@@ -39,13 +39,34 @@ Dashboard ◄── webhook (respostas dos botões) ◄── WhatsApp Cloud API
 - **Deploy**: Vercel (mesmo fluxo da barbearia-saas: push → deploy, promover manualmente se preciso).
 - **Fila de envio**: disparo em massa é assíncrono — tabela de fila no Postgres + processamento em lote com throttle e retry (Vercel cron ou endpoint de processamento). Necessário por causa dos rate limits da Meta.
 
+## Formatos reais já conhecidos (fotos recebidas 2026-07-23)
+
+Dois exemplos reais analisados — ambos de Santa Catarina, sistemas diferentes:
+
+**1. SISREG III (ex.: Indaial/SC)** — relatório "Propriedades da Agenda":
+- Cabeçalho (metadados da lista inteira): unidade executante, período, profissional executante (nome + código), procedimento ambulatorial (ex.: "Consulta em Psiquiatria – Geral").
+- Por linha: cód. solicitação, **data/hora da consulta**, CNS, nome, nome social, nascimento, idade, origem (município), **1–2 telefones**, unidade solicitante (UBS de origem), vaga solicitada (**1ª VEZ / RETORNO**), CID-10.
+
+**2. CELK Saúde (ex.: Prefeitura de Penha)** — "Relação da Agenda para Contato":
+- Cabeçalho: unidade executante (Policlínica), período, profissional, paginação ("Página 001 de 003" — listas são multi-página, ~1.298 itens no exemplo).
+- Agrupado por **tipo de procedimento dentro do mesmo médico** (ex.: ultrassom obstétrico e ultrassom de articulação na mesma lista) — o procedimento é do grupo, não coluna da linha.
+- Por linha: paciente, idade, **até 4 colunas de telefone + celular**, data e hora, convênio.
+
+**Implicações pro sistema:**
+- **Múltiplos telefones por paciente** é a regra, não exceção: guardar todos, escolher o melhor candidato a WhatsApp (celular > fixo, DDD local > de fora), e fazer fallback pro próximo número se o envio falhar.
+- **Metadados no cabeçalho, não na linha**: a extração tem dois níveis — dados da lista (médico, procedimento, unidade, período) e dados por paciente. No CELK o procedimento vem por grupo/seção.
+- **As anotações à mão nas fotos mostram o processo manual atual**: marca-texto = contatado, vermelho = recusou, com o **motivo escrito ao lado** ("não quer ir pois já fez acompanhamento", "não pode ir por conta do serviço"). O sistema precisa de campo de **motivo da recusa** (capturado da resposta livre do paciente ou anotado pela equipe) — isso vai no relatório devolvido à secretaria.
+- **Input pode ser foto, não só PDF**: hoje o material chega às vezes fotografado (inclusive torto, com dedo na borda). O upload aceita PDF **e** imagem (JPG/PNG); Claude lê ambos. Fotos de baixa qualidade → linhas com flag de baixa confiança na revisão.
+- Alguns pacientes vêm **sem telefone nenhum** ou com número visivelmente inválido → status próprio (`sem_telefone`) já na revisão, listado no relatório final como "não contatável".
+- CID-10 e CNS são dados sensíveis: capturar só se úteis pro relatório (CNS ajuda a identificar o paciente pra secretaria); nunca incluir CID na mensagem de WhatsApp.
+
 ## Modelo de dados (rascunho)
 
 - `users` — equipe da empresa (login/senha, recuperação como na barbearia).
 - `municipalities` — prefeituras/secretarias (nome, contato, observações de formato do PDF).
 - `doctors` — médicos contratados (nome, especialidade).
 - `lists` — cada PDF recebido: arquivo original, município, data do atendimento, status (`extraindo → em_revisao → aprovada → disparada → concluida`), quem subiu/aprovou.
-- `appointments` — cada linha da lista: paciente (nome, telefone E.164), procedimento, médico, data/hora, status de confirmação (`pendente → enviado → entregue → confirmado | recusado | sem_resposta | falha`), confiança da extração, corrigido manualmente ou não.
+- `appointments` — cada linha da lista: paciente (nome, CNS opcional, **telefones[] em E.164** + telefone escolhido pro disparo), procedimento, médico, data/hora da consulta, 1ª vez/retorno, unidade solicitante, status de confirmação (`pendente → enviado → entregue → confirmado | recusado | sem_resposta | sem_telefone | falha`), **motivo da recusa** (texto), confiança da extração, corrigido manualmente ou não.
 - `whatsapp_messages` — log de cada envio e resposta (wamid, template usado, timestamps, status de entrega via webhook `statuses`).
 
 ## Pontos de atenção técnicos
