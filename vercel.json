@@ -1,11 +1,24 @@
 {
   "framework": null,
   "buildCommand": "npm run build",
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "functions": {
     "api/index.js": {
       "includeFiles": "dist-web/**"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/queue",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import { useSession } from "./lib/session";
 import { Login } from "./pages/Login";
 import { Listas } from "./pages/Listas";
+import { Revisao } from "./pages/Revisao";
 import { Hoje } from "./pages/Hoje";
 import { Fechamento } from "./pages/Fechamento";
 import { Indicadores } from "./pages/Indicadores";
@@ -33,6 +34,7 @@ export function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/listas" element={<Listas />} />
+        <Route path="/listas/:id" element={<Revisao />} />
         <Route path="/hoje" element={<Hoje />} />
         <Route path="/fechamento" element={<Fechamento />} />
         <Route path="/indicadores" element={<Indicadores />} />

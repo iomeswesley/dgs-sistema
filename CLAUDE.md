@@ -14,19 +14,29 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 ## Estado atual (2026-07-25)
 
-Só o esqueleto está pronto. Nada de negócio foi implementado ainda.
+A **Fase 1 do PLANO.md está implementada por inteiro**. Falta ligar às credenciais reais — ver [INSTALACAO.md](INSTALACAO.md).
 
-**Pronto e validado** (typecheck + 23 testes + build limpos, UI conferida no navegador):
-- Schema Prisma completo com todas as tabelas do plano (`prisma/schema.prisma`).
-- Backend: `config/env.ts`, `lib/prisma`, `lib/auth` (scrypt), `lib/phone` (normalização E.164 + escolha do melhor número), `lib/whatsapp` (template com variáveis, assinatura do webhook fail-closed, leitura de respostas e de `statuses`), `lib/templates` (classificação da resposta), `lib/timezone`, `lib/errorReporting` (Sentry com scrub de PII).
-- Middleware: sessão, auth, rate limit (persistido no Postgres), errorHandler, rawBody.
-- Módulos: `auth` (login/logout/me com regeneração de sessão) e `audit` (trilha de alterações manuais).
-- Frontend React/Vite/Tailwind v4: login, shell de navegação, 5 páginas com estados vazios, `StatusBand` (elemento-assinatura), `ConfirmModal`.
+Validado: typecheck (server + web), 46 testes e build limpos; telas conferidas no navegador.
 
-- **Extração das listas** (`src/modules/extraction/`): prompt calibrado nos dois formatos reais, schema da resposta, chamada ao Claude (PDF e imagem, structured output, streaming) e o mapeador que vira rascunho de agendamento com telefones normalizados e pendências apontadas. **A chamada real nunca foi executada** — falta `ANTHROPIC_API_KEY` e um arquivo de verdade; só o mapeador está coberto por teste.
-- Scripts: `scripts/extrair.ts` (testa a extração num arquivo local) e `scripts/criar-templates-whatsapp.ts` (submete os 3 templates à Meta).
+**Backend** (`src/`):
+- `config/env`, `lib/` (prisma, auth scrypt, phone E.164, whatsapp, templates, timezone, csv, http, errorReporting)
+- `middleware/` (sessão, auth, rate limit no Postgres, errorHandler, rawBody)
+- `modules/auth` — login com regeneração de sessão
+- `modules/audit` — trilha de toda alteração manual
+- `modules/catalog` — municípios, unidades, médicos, procedimentos, procedimento×médico com valores
+- `modules/agendas` — escala do médico (âncora das listas complementares)
+- `modules/extraction` — prompt, schema, chamada ao Claude, mapeador para rascunhos
+- `modules/lists` — upload, extração assíncrona, edição na revisão, aprovação
+- `modules/queue` — fila com throttle e teto diário da Meta
+- `modules/whatsapp` — webhook (respostas, statuses de entrega, opt-out), idempotente por wamid
+- `modules/closings` — checks 2 e 3 + `closings.alerts.ts` (módulo puro de inconsistências)
+- `modules/indicators` — as 4 taxas + repasse/faturamento/margem, e export CSV
 
-**Falta tudo o mais**: upload pelo painel, tela de revisão, fila de disparo, webhook, cadastros, fechamento, indicadores, export.
+**Frontend** (`web/src/`): login, shell, Listas, Revisão (tabela + arquivo lado a lado), Acompanhamento, Fechamento, Indicadores, Configurações (5 abas), `StatusBand`, `ConfirmModal`, `FormModal`, `ui.tsx`.
+
+**Nunca executado de verdade**: a chamada à API de extração e o envio real de WhatsApp — falta credencial. Os testes cobrem a lógica pura (telefone, classificação de resposta, mapeamento da extração, alertas de fechamento), não a integração.
+
+**Fase 2 não implementada**: lembrete de véspera automático, reenvio para sem-resposta, classificação IA de texto livre, sugestão de confirmações, reposição de vagas, relatório automático por e-mail, score de no-show.
 
 ## Convenções de código
 

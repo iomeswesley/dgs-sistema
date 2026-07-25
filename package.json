@@ -21,7 +21,9 @@
     "prisma:generate": "prisma generate",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "seed": "tsx --env-file=.env prisma/seed.ts"
+    "seed": "tsx --env-file=.env prisma/seed.ts",
+    "extrair": "tsx --env-file=.env scripts/extrair.ts",
+    "templates": "tsx --env-file=.env scripts/criar-templates-whatsapp.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

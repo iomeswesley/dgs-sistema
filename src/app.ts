@@ -10,6 +10,16 @@ import "@/middleware/session.js";
 import "@/middleware/rawBody.js";
 
 import { authRouter } from "@/modules/auth/auth.routes.js";
+import { catalogRouter } from "@/modules/catalog/catalog.routes.js";
+import { agendasRouter } from "@/modules/agendas/agendas.routes.js";
+import { listsRouter } from "@/modules/lists/lists.routes.js";
+import { appointmentsRouter } from "@/modules/appointments/appointments.routes.js";
+import { queueRouter } from "@/modules/queue/queue.routes.js";
+import { whatsappRouter } from "@/modules/whatsapp/whatsapp.routes.js";
+import { closingsRouter } from "@/modules/closings/closings.routes.js";
+import { indicatorsRouter } from "@/modules/indicators/indicators.routes.js";
+import { processQueue } from "@/modules/queue/queue.service.js";
+import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -39,6 +49,9 @@ export function createApp() {
           imgSrc: ["'self'", "data:", "blob:"],
           fontSrc: ["'self'", "data:"],
           connectSrc: ["'self'"],
+          // O PDF da lista é exibido em <iframe> na revisão, servido pela
+          // própria origem.
+          frameSrc: ["'self'", "blob:"],
           frameAncestors: ["'none'"],
           objectSrc: ["'none'"],
         },
@@ -50,7 +63,9 @@ export function createApp() {
   // cru, e o JSON reserializado não bate com a assinatura.
   app.use(
     express.json({
-      limit: "2mb",
+      // Upload chega em base64 dentro do JSON, então o limite acompanha o
+      // teto de 20 MB do arquivo com folga pra codificação.
+      limit: "30mb",
       verify: (req, _res, buf) => {
         (req as express.Request).rawBody = buf;
       },
@@ -87,7 +102,36 @@ export function createApp() {
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  /*
+    Cron do Vercel (ver vercel.json). O Vercel manda
+    "Authorization: Bearer <CRON_SECRET>" automaticamente quando a variável
+    está configurada no projeto.
+  */
+  app.post(
+    "/api/cron/queue",
+    async (req, res, next) => {
+      try {
+        if (env.CRON_SECRET && req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
+          return res.status(401).json({ error: "unauthorized" });
+        }
+        const processed = await processQueue();
+        const closed = await closeExpiredAppointments();
+        res.json({ ...processed, closedAsNoAnswer: closed });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
   app.use(authRouter);
+  app.use(catalogRouter);
+  app.use(agendasRouter);
+  app.use(listsRouter);
+  app.use(appointmentsRouter);
+  app.use(queueRouter);
+  app.use(whatsappRouter);
+  app.use(closingsRouter);
+  app.use(indicatorsRouter);
 
   app.use("/api", notFoundHandler);
 

@@ -206,7 +206,7 @@ model List {
   municipalityId Int
   agendaId       Int?
   originalName   String
-  storagePath    String
+  fileData       Bytes
   mimeType       String
   sizeBytes      Int?
   sourceFormat   SourceFormat @default(OUTRO)
@@ -412,7 +412,12 @@ model DailyClosing {
   paidCountBy        User?        @relation("ClosingPaidBy", fields: [paidCountById], references: [id])
   attachments        ClosingAttachment[]
 
-  @@unique([doctorId, municipalityId, date, procedureId])
+  // Sem @@unique aqui de propósito: procedureId é nulável e o Postgres trata
+  // NULL como distinto de NULL, então um índice único comum deixaria
+  // duplicar o fechamento "sem procedimento" do mesmo médico e dia — numa
+  // tabela que vira pagamento. A garantia vem de dois índices parciais
+  // criados na migration (um para procedureId NOT NULL, outro para NULL).
+  @@index([doctorId, municipalityId, date])
   @@index([date])
   @@map("daily_closings")
 }
@@ -422,7 +427,7 @@ model ClosingAttachment {
   id           Int      @id @default(autoincrement())
   closingId    Int
   originalName String
-  storagePath  String
+  fileData     Bytes
   mimeType     String
   uploadedById Int
   createdAt    DateTime @default(now())
