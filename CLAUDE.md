@@ -23,7 +23,10 @@ Só o esqueleto está pronto. Nada de negócio foi implementado ainda.
 - Módulos: `auth` (login/logout/me com regeneração de sessão) e `audit` (trilha de alterações manuais).
 - Frontend React/Vite/Tailwind v4: login, shell de navegação, 5 páginas com estados vazios, `StatusBand` (elemento-assinatura), `ConfirmModal`.
 
-**Falta tudo o mais**: upload e extração das listas, tela de revisão, fila de disparo, webhook, cadastros, fechamento, indicadores, export.
+- **Extração das listas** (`src/modules/extraction/`): prompt calibrado nos dois formatos reais, schema da resposta, chamada ao Claude (PDF e imagem, structured output, streaming) e o mapeador que vira rascunho de agendamento com telefones normalizados e pendências apontadas. **A chamada real nunca foi executada** — falta `ANTHROPIC_API_KEY` e um arquivo de verdade; só o mapeador está coberto por teste.
+- Scripts: `scripts/extrair.ts` (testa a extração num arquivo local) e `scripts/criar-templates-whatsapp.ts` (submete os 3 templates à Meta).
+
+**Falta tudo o mais**: upload pelo painel, tela de revisão, fila de disparo, webhook, cadastros, fechamento, indicadores, export.
 
 ## Convenções de código
 
@@ -45,6 +48,8 @@ Só o esqueleto está pronto. Nada de negócio foi implementado ainda.
 
 ## Notas técnicas que não são óbvias
 
+- **A extração usa `claude-opus-5` com structured output** (`output_config.format` com JSON Schema escrito à mão, não derivado do zod — a API só aceita um subconjunto do JSON Schema). Precisa do `@anthropic-ai/sdk` ≥ 0.115: versões anteriores não tipam `output_config`. Streaming é obrigatório com `max_tokens` alto (64k) pra não estourar o timeout de HTTP.
+- **O prompt de extração descreve a estrutura, não um roteiro de passos** — modelos atuais rendem menos com prompt prescritivo. Ao ajustar, manter a regra central: campo ilegível vira `null` com confiança baixa, nunca um chute.
 - **`react-router-dom` fica na versão mais recente (7.18.x) mesmo com um aviso do `npm audit`.** O aviso é GHSA-2w69-qvjg-hvjx (CSRF em **RSC mode**), que não se aplica: usamos SPA com `BrowserRouter`, sem React Server Components nem server actions. A "correção" que o npm sugere é descer para 7.11.0, que é afetada por **13 outros** avisos. Não descer de versão.
 - `@theme inline` no `index.css` mapeia os tokens do Tailwind para variáveis CSS próprias, que trocam no seletor `.dark`. Por isso as utilidades (`bg-sheet`, `text-ink`…) acompanham o tema sozinhas.
 - O build do Vite sai em `dist-web/` e o Express serve dali em produção (`WEB_DIST` em `src/app.ts`); em dev são dois processos (`npm run dev` sobe os dois, com proxy `/api` do Vite para a porta 3000).

@@ -24,7 +24,7 @@
     "seed": "tsx --env-file=.env prisma/seed.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@prisma/client": "^6.16.0",
     "@sentry/node": "^10.66.0",
     "connect-pg-simple": "^10.0.0",
