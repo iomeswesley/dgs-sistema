@@ -10,13 +10,22 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 - Repo: local, branch `master`. Sem remote configurado ainda.
 - Deploy: previsto para Vercel (`vercel.json` + `api/index.js` já prontos). Ainda não publicado.
-- Banco: Postgres/Supabase, **projeto novo e dedicado** — não reaproveitar o da barbearia-saas nem o do agendamento-quadra. Ainda não criado.
+- Banco de **produção**: Postgres/Supabase, **projeto novo e dedicado** — não reaproveitar o da barbearia-saas nem o do agendamento-quadra. Ainda não criado.
+- Banco de **dev local**: PostgreSQL 17 instalado na máquina via winget (serviço Windows `postgresql-x64-17`, sempre rodando), banco `sistema_dgs`, usuário `postgres` senha `dgs_local_dev`. `.env` local já existe (não versionado) apontando pra ele — ver seção "Ambiente local" abaixo antes de recriar nada.
 
 ## Estado atual (2026-07-25)
 
-A **Fase 1 do PLANO.md está implementada por inteiro**. Falta ligar às credenciais reais — ver [INSTALACAO.md](INSTALACAO.md).
+**Fase 1 e Fase 2 do PLANO.md implementadas por inteiro.** Falta só ligar às credenciais reais de produção — ver [INSTALACAO.md](INSTALACAO.md). O fluxo já foi **validado rodando de verdade**: login funcionando com sessão real, banco local com as migrations aplicadas, navegação testada no navegador.
 
-Validado: typecheck (server + web), 46 testes e build limpos; telas conferidas no navegador.
+Validado: typecheck (server + web), 62 testes e build limpos; login e navegação conferidos no navegador contra banco real.
+
+## Ambiente local (já configurado nesta máquina)
+
+- Postgres local rodando (ver acima). `.env` na raiz do projeto (git-ignorado) já tem `DATABASE_URL`/`DIRECT_URL` apontando pra ele, `SESSION_SECRET` gerado, e o resto das chaves (Anthropic/WhatsApp/Resend) vazias — então extração, WhatsApp e e-mail caem nos stubs (log no console), mas login/cadastro/navegação funcionam de ponta a ponta.
+- Usuário de teste já criado: `wesley@dgs.local`. Senha gerada uma vez pelo `npm run seed` — se perdida, gerar outra com `npm run seed -- "Nome" outro-email@dgs.local` (não reseta a existente) ou redefinir depois de logar com outra conta.
+- **Corrigido**: `npm run dev:api` agora força `PORT=3000` via `cross-env`, porque o harness de preview injeta `PORT=5173` (a porta do Vite) no ambiente e o `--env-file` do Node não sobrescreve variável já existente — sem o `cross-env` a API tentava subir na mesma porta do Vite e o login falhava com 502. Não reverter esse script.
+- Pra rodar: `npm run dev` (sobe API na 3000 + Vite na 5173 com proxy `/api`), ou usar o preview do harness com o config `dgs-web` (aponta pra porta 5173).
+- Cadastro está **vazio** de propósito (nenhum município/médico/procedimento) — é o estado real de primeiro acesso, não precisa popular a menos que peçam.
 
 **Backend** (`src/`):
 - `config/env`, `lib/` (prisma, auth scrypt, phone E.164, whatsapp, templates, timezone, csv, http, errorReporting)
@@ -76,10 +85,12 @@ Validado: typecheck (server + web), 46 testes e build limpos; telas conferidas n
 - `api/index.js` importa de `dist/`, não do TypeScript fonte — os aliases `@/...` já foram reescritos pelo `tsc-alias` no build.
 - O webhook precisa tratar `statuses` (entrega/falha), diferente da barbearia-saas que os ignora: telefone errado na lista da prefeitura é rotina e vira indicador de qualidade devolvido à secretaria.
 
-## Pendências externas (bloqueiam o desenvolvimento)
+## Pendências externas (bloqueiam ir pra produção — dev local já funciona sem elas)
 
-1. Projeto Supabase dedicado + `DATABASE_URL`/`DIRECT_URL` no `.env`.
-2. Número de WhatsApp Business + app na Meta, e os **templates submetidos para aprovação** (maior lead time do projeto).
-3. Chave da API Anthropic para a extração.
-4. PDFs reais de 2–3 prefeituras para calibrar o prompt de extração (só fotos até agora).
-5. Valores de `doctor_fee` e `city_rate` por procedimento.
+1. Projeto Supabase dedicado de produção + trocar `DATABASE_URL`/`DIRECT_URL` no `.env` (hoje aponta pro Postgres local).
+2. Número de WhatsApp Business + app na Meta, e os **templates submetidos para aprovação** (maior lead time do projeto) — `npm run templates` depois de ter `WHATSAPP_BUSINESS_ACCOUNT_ID` e um token com `whatsapp_business_management`.
+3. Chave da API Anthropic (`ANTHROPIC_API_KEY`) para a extração e a classificação de respostas ambíguas.
+4. Chave do Resend (`RESEND_API_KEY`) para relatório automático por e-mail e resumo diário.
+5. PDFs reais de 2–3 prefeituras para calibrar o prompt de extração (só fotos até agora) — `npm run extrair -- caminho/do/arquivo.pdf`.
+6. Valores de `doctor_fee` e `city_rate` por procedimento.
+7. Plano **Pro** da Vercel pro cron horário da fila funcionar em produção (Hobby só roda cron 1x/dia).
