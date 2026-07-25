@@ -31,12 +31,17 @@ Validado: typecheck (server + web), 46 testes e build limpos; telas conferidas n
 - `modules/whatsapp` — webhook (respostas, statuses de entrega, opt-out), idempotente por wamid
 - `modules/closings` — checks 2 e 3 + `closings.alerts.ts` (módulo puro de inconsistências)
 - `modules/indicators` — as 4 taxas + repasse/faturamento/margem, e export CSV
+- `modules/team` — equipe (criar, redefinir senha, ativar/desativar, trocar a própria) e leitura da trilha de auditoria
+- `modules/suggestions` — `suggestions.ts` (puro, testado) calcula overbooking pela taxa histórica; `suggestions.service.ts` busca o histórico em cascata (médico+procedimento → médico → município → global)
+- `modules/queue/cadence.service` — lembrete D-1, reenvio pelo telefone alternativo e expurgo LGPD; tudo acionado pelo cron horário
 
-**Frontend** (`web/src/`): login, shell, Listas, Revisão (tabela + arquivo lado a lado), Acompanhamento, Fechamento, Indicadores, Configurações (5 abas), `StatusBand`, `ConfirmModal`, `FormModal`, `ui.tsx`.
+**Frontend** (`web/src/`): login, shell, Listas, Revisão (tabela + arquivo lado a lado + sugestão de confirmações), Acompanhamento, Fechamento, Indicadores, Configurações (5 abas), Equipe e auditoria, `StatusBand`, `ConfirmModal`, `FormModal`, `ui.tsx`.
 
 **Nunca executado de verdade**: a chamada à API de extração e o envio real de WhatsApp — falta credencial. Os testes cobrem a lógica pura (telefone, classificação de resposta, mapeamento da extração, alertas de fechamento), não a integração.
 
-**Fase 2 não implementada**: lembrete de véspera automático, reenvio para sem-resposta, classificação IA de texto livre, sugestão de confirmações, reposição de vagas, relatório automático por e-mail, score de no-show.
+**Fase 2 parcialmente implementada**: lembrete D-1, reenvio por telefone alternativo, sugestão de confirmações e expurgo LGPD estão prontos. **Falta**: classificação por IA do texto livre, reposição de vagas via lista complementar, relatório automático por e-mail, resumo do dia pro gestor.
+
+**Score de no-show por paciente: deliberadamente não implementado.** O dado não existe — o médico informa um total de atendidos por dia, não quem compareceu. Qualquer score seria aproximação apresentada como fato. A função pura `noShowScore` está pronta e testada em `modules/suggestions/suggestions.ts` para quando houver presença por paciente. Ver o comentário no fim de `suggestions.service.ts`.
 
 ## Convenções de código
 

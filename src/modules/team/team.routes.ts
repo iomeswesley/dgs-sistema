@@ -1,0 +1,180 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma.js";
+import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
+import { currentUserId, requireAuth } from "@/middleware/auth.js";
+import { parseBody, parseQuery, routeId } from "@/lib/http.js";
+import { generateRandomPassword, hashPassword, verifyPassword } from "@/lib/auth.js";
+import { recordAudit } from "@/modules/audit/audit.service.js";
+
+/*
+  Equipe e trilha de auditoria.
+
+  A trilha precisa ser LEGÍVEL, não só gravada: como não existem perfis de
+  acesso, ela é o único controle sobre quem lançou o quê. Auditoria que
+  ninguém consegue consultar não protege nada.
+*/
+
+export const teamRouter = Router();
+teamRouter.use("/api/team", requireAuth);
+teamRouter.use("/api/audit", requireAuth);
+
+teamRouter.get(
+  "/api/team",
+  asyncHandler(async (_req, res) => {
+    const users = await prisma.user.findMany({
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, email: true, active: true, lastLoginAt: true, createdAt: true },
+    });
+    res.json({ users });
+  })
+);
+
+const inviteSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  email: z.string().email("E-mail inválido"),
+});
+
+/**
+ * Cria um membro da equipe com senha aleatória.
+ *
+ * A senha aparece uma vez só na resposta — quem criou repassa pessoalmente.
+ * Não é enviada por e-mail para não depender de um serviço externo estar
+ * configurado logo no primeiro acesso.
+ */
+teamRouter.post(
+  "/api/team",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, inviteSchema);
+    const email = data.email.toLowerCase().trim();
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw new AppError("Já existe alguém com esse e-mail.", 409);
+
+    const password = generateRandomPassword(14);
+    const user = await prisma.user.create({
+      data: { name: data.name, email, passwordHash: hashPassword(password) },
+      select: { id: true, name: true, email: true, active: true, createdAt: true },
+    });
+
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "create_user",
+      entity: "User",
+      entityId: user.id,
+      newValue: user.email,
+    });
+
+    res.status(201).json({ user, password });
+  })
+);
+
+teamRouter.post(
+  "/api/team/:id/reset-password",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) throw new AppError("Usuário não encontrado", 404);
+
+    const password = generateRandomPassword(14);
+    await prisma.user.update({ where: { id }, data: { passwordHash: hashPassword(password) } });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "reset_password",
+      entity: "User",
+      entityId: id,
+      newValue: user.email,
+    });
+
+    res.json({ password });
+  })
+);
+
+teamRouter.patch(
+  "/api/team/:id/active",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const { active } = parseBody(req, z.object({ active: z.boolean() }));
+
+    if (!active && id === currentUserId(req)) {
+      throw new AppError("Você não pode desativar a própria conta.", 400);
+    }
+    if (!active) {
+      // Um sistema sem ninguém ativo fica inacessível e só volta por script.
+      const activeCount = await prisma.user.count({ where: { active: true } });
+      if (activeCount <= 1) throw new AppError("Precisa sobrar pelo menos uma conta ativa.", 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { active },
+      select: { id: true, name: true, email: true, active: true },
+    });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: active ? "activate_user" : "deactivate_user",
+      entity: "User",
+      entityId: id,
+      newValue: user.email,
+    });
+
+    res.json({ user });
+  })
+);
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "A nova senha precisa de pelo menos 8 caracteres"),
+});
+
+/** Troca da própria senha, exigindo a atual. */
+teamRouter.post(
+  "/api/team/me/password",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, changePasswordSchema);
+    const id = currentUserId(req);
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) throw new AppError("Usuário não encontrado", 404);
+
+    if (!verifyPassword(data.currentPassword, user.passwordHash)) {
+      throw new AppError("Senha atual incorreta.", 401);
+    }
+
+    await prisma.user.update({ where: { id }, data: { passwordHash: hashPassword(data.newPassword) } });
+    await recordAudit({ userId: id, action: "change_own_password", entity: "User", entityId: id });
+
+    res.json({ ok: true });
+  })
+);
+
+/* ---------------- Trilha de auditoria ---------------- */
+
+teamRouter.get(
+  "/api/audit",
+  asyncHandler(async (req, res) => {
+    const query = parseQuery(
+      req,
+      z.object({
+        entity: z.string().optional(),
+        entityId: z.coerce.number().int().positive().optional(),
+        userId: z.coerce.number().int().positive().optional(),
+        action: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(500).default(200),
+      })
+    );
+
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        entity: query.entity,
+        entityId: query.entityId,
+        userId: query.userId,
+        action: query.action,
+      },
+      orderBy: { createdAt: "desc" },
+      take: query.limit,
+      include: { user: { select: { id: true, name: true } } },
+    });
+
+    res.json({ logs });
+  })
+);

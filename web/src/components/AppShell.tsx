@@ -15,6 +15,7 @@ const NAV = [
   { to: "/fechamento", label: "Fechamento", hint: "Atendidos e pagos" },
   { to: "/indicadores", label: "Indicadores", hint: "Histórico e taxas" },
   { to: "/configuracoes", label: "Configurações", hint: "Cadastros e valores" },
+  { to: "/equipe", label: "Equipe", hint: "Acessos e auditoria" },
 ];
 
 export function AppShell() {

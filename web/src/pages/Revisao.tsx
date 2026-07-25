@@ -32,6 +32,14 @@ interface Appointment {
   rawLine: { issues?: string[]; invalidPhones?: string[]; notes?: string | null } | null;
 }
 
+interface ListSuggestion {
+  stillNeeded: number;
+  confirmationsNeeded: number;
+  explanation: string;
+  doctorName: string;
+  expectedPerDay: number;
+}
+
 interface ListDetail {
   list: {
     id: number;
@@ -60,6 +68,10 @@ export function Revisao() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const detail = useApi<ListDetail>(id ? `/api/lists/${id}` : null, [id]);
+  const suggestion = useApi<{ suggestion: ListSuggestion | null }>(
+    id ? `/api/suggestions/list/${id}` : null,
+    [id]
+  );
 
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
@@ -205,6 +217,12 @@ export function Revisao() {
               ))}
             </ul>
           </Callout>
+        </div>
+      )}
+
+      {suggestion.data?.suggestion && (
+        <div className="mb-4">
+          <Callout>{suggestion.data.suggestion.explanation}</Callout>
         </div>
       )}
 

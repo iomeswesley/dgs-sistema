@@ -18,8 +18,11 @@ import { queueRouter } from "@/modules/queue/queue.routes.js";
 import { whatsappRouter } from "@/modules/whatsapp/whatsapp.routes.js";
 import { closingsRouter } from "@/modules/closings/closings.routes.js";
 import { indicatorsRouter } from "@/modules/indicators/indicators.routes.js";
+import { teamRouter } from "@/modules/team/team.routes.js";
+import { suggestionsRouter } from "@/modules/suggestions/suggestions.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
+import { enqueueReminders, enqueueRetries, purgeExpiredData } from "@/modules/queue/cadence.service.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -114,9 +117,21 @@ export function createApp() {
         if (env.CRON_SECRET && req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
           return res.status(401).json({ error: "unauthorized" });
         }
+        // Ordem importa: primeiro cria os jobs do dia (lembrete e reenvio),
+        // depois processa a fila — assim o que foi enfileirado agora já sai
+        // nesta mesma rodada, se couber no limite.
+        const reminders = await enqueueReminders();
+        const retries = await enqueueRetries();
         const processed = await processQueue();
         const closed = await closeExpiredAppointments();
-        res.json({ ...processed, closedAsNoAnswer: closed });
+        const purged = await purgeExpiredData();
+        res.json({
+          ...processed,
+          remindersQueued: reminders.queued,
+          retriesQueued: retries.queued,
+          closedAsNoAnswer: closed,
+          purged,
+        });
       } catch (err) {
         next(err);
       }
@@ -132,6 +147,8 @@ export function createApp() {
   app.use(whatsappRouter);
   app.use(closingsRouter);
   app.use(indicatorsRouter);
+  app.use(teamRouter);
+  app.use(suggestionsRouter);
 
   app.use("/api", notFoundHandler);
 
