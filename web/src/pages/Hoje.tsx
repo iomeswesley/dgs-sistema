@@ -28,7 +28,13 @@ interface Appointment {
   procedure: { name: string };
   municipality: { name: string };
   contactedBy: { name: string } | null;
-  messages: { direction: string; status: string; body: string | null; errorMessage: string | null }[];
+  messages: {
+    direction: string;
+    status: string;
+    body: string | null;
+    errorMessage: string | null;
+    raw: { aiClassified?: boolean; aiConfidence?: number; aiReasoning?: string } | null;
+  }[];
 }
 
 interface Capacity {
@@ -199,6 +205,9 @@ export function Hoje() {
         >
           {data.data?.appointments.map((appointment) => {
             const lastError = appointment.messages.find((message) => message.errorMessage);
+            const lastReply = appointment.messages.find(
+              (message) => message.direction === "RECEBIDA" && message.body
+            );
             return (
               <tr key={appointment.id}>
                 <Td>
@@ -228,6 +237,18 @@ export function Hoje() {
                   )}
                   {appointment.contactedBy && (
                     <p className="text-xs text-ink-faint">contato por {appointment.contactedBy.name}</p>
+                  )}
+                  {lastReply && (
+                    <p className="mt-0.5 text-xs italic text-ink-faint">"{lastReply.body}"</p>
+                  )}
+                  {lastReply?.raw?.aiClassified && (
+                    <p className="text-xs text-accent">
+                      IA leu como {lastReply.raw.aiConfidence && lastReply.raw.aiConfidence >= 0.7
+                        ? "resposta clara"
+                        : `incerta (${Math.round((lastReply.raw.aiConfidence ?? 0) * 100)}%)`}
+                      {" — "}
+                      {lastReply.raw.aiReasoning}
+                    </p>
                   )}
                   {lastError && <p className="text-xs text-mark-red">{lastError.errorMessage}</p>}
                 </Td>

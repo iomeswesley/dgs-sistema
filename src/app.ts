@@ -23,6 +23,7 @@ import { suggestionsRouter } from "@/modules/suggestions/suggestions.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData } from "@/modules/queue/cadence.service.js";
+import { sendDailySummary } from "@/modules/reports/daily-summary.service.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -132,6 +133,24 @@ export function createApp() {
           closedAsNoAnswer: closed,
           purged,
         });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  /*
+    Resumo do dia pro gestor — cron próprio, uma vez por dia (18h de
+    Brasília), separado do cron horário da fila. Ver vercel.json.
+  */
+  app.post(
+    "/api/cron/daily-summary",
+    async (req, res, next) => {
+      try {
+        if (env.CRON_SECRET && req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
+          return res.status(401).json({ error: "unauthorized" });
+        }
+        res.json(await sendDailySummary());
       } catch (err) {
         next(err);
       }

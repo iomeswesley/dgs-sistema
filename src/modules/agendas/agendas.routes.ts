@@ -5,6 +5,8 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { dateOnlySchema, parseBody, parseDateOnly, parseQuery, routeId } from "@/lib/http.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { toCsv } from "@/lib/csv.js";
+import { REFUSAL_REASON_LABEL } from "@/lib/labels.js";
 
 /*
   Agenda = escala do médico num município e data. É o que permite saber o
@@ -95,6 +97,74 @@ agendasRouter.patch(
     });
     await recordAudit({ userId: currentUserId(req), action: "update", entity: "Agenda", entityId: id });
     res.json({ agenda });
+  })
+);
+
+/*
+  Reposição de vagas: quando alguém recusa ou não responde, o horário fica
+  aberto. Este relatório é o que volta pra secretaria pedir substitutos —
+  ela manda uma lista complementar, vinculada à mesma agenda (campo
+  `agendaId` no upload), que o sistema dispara só pros horários vagos.
+*/
+async function openSlots(agendaId: number) {
+  const agenda = await prisma.agenda.findUnique({
+    where: { id: agendaId },
+    include: {
+      doctor: { select: { name: true } },
+      municipality: { select: { name: true } },
+      procedure: { select: { name: true } },
+    },
+  });
+  if (!agenda) throw new AppError("Agenda não encontrada", 404);
+
+  const appointments = await prisma.appointment.findMany({
+    where: { agendaId, status: { in: ["RECUSADO", "SEM_RESPOSTA", "SEM_TELEFONE"] } },
+    orderBy: { scheduledAt: "asc" },
+    include: {
+      patient: { select: { name: true } },
+      procedure: { select: { name: true } },
+      requestingUnit: { select: { name: true } },
+    },
+  });
+
+  return { agenda, appointments };
+}
+
+agendasRouter.get(
+  "/api/agendas/:id/open-slots",
+  asyncHandler(async (req, res) => {
+    const { agenda, appointments } = await openSlots(routeId(req));
+    res.json({ agenda, slots: appointments });
+  })
+);
+
+agendasRouter.get(
+  "/api/agendas/:id/open-slots/export",
+  asyncHandler(async (req, res) => {
+    const { agenda, appointments } = await openSlots(routeId(req));
+
+    const csv = toCsv(
+      ["Horário vago", "Paciente que liberou", "Procedimento", "Situação anterior", "Motivo", "Unidade solicitante"],
+      appointments.map((appointment) => [
+        appointment.scheduledAt.toLocaleString("pt-BR"),
+        appointment.patient.name,
+        appointment.procedure.name,
+        appointment.status === "RECUSADO"
+          ? "Recusou"
+          : appointment.status === "SEM_TELEFONE"
+            ? "Sem telefone"
+            : "Sem resposta",
+        appointment.refusalReason ? (REFUSAL_REASON_LABEL[appointment.refusalReason] ?? "") : "",
+        appointment.requestingUnit?.name ?? "",
+      ])
+    );
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="vagas-${agenda.doctor.name.replace(/\s+/g, "-")}-${agenda.date.toISOString().slice(0, 10)}.csv"`
+    );
+    res.send(csv);
   })
 );
 

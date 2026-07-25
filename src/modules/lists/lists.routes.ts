@@ -7,6 +7,9 @@ import { parseBody, routeId } from "@/lib/http.js";
 import { approveList, editAppointment, extractAndStage, removeAppointment } from "./lists.service.js";
 import { enqueueList, queueCapacity } from "@/modules/queue/queue.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
+import { buildListReportCsv } from "./list-report.js";
+import { emailConfigured, sendEmail } from "@/lib/email.js";
+import { recordAudit } from "@/modules/audit/audit.service.js";
 
 export const listsRouter = Router();
 listsRouter.use("/api/lists", requireAuth);
@@ -228,5 +231,52 @@ listsRouter.post(
     const result = await enqueueList(routeId(req), currentUserId(req));
     const capacity = await queueCapacity();
     res.json({ ...result, capacity });
+  })
+);
+
+/**
+ * Encerra a lista e devolve o relatório à secretaria automaticamente, se
+ * houver e-mail de contato cadastrado — o mesmo CSV que já existe pra
+ * download manual, só que sem a equipe precisar lembrar de mandar.
+ */
+listsRouter.post(
+  "/api/lists/:id/conclude",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const list = await prisma.list.findUnique({
+      where: { id },
+      include: { municipality: { select: { name: true, contactEmail: true } } },
+    });
+    if (!list) throw new AppError("Lista não encontrada", 404);
+    if (list.status !== "DISPARADA") {
+      throw new AppError("Só uma lista já disparada pode ser concluída.", 409);
+    }
+
+    await prisma.list.update({ where: { id }, data: { status: "CONCLUIDA" } });
+    await recordAudit({ userId: currentUserId(req), action: "conclude", entity: "List", entityId: id });
+
+    let emailSent = false;
+    if (list.municipality.contactEmail) {
+      const { csv, filename } = await buildListReportCsv(id);
+      try {
+        await sendEmail({
+          to: list.municipality.contactEmail,
+          subject: `Relatório de confirmações — ${list.municipality.name} — ${list.originalName}`,
+          html: `
+            <p>Olá,</p>
+            <p>Segue em anexo o resultado das confirmações da lista <b>${list.originalName}</b>, enviada em ${list.createdAt.toLocaleDateString("pt-BR")}.</p>
+            <p>Atenciosamente,<br>DGS - D'Artibale Gestão em Saúde</p>
+          `,
+          attachments: [{ filename, content: Buffer.from(csv, "utf-8") }],
+        });
+        emailSent = true;
+      } catch (err) {
+        // Não falha a conclusão por causa do e-mail — a lista já está
+        // encerrada, e o CSV continua disponível pra baixar manualmente.
+        console.error(`[LISTA ${id}] Falha ao enviar relatório por e-mail:`, (err as Error).message);
+      }
+    }
+
+    res.json({ ok: true, emailSent, emailConfigured, hasContactEmail: !!list.municipality.contactEmail });
   })
 );

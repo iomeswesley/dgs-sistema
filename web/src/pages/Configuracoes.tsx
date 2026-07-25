@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { PageHeader } from "../components/AppShell";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
-import { ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
+import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatMoney } from "../lib/format";
+import { formatDate, formatMoney } from "../lib/format";
 
 interface Municipality {
   id: number;
@@ -12,6 +13,7 @@ interface Municipality {
   state: string;
   contactName: string | null;
   contactPhone: string | null;
+  contactEmail: string | null;
   active: boolean;
   _count: { units: number; appointments: number };
 }
@@ -44,7 +46,7 @@ interface Doctor {
   procedures: DoctorProcedure[];
 }
 
-type Tab = "municipios" | "unidades" | "medicos" | "procedimentos" | "valores";
+type Tab = "municipios" | "unidades" | "medicos" | "procedimentos" | "valores" | "agendas";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "municipios", label: "Municípios" },
@@ -52,6 +54,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "medicos", label: "Médicos" },
   { id: "procedimentos", label: "Procedimentos" },
   { id: "valores", label: "Procedimentos por médico" },
+  { id: "agendas", label: "Agendas" },
 ];
 
 export function Configuracoes() {
@@ -87,6 +90,7 @@ export function Configuracoes() {
       {tab === "medicos" && <DoctorsTab />}
       {tab === "procedimentos" && <ProceduresTab />}
       {tab === "valores" && <DoctorProceduresTab />}
+      {tab === "agendas" && <AgendasTab />}
     </>
   );
 }
@@ -96,7 +100,7 @@ export function Configuracoes() {
 function MunicipalitiesTab() {
   const data = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", state: "SC", contactName: "", contactPhone: "" });
+  const [form, setForm] = useState({ name: "", state: "SC", contactName: "", contactPhone: "", contactEmail: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,7 +110,7 @@ function MunicipalitiesTab() {
     try {
       await api.post("/api/catalog/municipalities", form);
       setOpen(false);
-      setForm({ name: "", state: "SC", contactName: "", contactPhone: "" });
+      setForm({ name: "", state: "SC", contactName: "", contactPhone: "", contactEmail: "" });
       data.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
@@ -147,6 +151,9 @@ function MunicipalitiesTab() {
                 {municipality.contactName ?? "—"}
                 {municipality.contactPhone && (
                   <p className="text-xs text-ink-faint">{municipality.contactPhone}</p>
+                )}
+                {municipality.contactEmail && (
+                  <p className="text-xs text-ink-faint">{municipality.contactEmail}</p>
                 )}
               </Td>
               <Td align="right" muted>
@@ -196,6 +203,17 @@ function MunicipalitiesTab() {
             className="field"
             value={form.contactPhone}
             onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+          />
+        </Field>
+        <Field
+          label="E-mail do contato"
+          hint="O relatório de confirmações é enviado pra cá quando a equipe conclui a lista."
+        >
+          <input
+            type="email"
+            className="field"
+            value={form.contactEmail}
+            onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
           />
         </Field>
       </FormModal>
@@ -647,6 +665,296 @@ function DoctorProceduresTab() {
           </Field>
         </div>
       </FormModal>
+    </>
+  );
+}
+
+/* ---------------- Agendas ---------------- */
+
+interface Agenda {
+  id: number;
+  date: string;
+  shift: string;
+  capacity: number | null;
+  doctor: { id: number; name: string };
+  municipality: { id: number; name: string };
+  unit: { id: number; name: string } | null;
+  procedure: { id: number; name: string } | null;
+  _count: { lists: number; appointments: number };
+}
+
+interface OpenSlot {
+  id: number;
+  scheduledAt: string;
+  status: string;
+  patient: { name: string };
+  procedure: { name: string };
+}
+
+const SHIFT_LABEL: Record<string, string> = { MANHA: "Manhã", TARDE: "Tarde", INTEGRAL: "Dia todo" };
+
+function AgendasTab() {
+  const data = useApi<{ agendas: Agenda[] }>("/api/agendas");
+  const doctors = useApi<{ doctors: Doctor[] }>("/api/catalog/doctors");
+  const municipalities = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
+  const procedures = useApi<{ procedures: Procedure[] }>("/api/catalog/procedures");
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    doctorId: "",
+    municipalityId: "",
+    procedureId: "",
+    date: "",
+    shift: "INTEGRAL",
+    capacity: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [viewingSlots, setViewingSlots] = useState<Agenda | null>(null);
+  const [deleting, setDeleting] = useState<Agenda | null>(null);
+  const slots = useApi<{ slots: OpenSlot[] }>(
+    viewingSlots ? `/api/agendas/${viewingSlots.id}/open-slots` : null,
+    [viewingSlots?.id]
+  );
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post("/api/agendas", {
+        doctorId: Number(form.doctorId),
+        municipalityId: Number(form.municipalityId),
+        procedureId: form.procedureId ? Number(form.procedureId) : null,
+        date: form.date,
+        shift: form.shift,
+        capacity: form.capacity ? Number(form.capacity) : null,
+      });
+      setOpen(false);
+      setForm({ doctorId: "", municipalityId: "", procedureId: "", date: "", shift: "INTEGRAL", capacity: "" });
+      data.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await api.delete(`/api/agendas/${deleting.id}`);
+      setDeleting(null);
+      data.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao excluir.");
+      setDeleting(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Callout>
+        Cadastrar a agenda antes da lista chegar é o que permite ao sistema saber a capacidade esperada
+        do dia. Quando alguém recusa ou não responde, o horário fica "aberto" — a lista de vagas abaixo é
+        o que volta pra secretaria pedir substitutos, e a lista complementar que ela mandar se vincula à
+        mesma agenda.
+      </Callout>
+
+      <div className="my-3 flex justify-end">
+        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+          Nova agenda
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-3">
+          <ErrorNote message={error} />
+        </div>
+      )}
+
+      {data.loading && <Spinner />}
+      {data.data && (
+        <Table
+          head={
+            <tr>
+              <Th>Data</Th>
+              <Th>Médico</Th>
+              <Th>Município</Th>
+              <Th align="right">Capacidade</Th>
+              <Th align="right">Vagas abertas</Th>
+              <Th align="right">Ações</Th>
+            </tr>
+          }
+        >
+          {data.data.agendas.map((agenda) => (
+            <tr key={agenda.id}>
+              <Td>
+                {formatDate(agenda.date)}
+                <p className="text-xs text-ink-faint">{SHIFT_LABEL[agenda.shift] ?? agenda.shift}</p>
+              </Td>
+              <Td muted>
+                {agenda.doctor.name}
+                {agenda.procedure && <p className="text-xs text-ink-faint">{agenda.procedure.name}</p>}
+              </Td>
+              <Td muted>{agenda.municipality.name}</Td>
+              <Td align="right" muted>
+                {agenda.capacity ?? "—"}
+              </Td>
+              <Td align="right" muted>
+                {agenda._count.appointments}
+              </Td>
+              <Td align="right">
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => setViewingSlots(agenda)}
+                  >
+                    Vagas abertas
+                  </button>
+                  {agenda._count.lists === 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => setDeleting(agenda)}
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </div>
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      <FormModal
+        open={open}
+        title="Nova agenda"
+        description="A capacidade do dia alimenta a sugestão de confirmações na revisão da lista."
+        busy={busy}
+        error={error}
+        onSubmit={save}
+        onCancel={() => setOpen(false)}
+      >
+        <Field label="Médico">
+          <select
+            className="field"
+            value={form.doctorId}
+            onChange={(e) => setForm({ ...form, doctorId: e.target.value })}
+            required
+          >
+            <option value="">Selecione…</option>
+            {doctors.data?.doctors.map((doctor) => (
+              <option key={doctor.id} value={doctor.id}>
+                {doctor.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Município">
+          <select
+            className="field"
+            value={form.municipalityId}
+            onChange={(e) => setForm({ ...form, municipalityId: e.target.value })}
+            required
+          >
+            <option value="">Selecione…</option>
+            {municipalities.data?.municipalities.map((municipality) => (
+              <option key={municipality.id} value={municipality.id}>
+                {municipality.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Procedimento" hint="Opcional — deixe em branco se a agenda cobre vários.">
+          <select
+            className="field"
+            value={form.procedureId}
+            onChange={(e) => setForm({ ...form, procedureId: e.target.value })}
+          >
+            <option value="">Não especificado</option>
+            {procedures.data?.procedures.map((procedure) => (
+              <option key={procedure.id} value={procedure.id}>
+                {procedure.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Data">
+            <input
+              type="date"
+              className="field"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Turno">
+            <select className="field" value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}>
+              <option value="MANHA">Manhã</option>
+              <option value="TARDE">Tarde</option>
+              <option value="INTEGRAL">Dia todo</option>
+            </select>
+          </Field>
+          <Field label="Capacidade">
+            <input
+              type="number"
+              min={1}
+              className="field"
+              value={form.capacity}
+              onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+            />
+          </Field>
+        </div>
+      </FormModal>
+
+      <FormModal
+        open={viewingSlots !== null}
+        title={viewingSlots ? `Vagas abertas — ${viewingSlots.doctor.name}, ${formatDate(viewingSlots.date)}` : ""}
+        description="Recusas, sem resposta e sem telefone. Devolva esta lista pra secretaria pedir substitutos."
+        submitLabel="Baixar CSV"
+        onSubmit={() => {
+          if (viewingSlots) window.open(`/api/agendas/${viewingSlots.id}/open-slots/export`, "_blank");
+        }}
+        onCancel={() => setViewingSlots(null)}
+      >
+        {slots.loading && <Spinner />}
+        {slots.data?.slots.length === 0 && (
+          <p className="text-sm text-ink-muted">Nenhuma vaga aberta nesta agenda.</p>
+        )}
+        {(slots.data?.slots.length ?? 0) > 0 && (
+          <ul className="grid gap-1.5 text-sm">
+            {slots.data?.slots.map((slot) => (
+              <li key={slot.id} className="flex justify-between gap-3 border-b border-rule pb-1.5">
+                <span>
+                  {slot.patient.name}
+                  <span className="ml-1 text-xs text-ink-faint">{slot.procedure.name}</span>
+                </span>
+                <span className="tabular shrink-0 text-ink-faint">
+                  {new Date(slot.scheduledAt).toLocaleString("pt-BR")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </FormModal>
+
+      <ConfirmModal
+        open={deleting !== null}
+        title="Excluir esta agenda?"
+        description="Só é possível quando nenhuma lista foi vinculada a ela ainda."
+        confirmLabel="Excluir"
+        danger
+        busy={busy}
+        onConfirm={remove}
+        onCancel={() => setDeleting(null)}
+      />
     </>
   );
 }

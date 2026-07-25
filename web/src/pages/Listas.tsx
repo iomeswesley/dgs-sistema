@@ -26,19 +26,37 @@ interface Municipality {
   name: string;
 }
 
+interface Agenda {
+  id: number;
+  date: string;
+  municipalityId: number;
+  doctor: { name: string };
+}
+
 const MAX_BYTES = 20 * 1024 * 1024;
 
 export function Listas() {
   const lists = useApi<{ lists: ListSummary[]; extractionConfigured: boolean }>("/api/lists");
   const municipalities = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
+  const agendas = useApi<{ agendas: Agenda[] }>("/api/agendas");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [municipalityId, setMunicipalityId] = useState<string>("");
+  const [agendaId, setAgendaId] = useState<string>("");
+  const [isComplementary, setIsComplementary] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const agendaOptions = (agendas.data?.agendas ?? []).filter(
+    (agenda) => String(agenda.municipalityId) === municipalityId
+  );
 
   async function handleUpload(file: File) {
     if (!municipalityId) {
       setError("Escolha o município antes de enviar.");
+      return;
+    }
+    if (isComplementary && !agendaId) {
+      setError("Lista complementar precisa estar vinculada a uma agenda — é o que garante o disparo só pras vagas abertas.");
       return;
     }
     if (file.size > MAX_BYTES) {
@@ -60,11 +78,15 @@ export function Listas() {
 
       await api.post("/api/lists", {
         municipalityId: Number(municipalityId),
+        agendaId: agendaId ? Number(agendaId) : null,
+        isComplementary,
         originalName: file.name,
         mimeType: file.type || "application/pdf",
         fileBase64: btoa(binary),
       });
       if (fileRef.current) fileRef.current.value = "";
+      setIsComplementary(false);
+      setAgendaId("");
       lists.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao enviar o arquivo.");
@@ -92,12 +114,15 @@ export function Listas() {
 
       <div className="card mb-6 p-5">
         <p className="eyebrow">Enviar lista</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-[220px_1fr]">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field label="Município">
             <select
               className="field"
               value={municipalityId}
-              onChange={(event) => setMunicipalityId(event.target.value)}
+              onChange={(event) => {
+                setMunicipalityId(event.target.value);
+                setAgendaId("");
+              }}
             >
               <option value="">Selecione…</option>
               {municipalities.data?.municipalities.map((municipality) => (
@@ -108,6 +133,40 @@ export function Listas() {
             </select>
           </Field>
 
+          <Field
+            label="Agenda vinculada"
+            hint={
+              isComplementary
+                ? "Obrigatório para lista complementar."
+                : "Opcional — liga a sugestão de confirmações à capacidade cadastrada."
+            }
+          >
+            <select
+              className="field"
+              value={agendaId}
+              onChange={(event) => setAgendaId(event.target.value)}
+              disabled={!municipalityId}
+            >
+              <option value="">Nenhuma</option>
+              {agendaOptions.map((agenda) => (
+                <option key={agenda.id} value={agenda.id}>
+                  {agenda.doctor.name} — {formatDate(agenda.date)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <label className="mt-3 flex items-center gap-2 text-sm text-ink-muted">
+          <input
+            type="checkbox"
+            checked={isComplementary}
+            onChange={(event) => setIsComplementary(event.target.checked)}
+          />
+          Esta é uma lista complementar (reposição de vagas abertas de uma agenda já disparada)
+        </label>
+
+        <div className="mt-3">
           <Field label="Arquivo" hint="PDF ou foto da agenda (JPG, PNG ou WebP), até 20 MB.">
             <input
               ref={fileRef}
@@ -122,6 +181,7 @@ export function Listas() {
             />
           </Field>
         </div>
+
         {uploading && <p className="mt-3 text-sm text-ink-muted">Enviando…</p>}
         {error && (
           <div className="mt-3">
@@ -156,7 +216,12 @@ export function Listas() {
             <Link key={list.id} to={`/listas/${list.id}`} className="card block p-5 hover:border-accent">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate font-semibold text-ink">{list.originalName}</p>
+                  <p className="truncate font-semibold text-ink">
+                    {list.originalName}
+                    {list.isComplementary && (
+                      <span className="ml-2 align-middle text-xs font-normal text-accent">complementar</span>
+                    )}
+                  </p>
                   <p className="mt-0.5 text-sm text-ink-muted">
                     {list.municipality.name}
                     {list.agenda && ` · agenda de ${formatDate(list.agenda.date)}`} · enviada por{" "}

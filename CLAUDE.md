@@ -34,12 +34,17 @@ Validado: typecheck (server + web), 46 testes e build limpos; telas conferidas n
 - `modules/team` — equipe (criar, redefinir senha, ativar/desativar, trocar a própria) e leitura da trilha de auditoria
 - `modules/suggestions` — `suggestions.ts` (puro, testado) calcula overbooking pela taxa histórica; `suggestions.service.ts` busca o histórico em cascata (médico+procedimento → médico → município → global)
 - `modules/queue/cadence.service` — lembrete D-1, reenvio pelo telefone alternativo e expurgo LGPD; tudo acionado pelo cron horário
+- `modules/replies` — classificação por IA de resposta em texto livre ambígua (só entra quando `classifyReply()` puro devolve "unknown"); corte de confiança 0,7, abaixo disso fica "unknown" mesmo assim
+- `modules/reports/daily-summary.service` — resumo do dia pro gestor (e-mail com a agenda de amanhã), cron próprio às 18h
+- `modules/lists/list-report.ts` — geração do CSV do relatório de uma lista, reaproveitada pelo export manual e pelo e-mail automático ao concluir
+- `lib/email.ts` — wrapper do Resend com stub em log quando falta `RESEND_API_KEY`
+- Reposição de vagas: `GET /api/agendas/:id/open-slots` (+ `/export`) lista os horários que abriram (recusa/sem resposta/sem telefone); lista complementar (`isComplementary`) dispara com o template `VAGA_ABERTA` em vez de `CONFIRMACAO`
 
 **Frontend** (`web/src/`): login, shell, Listas, Revisão (tabela + arquivo lado a lado + sugestão de confirmações), Acompanhamento, Fechamento, Indicadores, Configurações (5 abas), Equipe e auditoria, `StatusBand`, `ConfirmModal`, `FormModal`, `ui.tsx`.
 
 **Nunca executado de verdade**: a chamada à API de extração e o envio real de WhatsApp — falta credencial. Os testes cobrem a lógica pura (telefone, classificação de resposta, mapeamento da extração, alertas de fechamento), não a integração.
 
-**Fase 2 parcialmente implementada**: lembrete D-1, reenvio por telefone alternativo, sugestão de confirmações e expurgo LGPD estão prontos. **Falta**: classificação por IA do texto livre, reposição de vagas via lista complementar, relatório automático por e-mail, resumo do dia pro gestor.
+**Fase 2 completa** conforme escopo do PLANO.md: lembrete D-1, reenvio por telefone alternativo, sugestão de confirmações, expurgo LGPD, classificação por IA de texto livre ambíguo, reposição de vagas via lista complementar, relatório automático por e-mail ao concluir a lista, e resumo diário para o gestor.
 
 **Score de no-show por paciente: deliberadamente não implementado.** O dado não existe — o médico informa um total de atendidos por dia, não quem compareceu. Qualquer score seria aproximação apresentada como fato. A função pura `noShowScore` está pronta e testada em `modules/suggestions/suggestions.ts` para quando houver presença por paciente. Ver o comentário no fim de `suggestions.service.ts`.
 

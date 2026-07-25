@@ -72,7 +72,11 @@ https://SEU-DOMINIO/api/whatsapp/webhook
 
 Usar o mesmo valor de `WHATSAPP_VERIFY_TOKEN` no campo de verificação, e assinar os campos **`messages`** (respostas dos pacientes) e **`message_status`** (entrega e falha — sem isso o sistema não sabe que a mensagem não chegou).
 
-### 3.4 Limite diário
+### 3.4 Templates adicionais da Fase 2
+
+`lembrete_vespera` e `convite_vaga_aberta` (o segundo usado nas listas complementares) fazem parte do mesmo lote submetido por `npm run templates` — não precisam de passo separado.
+
+### 3.5 Limite diário
 
 `WHATSAPP_DAILY_LIMIT` precisa espelhar o tier atual do número na Meta (um número novo começa em ~250 conversas/24h). A fila para ao bater esse teto e informa quanto sobrou, em vez de insistir e derrubar a qualidade do número. Conforme a Meta elevar o tier, aumentar o valor aqui.
 
@@ -82,8 +86,15 @@ Usar o mesmo valor de `WHATSAPP_VERIFY_TOKEN` no campo de verificação, e assin
 2. Copiar todas as variáveis do `.env` para as Environment Variables do projeto.
 3. Definir `CRON_SECRET` (qualquer valor aleatório) — o Vercel usa para autenticar o cron que processa a fila de hora em hora.
 4. Após o push, se o site continuar servindo a versão antiga: Deployments → **Promote to Production**.
+5. O projeto usa **dois crons** (fila a cada hora + resumo diário às 18h de Brasília). No plano **Hobby** da Vercel, cron só roda no máximo uma vez por dia — o cron horário da fila não vai disparar como configurado. Para o disparo em massa funcionar de verdade (não só o botão manual "processar agora" no painel), o projeto precisa estar no plano **Pro**.
 
-## 5. Primeira operação
+## 5. E-mail (Resend) — opcional, mas necessário para relatório automático
+
+Colar a chave em `RESEND_API_KEY` e configurar `EMAIL_FROM` com um domínio verificado no Resend. Sem isso:
+- O relatório da lista ao "Concluir" não sai por e-mail (mas continua disponível para baixar manualmente).
+- O resumo diário para o gestor não é enviado.
+
+## 6. Primeira operação
 
 Na ordem, pelo painel:
 
@@ -102,9 +113,11 @@ Na ordem, pelo painel:
 - [ ] `npx prisma migrate deploy` rodado
 - [ ] `SESSION_SECRET` gerado
 - [ ] Primeiro usuário criado com `npm run seed`
-- [ ] `ANTHROPIC_API_KEY` configurada
+- [ ] `ANTHROPIC_API_KEY` configurada (extração **e** classificação de respostas ambíguas)
 - [ ] Conta do WhatsApp Business criada e as 5 variáveis preenchidas
-- [ ] Templates submetidos e **aprovados** pela Meta
+- [ ] Templates submetidos e **aprovados** pela Meta (3 da Fase 1 + `lembrete_vespera` e `convite_vaga_aberta`)
 - [ ] Webhook cadastrado com `messages` e `message_status` assinados
 - [ ] `WHATSAPP_DAILY_LIMIT` conferido com o tier do número
+- [ ] `RESEND_API_KEY` e `EMAIL_FROM` configurados (relatório automático e resumo diário)
 - [ ] Projeto no Vercel com as variáveis e o `CRON_SECRET`
+- [ ] Plano **Pro** na Vercel (Hobby não roda cron mais de uma vez por dia — a fila precisa do cron horário)

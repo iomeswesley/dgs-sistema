@@ -1,0 +1,49 @@
+import { prisma } from "@/lib/prisma.js";
+import { AppError } from "@/middleware/errorHandler.js";
+import { toCsv } from "@/lib/csv.js";
+import { REFUSAL_REASON_LABEL, STATUS_LABEL } from "@/lib/labels.js";
+
+/**
+ * Relatório de uma lista para devolver à secretaria: nome, telefone (via
+ * status) e o que cada paciente respondeu, com o motivo quando recusou.
+ *
+ * Função única usada tanto pelo export manual quanto pelo e-mail automático
+ * ao concluir a lista — sem duplicar a query e o mapeamento de rótulos.
+ */
+export async function buildListReportCsv(listId: number): Promise<{ csv: string; filename: string; municipalityName: string }> {
+  const list = await prisma.list.findUnique({
+    where: { id: listId },
+    select: { municipality: { select: { name: true, contactEmail: true } }, createdAt: true },
+  });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+
+  const appointments = await prisma.appointment.findMany({
+    where: { listId },
+    orderBy: { scheduledAt: "asc" },
+    include: {
+      patient: { select: { name: true, cns: true } },
+      doctor: { select: { name: true } },
+      procedure: { select: { name: true } },
+    },
+  });
+
+  const csv = toCsv(
+    ["Paciente", "CNS", "Data/Hora", "Procedimento", "Médico", "Situação", "Motivo", "Observação"],
+    appointments.map((appointment) => [
+      appointment.patient.name,
+      appointment.patient.cns ?? "",
+      appointment.scheduledAt.toLocaleString("pt-BR"),
+      appointment.procedure.name,
+      appointment.doctor.name,
+      STATUS_LABEL[appointment.status] ?? appointment.status,
+      appointment.refusalReason ? (REFUSAL_REASON_LABEL[appointment.refusalReason] ?? "") : "",
+      appointment.refusalNote ?? appointment.contactNote ?? "",
+    ])
+  );
+
+  return {
+    csv,
+    filename: `lista-${listId}.csv`,
+    municipalityName: list.municipality.name,
+  };
+}

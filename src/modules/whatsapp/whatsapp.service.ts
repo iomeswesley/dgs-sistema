@@ -2,6 +2,7 @@ import type { AppointmentStatus, DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
 import { classifyReply } from "@/lib/templates.js";
 import type { InboundReply, StatusUpdate } from "@/lib/whatsapp.js";
+import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
 
 /*
   Tratamento do webhook.
@@ -35,7 +36,17 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
   if (known) return;
 
   const appointment = await findAppointmentForPhone(reply.from);
-  const intent = classifyReply({ buttonPayload: reply.buttonPayload, text: reply.text });
+  let intent = classifyReply({ buttonPayload: reply.buttonPayload, text: reply.text });
+
+  // O caminho barato (clique de botão, "sim"/"não" óbvio) já resolveu a
+  // maioria. Só cai na IA quando é texto livre ambíguo — e mesmo assim o
+  // resultado bruto vai pro log; só vira ação se a confiança bater o corte
+  // (ver replies.service.ts).
+  let aiResult: Awaited<ReturnType<typeof classifyReplyWithAI>> | null = null;
+  if (intent === "unknown" && reply.text) {
+    aiResult = await classifyReplyWithAI(reply.text);
+    if (aiResult.intent !== "unknown") intent = aiResult.intent;
+  }
 
   await prisma.whatsappMessage.create({
     data: {
@@ -46,7 +57,12 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
       body: reply.text,
       buttonPayload: reply.buttonPayload,
       status: "ENTREGUE",
-      raw: { intent } as never,
+      raw: {
+        intent,
+        ...(aiResult
+          ? { aiClassified: true, aiConfidence: aiResult.rawConfidence, aiReasoning: aiResult.reasoning }
+          : {}),
+      } as never,
     },
   });
 

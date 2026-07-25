@@ -80,7 +80,7 @@ export function Revisao() {
     scheduledAt: "",
   });
   const [removing, setRemoving] = useState<Appointment | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"approve" | "dispatch" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"approve" | "dispatch" | "conclude" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -149,7 +149,7 @@ export function Revisao() {
       if (confirmAction === "approve") {
         await api.post(`/api/lists/${list.id}/approve`);
         setNotice("Lista aprovada. Agora dá para disparar as confirmações.");
-      } else {
+      } else if (confirmAction === "dispatch") {
         const result = await api.post<{ queued: number; skipped: number; capacity: { remaining: number } }>(
           `/api/lists/${list.id}/dispatch`
         );
@@ -157,6 +157,17 @@ export function Revisao() {
           `${result.queued} mensagens na fila.` +
             (result.skipped > 0 ? ` ${result.skipped} ignoradas (opt-out ou já enfileiradas).` : "") +
             ` Cabem mais ${result.capacity.remaining} envios hoje.`
+        );
+      } else {
+        const result = await api.post<{ emailSent: boolean; hasContactEmail: boolean }>(
+          `/api/lists/${list.id}/conclude`
+        );
+        setNotice(
+          result.emailSent
+            ? "Lista concluída e o relatório foi enviado por e-mail para a secretaria."
+            : result.hasContactEmail
+              ? "Lista concluída. O e-mail para a secretaria falhou — baixe o relatório e envie manualmente."
+              : "Lista concluída. Cadastre o e-mail de contato do município para o relatório sair automaticamente da próxima vez."
         );
       }
       setConfirmAction(null);
@@ -191,6 +202,11 @@ export function Revisao() {
             {list.status === "APROVADA" && (
               <button type="button" className="btn btn-primary" onClick={() => setConfirmAction("dispatch")}>
                 Disparar confirmações
+              </button>
+            )}
+            {list.status === "DISPARADA" && (
+              <button type="button" className="btn btn-primary" onClick={() => setConfirmAction("conclude")}>
+                Concluir e enviar relatório
               </button>
             )}
           </div>
@@ -413,15 +429,25 @@ export function Revisao() {
 
       <ConfirmModal
         open={confirmAction !== null}
-        title={confirmAction === "approve" ? "Aprovar a lista?" : "Disparar as confirmações?"}
+        title={
+          confirmAction === "approve"
+            ? "Aprovar a lista?"
+            : confirmAction === "dispatch"
+              ? "Disparar as confirmações?"
+              : "Concluir esta lista?"
+        }
         description={
           confirmAction === "approve"
             ? "Depois de aprovada a revisão fecha e os dados não podem mais ser corrigidos aqui."
-            : `As mensagens entram na fila e saem respeitando o limite diário da Meta. ${
-                pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
-              }`
+            : confirmAction === "dispatch"
+              ? `As mensagens entram na fila e saem respeitando o limite diário da Meta. ${
+                  pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
+                }`
+              : "O relatório com o resultado de cada paciente é enviado por e-mail para a secretaria, se houver contato cadastrado."
         }
-        confirmLabel={confirmAction === "approve" ? "Aprovar" : "Disparar"}
+        confirmLabel={
+          confirmAction === "approve" ? "Aprovar" : confirmAction === "dispatch" ? "Disparar" : "Concluir"
+        }
         busy={busy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}

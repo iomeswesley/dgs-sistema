@@ -73,6 +73,10 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
     include: { patient: { select: { optedOut: true } } },
   });
 
+  // Lista complementar convida para uma vaga que abriu (template diferente,
+  // com pergunta de interesse) — não é a mesma confirmação da lista original.
+  const template: TemplateKind = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+
   let queued = 0;
   let skipped = 0;
 
@@ -85,7 +89,7 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
     }
     // Nunca dois jobs pro mesmo agendamento e template.
     const existing = await prisma.messageJob.findFirst({
-      where: { appointmentId: appointment.id, template: "CONFIRMACAO", status: { in: ["PENDENTE", "ENVIADO"] } },
+      where: { appointmentId: appointment.id, template, status: { in: ["PENDENTE", "ENVIADO"] } },
     });
     if (existing) {
       skipped++;
@@ -95,7 +99,7 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
     await prisma.messageJob.create({
       data: {
         appointmentId: appointment.id,
-        template: "CONFIRMACAO",
+        template,
         phone: appointment.selectedPhone!,
       },
     });

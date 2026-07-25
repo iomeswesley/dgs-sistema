@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { dateOnlySchema, parseDateOnly, parseQuery } from "@/lib/http.js";
 import { buildIndicators, type GroupBy } from "./indicators.service.js";
 import { toCsv } from "@/lib/csv.js";
+import { buildListReportCsv } from "@/modules/lists/list-report.js";
 
 export const indicatorsRouter = Router();
 indicatorsRouter.use("/api/indicators", requireAuth);
@@ -107,53 +107,10 @@ indicatorsRouter.get(
   "/api/indicators/list-report",
   asyncHandler(async (req, res) => {
     const query = parseQuery(req, z.object({ listId: z.coerce.number().int().positive() }));
-
-    const appointments = await prisma.appointment.findMany({
-      where: { listId: query.listId },
-      orderBy: { scheduledAt: "asc" },
-      include: {
-        patient: { select: { name: true, cns: true } },
-        doctor: { select: { name: true } },
-        procedure: { select: { name: true } },
-      },
-    });
-
-    const STATUS_LABEL: Record<string, string> = {
-      PENDENTE: "Não enviado",
-      ENVIADO: "Enviado, sem resposta",
-      ENTREGUE: "Entregue, sem resposta",
-      CONFIRMADO: "Confirmou",
-      RECUSADO: "Recusou",
-      SEM_RESPOSTA: "Sem resposta",
-      SEM_TELEFONE: "Não contatável (sem telefone)",
-      FALHA: "Falha na entrega",
-    };
-    const REASON_LABEL: Record<string, string> = {
-      JA_FEZ: "Já fez o procedimento",
-      HORARIO_RUIM: "Horário não serve",
-      SEM_TRANSPORTE: "Sem transporte",
-      MUDOU_SE: "Mudou-se",
-      TELEFONE_ERRADO: "Telefone errado",
-      OBITO: "Óbito",
-      OUTRO: "Outro",
-    };
-
-    const csv = toCsv(
-      ["Paciente", "CNS", "Data/Hora", "Procedimento", "Médico", "Situação", "Motivo", "Observação"],
-      appointments.map((appointment) => [
-        appointment.patient.name,
-        appointment.patient.cns ?? "",
-        appointment.scheduledAt.toLocaleString("pt-BR"),
-        appointment.procedure.name,
-        appointment.doctor.name,
-        STATUS_LABEL[appointment.status] ?? appointment.status,
-        appointment.refusalReason ? (REASON_LABEL[appointment.refusalReason] ?? "") : "",
-        appointment.refusalNote ?? appointment.contactNote ?? "",
-      ])
-    );
+    const { csv, filename } = await buildListReportCsv(query.listId);
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="lista-${query.listId}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
   })
 );

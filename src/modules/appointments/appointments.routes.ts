@@ -60,6 +60,7 @@ appointmentsRouter.get(
             buttonPayload: true,
             errorMessage: true,
             createdAt: true,
+            raw: true,
           },
         },
       },
