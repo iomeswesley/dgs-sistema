@@ -1,0 +1,106 @@
+import express from "express";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import helmet from "helmet";
+import fs from "node:fs";
+import path from "node:path";
+import { env, isProduction } from "@/config/env.js";
+import { errorHandler, notFoundHandler } from "@/middleware/errorHandler.js";
+import "@/middleware/session.js";
+import "@/middleware/rawBody.js";
+
+import { authRouter } from "@/modules/auth/auth.routes.js";
+
+const PgSession = connectPgSimple(session);
+
+// O build do Vite sai em dist-web/ (ver vite.config.ts). process.cwd() em vez
+// de __dirname porque a profundidade muda entre dev (tsx sobre src/) e build
+// (dist/src/), mas o processo sempre roda a partir da raiz do projeto.
+const WEB_DIST = path.join(process.cwd(), "dist-web");
+
+export function createApp() {
+  const app = express();
+
+  // O Vercel termina TLS na borda e a função recebe HTTP puro. Sem confiar no
+  // proxy, req.secure fica false e o cookie de sessão com secure:true é
+  // descartado silenciosamente — o login responde 200 mas nenhum Set-Cookie
+  // chega ao navegador.
+  app.set("trust proxy", 1);
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          // O frontend é React compilado pelo Vite: nada de script inline,
+          // então não precisa de 'unsafe-inline' em scriptSrc.
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          fontSrc: ["'self'", "data:"],
+          connectSrc: ["'self'"],
+          frameAncestors: ["'none'"],
+          objectSrc: ["'none'"],
+        },
+      },
+    })
+  );
+
+  // Guarda o corpo bruto em req.rawBody: o webhook da Meta assina o payload
+  // cru, e o JSON reserializado não bate com a assinatura.
+  app.use(
+    express.json({
+      limit: "2mb",
+      verify: (req, _res, buf) => {
+        (req as express.Request).rawBody = buf;
+      },
+    })
+  );
+
+  app.use(
+    session({
+      // Usa DATABASE_URL (pooler em modo transaction), não DIRECT_URL: o
+      // pooler em modo session tem teto baixo de conexões reais e cada
+      // instância serverless abre a sua, esgotando o limite rapidamente.
+      // connect-pg-simple só faz queries parametrizadas simples, então é
+      // seguro no modo transaction.
+      store: new PgSession({
+        conString: env.DATABASE_URL,
+        tableName: "session",
+        createTableIfMissing: true,
+        pruneSessionInterval: false, // timer de fundo não faz sentido em serverless
+        errorLog: (err) => console.error("[SESSION STORE ERROR]", err),
+      }),
+      secret: env.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 8, // 8h
+        secure: isProduction,
+        sameSite: "lax",
+      },
+    })
+  );
+
+  /* ---------------- API ---------------- */
+
+  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+  app.use(authRouter);
+
+  app.use("/api", notFoundHandler);
+
+  /* ---------------- Frontend (SPA) ---------------- */
+
+  if (fs.existsSync(WEB_DIST)) {
+    app.use(express.static(WEB_DIST));
+    // Fallback do React Router: qualquer rota que não seja /api cai no
+    // index.html pra o roteamento acontecer no cliente.
+    app.get("*", (_req, res) => res.sendFile(path.join(WEB_DIST, "index.html")));
+  }
+
+  app.use(errorHandler);
+
+  return app;
+}

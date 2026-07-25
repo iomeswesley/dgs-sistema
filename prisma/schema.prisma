@@ -1,0 +1,538 @@
+// Schema do Sistema DGS — ver PLANO.md para o desenho completo.
+//
+// Princípio central: contagens derivadas (planejados, confirmados, recusados,
+// sem resposta) NUNCA são colunas — sempre calculadas a partir de Appointment.
+// Só os checks 2 (atendidos) e 3 (pagos) são lançamentos manuais, e por isso
+// carregam quem lançou e quando, além de entrada no AuditLog.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/* ------------------------------------------------------------------ */
+/* Equipe                                                              */
+/* ------------------------------------------------------------------ */
+
+// Perfil único: todo mundo da equipe tem os mesmos poderes. O controle vem
+// do AuditLog (quem lançou o quê), não de permissões — decisão explícita do
+// usuário, ver PLANO.md.
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  passwordHash String
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  passwordResets    PasswordReset[]
+  auditLogs         AuditLog[]
+  uploadedLists     List[]          @relation("ListUploadedBy")
+  approvedLists     List[]          @relation("ListApprovedBy")
+  manualContacts    Appointment[]   @relation("AppointmentContactedBy")
+  attendedClosings  DailyClosing[]  @relation("ClosingAttendedBy")
+  paidClosings      DailyClosing[]  @relation("ClosingPaidBy")
+
+  @@map("users")
+}
+
+model PasswordReset {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+/* ------------------------------------------------------------------ */
+/* Cadastros                                                           */
+/* ------------------------------------------------------------------ */
+
+model Municipality {
+  id           Int      @id @default(autoincrement())
+  name         String
+  state        String   @default("SC")
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  // Observações sobre o formato da lista que essa prefeitura manda
+  // (ex: "SISREG, cabeçalho com procedimento único").
+  notes        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  units        HealthUnit[]
+  agendas      Agenda[]
+  lists        List[]
+  appointments Appointment[]
+  closings     DailyClosing[]
+
+  @@unique([name, state])
+  @@map("municipalities")
+}
+
+// Unidade de saúde. A mesma unidade pode ser executante (onde o atendimento
+// acontece) e solicitante (a UBS que encaminhou) — por isso não há tipo, o
+// papel vem de qual campo referencia a unidade.
+model HealthUnit {
+  id             Int      @id @default(autoincrement())
+  municipalityId Int
+  name           String
+  address        String?
+  phone          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  municipality        Municipality  @relation(fields: [municipalityId], references: [id])
+  agendas             Agenda[]
+  requestedAppointments Appointment[] @relation("AppointmentRequestingUnit")
+
+  @@unique([municipalityId, name])
+  @@index([municipalityId])
+  @@map("health_units")
+}
+
+model Doctor {
+  id           Int      @id @default(autoincrement())
+  name         String
+  specialty    String?
+  registration String? // CRM
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  procedures   DoctorProcedure[]
+  agendas      Agenda[]
+  appointments Appointment[]
+  closings     DailyClosing[]
+
+  @@map("doctors")
+}
+
+model Procedure {
+  id     Int     @id @default(autoincrement())
+  name   String  @unique
+  // Preparo enviado no lembrete de véspera (jejum, bexiga cheia, etc.).
+  // Quando vazio, o template usa um texto neutro — a Meta não aceita
+  // variável em branco.
+  preparationInstructions String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctors      DoctorProcedure[]
+  agendas      Agenda[]
+  appointments Appointment[]
+  closings     DailyClosing[]
+
+  @@map("procedures")
+}
+
+// Configuração por médico × procedimento: capacidade e valores. É daqui que
+// saem o "esperado por dia" da sugestão de confirmações e o financeiro
+// (repasse ao médico e faturamento da prefeitura).
+model DoctorProcedure {
+  id             Int      @id @default(autoincrement())
+  doctorId       Int
+  procedureId    Int
+  minutesPerVisit Int?
+  expectedPerDay Int?
+  // Valor pago ao médico por procedimento realizado.
+  doctorFee      Decimal? @db.Decimal(10, 2)
+  // Valor cobrado da prefeitura por procedimento realizado.
+  cityRate       Decimal? @db.Decimal(10, 2)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  procedure Procedure @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, procedureId])
+  @@index([doctorId])
+  @@map("doctor_procedures")
+}
+
+/* ------------------------------------------------------------------ */
+/* Agenda e listas                                                     */
+/* ------------------------------------------------------------------ */
+
+// Escala do médico: o sistema sabe o esperado ANTES da lista chegar. Uma
+// agenda pode receber a lista original e listas complementares (reposição
+// de vagas), daí a relação 1:N com List.
+model Agenda {
+  id             Int      @id @default(autoincrement())
+  doctorId       Int
+  municipalityId Int
+  unitId         Int?
+  procedureId    Int?
+  date           DateTime @db.Date
+  shift          Shift    @default(INTEGRAL)
+  capacity       Int?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+  municipality Municipality  @relation(fields: [municipalityId], references: [id])
+  unit         HealthUnit?   @relation(fields: [unitId], references: [id])
+  procedure    Procedure?    @relation(fields: [procedureId], references: [id])
+  lists        List[]
+  appointments Appointment[]
+
+  @@index([date])
+  @@index([doctorId, date])
+  @@map("agendas")
+}
+
+// Cada arquivo (PDF ou foto) recebido de uma prefeitura.
+model List {
+  id             Int        @id @default(autoincrement())
+  municipalityId Int
+  agendaId       Int?
+  originalName   String
+  storagePath    String
+  mimeType       String
+  sizeBytes      Int?
+  sourceFormat   SourceFormat @default(OUTRO)
+  status         ListStatus   @default(EXTRAINDO)
+  // Lista complementar enviada pra preencher vagas abertas de uma agenda que
+  // já teve disparo (fase 2).
+  isComplementary Boolean   @default(false)
+  // Resposta bruta da extração da IA, guardada pra auditoria e pra
+  // reprocessar sem precisar reler o arquivo.
+  extractionRaw  Json?
+  extractionError String?
+  extractedAt    DateTime?
+  uploadedById   Int
+  approvedById   Int?
+  approvedAt     DateTime?
+  dispatchedAt   DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  municipality Municipality  @relation(fields: [municipalityId], references: [id])
+  agenda       Agenda?       @relation(fields: [agendaId], references: [id])
+  uploadedBy   User          @relation("ListUploadedBy", fields: [uploadedById], references: [id])
+  approvedBy   User?         @relation("ListApprovedBy", fields: [approvedById], references: [id])
+  appointments Appointment[]
+
+  @@index([municipalityId])
+  @@index([status])
+  @@map("lists")
+}
+
+/* ------------------------------------------------------------------ */
+/* Pacientes e agendamentos                                            */
+/* ------------------------------------------------------------------ */
+
+// Entidade própria (não só linha de lista) pra ter histórico entre listas,
+// score de no-show e opt-out de LGPD. Dedupe por CNS quando existir, senão
+// por telefone normalizado.
+model Patient {
+  id        Int       @id @default(autoincrement())
+  name      String
+  cns       String?   @unique
+  birthDate DateTime? @db.Date
+  // Todos os telefones conhecidos, em E.164. As listas trazem até 5 colunas
+  // de telefone por paciente — guardar todos permite fallback quando o
+  // primeiro número falha.
+  phones    String[]  @default([])
+  // Paciente pediu pra não receber mensagens. Obrigatório respeitar (LGPD),
+  // e é a defesa mais barata contra denúncia de spam no WhatsApp.
+  optedOut   Boolean   @default(false)
+  optedOutAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  appointments Appointment[]
+
+  @@index([name])
+  @@map("patients")
+}
+
+model Appointment {
+  id               Int      @id @default(autoincrement())
+  listId           Int
+  agendaId         Int?
+  patientId        Int
+  municipalityId   Int
+  doctorId         Int
+  procedureId      Int
+  requestingUnitId Int?
+  scheduledAt      DateTime
+  isFirstVisit     Boolean?
+  // Snapshot dos telefones como vieram na lista (E.164), independente do
+  // cadastro do paciente — a lista da prefeitura pode trazer um número novo.
+  phones           String[] @default([])
+  // Número escolhido para o disparo (o melhor candidato a WhatsApp).
+  selectedPhone    String?
+  status           AppointmentStatus @default(PENDENTE)
+  refusalReason    RefusalReason?
+  refusalNote      String?
+  respondedAt      DateTime?
+  // Contato manual (equipe ligou) — sem isso esses casos voltariam pro papel.
+  contactedById    Int?
+  contactedAt      DateTime?
+  contactNote      String?
+  // 0..1 — abaixo do limiar a linha aparece destacada na revisão.
+  extractionConfidence Float?
+  manuallyEdited   Boolean  @default(false)
+  // Linha bruta como a IA extraiu, pra conferir contra o arquivo original.
+  rawLine          Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  list           List         @relation(fields: [listId], references: [id], onDelete: Cascade)
+  agenda         Agenda?      @relation(fields: [agendaId], references: [id])
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  municipality   Municipality @relation(fields: [municipalityId], references: [id])
+  doctor         Doctor       @relation(fields: [doctorId], references: [id])
+  procedure      Procedure    @relation(fields: [procedureId], references: [id])
+  requestingUnit HealthUnit?  @relation("AppointmentRequestingUnit", fields: [requestingUnitId], references: [id])
+  contactedBy    User?        @relation("AppointmentContactedBy", fields: [contactedById], references: [id])
+
+  messages     WhatsappMessage[]
+  messageJobs  MessageJob[]
+
+  @@index([listId])
+  @@index([patientId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([doctorId, scheduledAt])
+  @@map("appointments")
+}
+
+/* ------------------------------------------------------------------ */
+/* WhatsApp                                                            */
+/* ------------------------------------------------------------------ */
+
+// Fila de envio. Disparo em massa é assíncrono por causa do limite diário da
+// Meta: o processador respeita o teto do dia e reporta o que não coube, em
+// vez de falhar em silêncio.
+model MessageJob {
+  id            Int       @id @default(autoincrement())
+  appointmentId Int
+  template      TemplateKind
+  phone         String
+  scheduledFor  DateTime  @default(now())
+  status        JobStatus @default(PENDENTE)
+  attempts      Int       @default(0)
+  lastError     String?
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([appointmentId])
+  @@map("message_jobs")
+}
+
+model WhatsappMessage {
+  id            Int       @id @default(autoincrement())
+  appointmentId Int?
+  // Id da mensagem na Meta. Único: garante idempotência quando o webhook
+  // reentrega o mesmo evento.
+  wamid         String?   @unique
+  direction     Direction
+  template      TemplateKind?
+  phone         String
+  body          String?
+  // Payload do clique do botão, quando a resposta veio por quick reply.
+  buttonPayload String?
+  status        DeliveryStatus @default(ENVIADO)
+  errorCode     String?
+  errorMessage  String?
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  failedAt      DateTime?
+  raw           Json?
+  createdAt     DateTime  @default(now())
+
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId])
+  @@index([phone])
+  @@map("whatsapp_messages")
+}
+
+/* ------------------------------------------------------------------ */
+/* Conciliação e auditoria                                             */
+/* ------------------------------------------------------------------ */
+
+// Checks 2 e 3 da conciliação. Os confirmados (check 1) não estão aqui de
+// propósito — são derivados de Appointment.status.
+model DailyClosing {
+  id             Int      @id @default(autoincrement())
+  doctorId       Int
+  municipalityId Int
+  procedureId    Int?
+  date           DateTime @db.Date
+
+  // Check 2 — o que o médico informou ter atendido.
+  attendedReported     Int?
+  attendedReportedById Int?
+  attendedReportedAt   DateTime?
+
+  // Check 3 — o que o financeiro confirmou nas guias. É o que vira pagamento.
+  paidCount     Int?
+  paidCountById Int?
+  paidCountAt   DateTime?
+
+  // Atendidos que não estavam na lista. Sem isso, % de comparecimento
+  // estoura 100% e a conciliação nunca fecha.
+  extrasCount Int      @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doctor             Doctor       @relation(fields: [doctorId], references: [id])
+  municipality       Municipality @relation(fields: [municipalityId], references: [id])
+  procedure          Procedure?   @relation(fields: [procedureId], references: [id])
+  attendedReportedBy User?        @relation("ClosingAttendedBy", fields: [attendedReportedById], references: [id])
+  paidCountBy        User?        @relation("ClosingPaidBy", fields: [paidCountById], references: [id])
+  attachments        ClosingAttachment[]
+
+  @@unique([doctorId, municipalityId, date, procedureId])
+  @@index([date])
+  @@map("daily_closings")
+}
+
+// Guias anexadas como evidência do check 3.
+model ClosingAttachment {
+  id           Int      @id @default(autoincrement())
+  closingId    Int
+  originalName String
+  storagePath  String
+  mimeType     String
+  uploadedById Int
+  createdAt    DateTime @default(now())
+
+  closing DailyClosing @relation(fields: [closingId], references: [id], onDelete: Cascade)
+
+  @@index([closingId])
+  @@map("closing_attachments")
+}
+
+// Toda alteração de lançamento manual. É o que compensa a ausência de
+// perfis separados — sem roles, a rastreabilidade tem que ser total.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  entity    String
+  entityId  Int?
+  field     String?
+  oldValue  String?
+  newValue  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Rate limit persistido no banco, não em memória: em serverless cada
+// instância teria seu próprio Map e o limite não valeria nada.
+model RateLimitHit {
+  id        Int      @id @default(autoincrement())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@map("rate_limit_hits")
+}
+
+/* ------------------------------------------------------------------ */
+/* Enums                                                               */
+/* ------------------------------------------------------------------ */
+
+enum Shift {
+  MANHA
+  TARDE
+  INTEGRAL
+}
+
+enum SourceFormat {
+  SISREG
+  CELK
+  OUTRO
+}
+
+enum ListStatus {
+  EXTRAINDO
+  EM_REVISAO
+  APROVADA
+  DISPARADA
+  CONCLUIDA
+  ERRO
+}
+
+enum AppointmentStatus {
+  PENDENTE
+  ENVIADO
+  ENTREGUE
+  CONFIRMADO
+  RECUSADO
+  SEM_RESPOSTA
+  SEM_TELEFONE
+  FALHA
+}
+
+enum RefusalReason {
+  JA_FEZ
+  HORARIO_RUIM
+  SEM_TRANSPORTE
+  MUDOU_SE
+  TELEFONE_ERRADO
+  OBITO
+  OUTRO
+}
+
+enum TemplateKind {
+  CONFIRMACAO
+  LEMBRETE
+  VAGA_ABERTA
+}
+
+enum JobStatus {
+  PENDENTE
+  ENVIANDO
+  ENVIADO
+  FALHA
+  CANCELADO
+}
+
+enum Direction {
+  ENVIADA
+  RECEBIDA
+}
+
+enum DeliveryStatus {
+  ENVIADO
+  ENTREGUE
+  LIDO
+  FALHOU
+}
