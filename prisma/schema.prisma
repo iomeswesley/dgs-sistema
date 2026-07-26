@@ -39,6 +39,7 @@ model User {
   manualContacts    Appointment[]   @relation("AppointmentContactedBy")
   attendedClosings  DailyClosing[]  @relation("ClosingAttendedBy")
   paidClosings      DailyClosing[]  @relation("ClosingPaidBy")
+  connectedWhatsappAccounts WhatsappAccount[]
 
   @@map("users")
 }
@@ -373,6 +374,26 @@ model WhatsappMessage {
   @@index([appointmentId])
   @@index([phone])
   @@map("whatsapp_messages")
+}
+
+// Conta do WhatsApp Business conectada via Embedded Signup (fluxo de
+// Provedor de Tecnologia da Meta). Um único cliente (a própria DGS) usa o
+// sistema, então basta uma linha — o serviço mantém no máximo uma ativa em
+// vez de multi-tenant de verdade. Token vive só aqui, nunca em log/auditoria.
+model WhatsappAccount {
+  id             Int       @id @default(autoincrement())
+  wabaId         String
+  phoneNumberId  String
+  businessName   String?
+  accessToken    String
+  tokenExpiresAt DateTime?
+  connectedById  Int?
+  connectedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  connectedBy User? @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+
+  @@map("whatsapp_accounts")
 }
 
 /* ------------------------------------------------------------------ */

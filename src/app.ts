@@ -16,6 +16,7 @@ import { listsRouter } from "@/modules/lists/lists.routes.js";
 import { appointmentsRouter } from "@/modules/appointments/appointments.routes.js";
 import { queueRouter } from "@/modules/queue/queue.routes.js";
 import { whatsappRouter } from "@/modules/whatsapp/whatsapp.routes.js";
+import { whatsappSignupRouter } from "@/modules/whatsapp/signup.routes.js";
 import { closingsRouter } from "@/modules/closings/closings.routes.js";
 import { indicatorsRouter } from "@/modules/indicators/indicators.routes.js";
 import { teamRouter } from "@/modules/team/team.routes.js";
@@ -47,15 +48,18 @@ export function createApp() {
         directives: {
           defaultSrc: ["'self'"],
           // O frontend é React compilado pelo Vite: nada de script inline,
-          // então não precisa de 'unsafe-inline' em scriptSrc.
-          scriptSrc: ["'self'"],
+          // então não precisa de 'unsafe-inline' em scriptSrc. O SDK da Meta
+          // (Embedded Signup do WhatsApp, em Configurações → WhatsApp) é a
+          // única exceção — carrega de connect.facebook.net.
+          scriptSrc: ["'self'", "https://connect.facebook.net"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           imgSrc: ["'self'", "data:", "blob:"],
           fontSrc: ["'self'", "data:"],
-          connectSrc: ["'self'"],
+          connectSrc: ["'self'", "https://graph.facebook.com", "https://*.facebook.com"],
           // O PDF da lista é exibido em <iframe> na revisão, servido pela
-          // própria origem.
-          frameSrc: ["'self'", "blob:"],
+          // própria origem. https://www.facebook.com é o popup/iframe do
+          // Embedded Signup do WhatsApp.
+          frameSrc: ["'self'", "blob:", "https://www.facebook.com"],
           frameAncestors: ["'none'"],
           objectSrc: ["'none'"],
         },
@@ -164,6 +168,7 @@ export function createApp() {
   app.use(appointmentsRouter);
   app.use(queueRouter);
   app.use(whatsappRouter);
+  app.use(whatsappSignupRouter);
   app.use(closingsRouter);
   app.use(indicatorsRouter);
   app.use(teamRouter);

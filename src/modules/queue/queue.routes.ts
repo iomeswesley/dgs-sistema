@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { processQueue, queueCapacity } from "./queue.service.js";
-import { whatsappConfigured } from "@/config/env.js";
+import { isWhatsappConfigured } from "@/modules/whatsapp/whatsapp-account.service.js";
 
 export const queueRouter = Router();
 queueRouter.use("/api/queue", requireAuth);
@@ -11,7 +11,7 @@ queueRouter.use("/api/queue", requireAuth);
 queueRouter.get(
   "/api/queue",
   asyncHandler(async (_req, res) => {
-    const [capacity, failed] = await Promise.all([
+    const [capacity, failed, whatsappConfigured] = await Promise.all([
       queueCapacity(),
       prisma.messageJob.findMany({
         where: { status: "FALHA" },
@@ -21,6 +21,7 @@ queueRouter.get(
           appointment: { include: { patient: { select: { name: true } } } },
         },
       }),
+      isWhatsappConfigured(),
     ]);
     res.json({ capacity, failed, whatsappConfigured });
   })

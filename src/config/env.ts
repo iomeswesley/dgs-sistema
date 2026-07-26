@@ -19,11 +19,20 @@ const envSchema = z.object({
 
   // WhatsApp Cloud API (Meta). Sem token, o envio vira stub que só loga no
   // console — permite desenvolver o fluxo inteiro sem risco de mandar
-  // mensagem real pra telefone de paciente.
+  // mensagem real pra telefone de paciente. Em produção, ACCESS_TOKEN e
+  // PHONE_NUMBER_ID normalmente vêm do Embedded Signup (tabela
+  // WhatsappAccount) em vez do .env — essas duas variáveis seguem existindo
+  // só pro fluxo de desenvolvimento/sandbox sem passar pela tela de conectar.
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
+  // App ID (público, não é segredo — vai pro frontend) e o Configuration ID
+  // do Embedded Signup, criados no App Dashboard da Meta (WhatsApp →
+  // Configuração da API → Embedded Signup). Sem os dois, o botão "Conectar
+  // WhatsApp" não aparece nas Configurações.
+  WHATSAPP_APP_ID: z.string().optional(),
+  WHATSAPP_SIGNUP_CONFIG_ID: z.string().optional(),
   // Teto de mensagens por dia, espelhando o tier atual do número na Meta.
   // A fila para ao bater esse limite e reporta o que não coube, em vez de
   // queimar a qualidade do número tentando enviar tudo.
@@ -52,4 +61,3 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const isProduction = env.NODE_ENV === "production";
-export const whatsappConfigured = !!(env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID);

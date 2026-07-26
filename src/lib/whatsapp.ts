@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { env, isProduction, whatsappConfigured } from "@/config/env.js";
+import { env, isProduction } from "@/config/env.js";
+import { getActiveCredentials } from "@/modules/whatsapp/whatsapp-account.service.js";
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -34,7 +35,8 @@ export async function sendTemplate(
   params: TemplateComponentParams,
   languageCode = "pt_BR"
 ): Promise<SendResult> {
-  if (!whatsappConfigured) {
+  const credentials = await getActiveCredentials();
+  if (!credentials) {
     console.log(`[WHATSAPP:STUB] template "${templateName}" -> ${to}`, params);
     return { wamid: null, stubbed: true };
   }
@@ -52,11 +54,11 @@ export async function sendTemplate(
   });
 
   const res = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${credentials.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${credentials.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -103,17 +105,18 @@ export class WhatsappSendError extends Error {
  * quem escreveu de volta, nunca para disparo.
  */
 export async function sendText(to: string, text: string): Promise<SendResult> {
-  if (!whatsappConfigured) {
+  const credentials = await getActiveCredentials();
+  if (!credentials) {
     console.log(`[WHATSAPP:STUB] texto -> ${to}: ${text}`);
     return { wamid: null, stubbed: true };
   }
 
   const res = await fetch(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${credentials.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${credentials.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: text } }),

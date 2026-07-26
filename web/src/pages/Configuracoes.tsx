@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
@@ -46,7 +46,7 @@ interface Doctor {
   procedures: DoctorProcedure[];
 }
 
-type Tab = "municipios" | "unidades" | "medicos" | "procedimentos" | "valores" | "agendas";
+type Tab = "municipios" | "unidades" | "medicos" | "procedimentos" | "valores" | "agendas" | "whatsapp";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "municipios", label: "Municípios" },
@@ -55,6 +55,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "procedimentos", label: "Procedimentos" },
   { id: "valores", label: "Procedimentos por médico" },
   { id: "agendas", label: "Agendas" },
+  { id: "whatsapp", label: "WhatsApp" },
 ];
 
 export function Configuracoes() {
@@ -91,6 +92,7 @@ export function Configuracoes() {
       {tab === "procedimentos" && <ProceduresTab />}
       {tab === "valores" && <DoctorProceduresTab />}
       {tab === "agendas" && <AgendasTab />}
+      {tab === "whatsapp" && <WhatsappTab />}
     </>
   );
 }
@@ -954,6 +956,206 @@ function AgendasTab() {
         busy={busy}
         onConfirm={remove}
         onCancel={() => setDeleting(null)}
+      />
+    </>
+  );
+}
+
+/* ---------------- WhatsApp (Embedded Signup) ---------------- */
+
+interface WhatsappSignupConfig {
+  appId: string | null;
+  configId: string | null;
+  status: {
+    connected: boolean;
+    source: "signup" | "env" | null;
+    wabaId: string | null;
+    phoneNumberId: string | null;
+    businessName: string | null;
+    connectedAt: string | null;
+  };
+}
+
+declare global {
+  interface Window {
+    FB?: {
+      init: (options: Record<string, unknown>) => void;
+      login: (callback: (response: { authResponse?: { code?: string } }) => void, options: Record<string, unknown>) => void;
+    };
+    fbAsyncInit?: () => void;
+  }
+}
+
+const FB_SDK_ID = "facebook-jssdk";
+
+function loadFacebookSdk(appId: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (window.FB) return resolve();
+    window.fbAsyncInit = () => {
+      window.FB?.init({ appId, version: "v21.0" });
+      resolve();
+    };
+    if (document.getElementById(FB_SDK_ID)) return;
+    const script = document.createElement("script");
+    script.id = FB_SDK_ID;
+    script.src = "https://connect.facebook.net/pt_BR/sdk.js";
+    script.async = true;
+    document.body.appendChild(script);
+  });
+}
+
+function WhatsappTab() {
+  const data = useApi<WhatsappSignupConfig>("/api/whatsapp/signup/config");
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const signupData = useRef<{ wabaId: string; phoneNumberId: string; businessName: string | null } | null>(null);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "WA_EMBEDDED_SIGNUP" && payload.event === "FINISH") {
+          signupData.current = {
+            wabaId: payload.data?.waba_id,
+            phoneNumberId: payload.data?.phone_number_id,
+            businessName: payload.data?.business_name ?? null,
+          };
+        }
+      } catch {
+        // mensagens de outra origem/formato — ignora
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  async function connect() {
+    if (!data.data?.appId || !data.data?.configId) return;
+    setError(null);
+    setConnecting(true);
+    try {
+      await loadFacebookSdk(data.data.appId);
+      window.FB?.login(
+        (response) => {
+          void (async () => {
+            const code = response.authResponse?.code;
+            if (!code || !signupData.current?.wabaId || !signupData.current?.phoneNumberId) {
+              setConnecting(false);
+              setError("Login cancelado ou incompleto — tente novamente.");
+              return;
+            }
+            try {
+              await api.post("/api/whatsapp/signup/callback", { code, ...signupData.current });
+              data.reload();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Falha ao concluir a conexão.");
+            } finally {
+              setConnecting(false);
+            }
+          })();
+        },
+        {
+          config_id: data.data.configId,
+          response_type: "code",
+          override_default_response_type: true,
+          extras: { setup: {} },
+        }
+      );
+    } catch {
+      setConnecting(false);
+      setError("Falha ao carregar o SDK da Meta.");
+    }
+  }
+
+  async function disconnect() {
+    setConnecting(true);
+    try {
+      await api.delete("/api/whatsapp/signup");
+      data.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao desconectar.");
+    } finally {
+      setConnecting(false);
+      setDisconnecting(false);
+    }
+  }
+
+  const status = data.data?.status;
+  const missingAppConfig = data.data && (!data.data.appId || !data.data.configId);
+
+  return (
+    <>
+      <Callout>
+        Conecte a conta do WhatsApp Business da DGS pra habilitar o envio de mensagens. É um login único —
+        depois de conectado, o token fica salvo e o sistema usa direto, sem precisar voltar aqui.
+      </Callout>
+
+      {data.loading && <Spinner />}
+      {data.error && <ErrorNote message={data.error} />}
+      {error && (
+        <div className="my-3">
+          <ErrorNote message={error} />
+        </div>
+      )}
+
+      {missingAppConfig && (
+        <p className="card mt-3 p-4 text-sm text-ink-muted">
+          Faltam <code>WHATSAPP_APP_ID</code> e/ou <code>WHATSAPP_SIGNUP_CONFIG_ID</code> no ambiente do
+          servidor — sem eles o botão de conectar não pode aparecer.
+        </p>
+      )}
+
+      {status && (
+        <div className="card mt-3 flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="text-sm">
+            {status.connected ? (
+              <>
+                <p className="font-medium text-ink">
+                  Conectado{status.businessName ? ` — ${status.businessName}` : ""}
+                </p>
+                <p className="text-ink-faint">
+                  {status.source === "env"
+                    ? "Via variável de ambiente (sandbox/dev)."
+                    : `WABA ${status.wabaId} · número ${status.phoneNumberId}`}
+                  {status.connectedAt && ` · conectado em ${formatDate(status.connectedAt)}`}
+                </p>
+              </>
+            ) : (
+              <p className="text-ink-muted">Nenhuma conta do WhatsApp conectada ainda.</p>
+            )}
+          </div>
+
+          {status.source !== "env" && !missingAppConfig && (
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-primary" disabled={connecting} onClick={connect}>
+                {status.connected ? "Reconectar / trocar número" : "Conectar WhatsApp"}
+              </button>
+              {status.connected && (
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  disabled={connecting}
+                  onClick={() => setDisconnecting(true)}
+                >
+                  Desconectar
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <ConfirmModal
+        open={disconnecting}
+        title="Desconectar o WhatsApp?"
+        description="O envio de mensagens para de funcionar até uma nova conexão ser feita."
+        confirmLabel="Desconectar"
+        danger
+        busy={connecting}
+        onConfirm={disconnect}
+        onCancel={() => setDisconnecting(false)}
       />
     </>
   );
