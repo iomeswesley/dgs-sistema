@@ -6,7 +6,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "dist-web/**"
+      "includeFiles": "{dist,dist-web}/**"
     }
   },
   "rewrites": [
@@ -18,7 +18,7 @@
   "crons": [
     {
       "path": "/api/cron/queue",
-      "schedule": "0 * * * *"
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/cron/daily-summary",

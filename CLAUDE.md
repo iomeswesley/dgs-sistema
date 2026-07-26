@@ -95,4 +95,4 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 4. Chave do Resend (`RESEND_API_KEY`) para relatório automático por e-mail e resumo diário.
 5. PDFs reais de 2–3 prefeituras para calibrar o prompt de extração (só fotos até agora) — `npm run extrair -- caminho/do/arquivo.pdf`.
 6. Valores de `doctor_fee` e `city_rate` por procedimento.
-7. Plano **Pro** da Vercel pro cron horário da fila funcionar em produção (Hobby só roda cron 1x/dia).
+7. Plano **Pro** da Vercel pro cron horário da fila funcionar em produção (Hobby só roda cron 1x/dia). **Temporário**: `vercel.json` está com `/api/cron/queue` em `0 11 * * *` (1x/dia, 8h de Brasília) só pra caber no Hobby — volte pra `0 * * * *` assim que o Pro estiver ativo, senão lembrete D-1 e reposição de vagas ficam bem menos responsivos.
