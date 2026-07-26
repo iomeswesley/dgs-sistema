@@ -74,6 +74,7 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 - **Nunca disparar WhatsApp real para telefone de paciente em teste.** Sem `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` o envio já vira log no console — desenvolver assim. Para testar de verdade, usar número próprio.
 - Migrations: quando o banco existir, seguir o padrão da barbearia-saas — **nunca** `prisma migrate dev` (a tabela `session` criada em runtime pelo `connect-pg-simple` gera "drift" e o Prisma oferece resetar o banco). Criar a pasta de migration à mão e aplicar com `prisma migrate deploy`.
 - Nunca aceitar chave/token/senha colada no chat — orientar configuração direto no dashboard (Supabase/Vercel/Meta).
+- **Minimização de dados diante de pedido de autoridade pública ou do titular (LGPD art. 18)**: nunca abrir acesso à base inteira. Usar `npx tsx --env-file=.env scripts/exportar-dados-paciente.ts --cns=... [--incluir-mensagens]` — traz só o essencial de UM paciente (nome, telefones, agendamentos); conteúdo de mensagem e nota interna da equipe são opt-in, não vêm por padrão. Confirmar legitimidade do pedido com o jurídico antes de repassar qualquer coisa.
 - Manter este arquivo e o PLANO.md atualizados a cada mudança relevante.
 
 ## Notas técnicas que não são óbvias
