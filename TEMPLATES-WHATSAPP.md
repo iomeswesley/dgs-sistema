@@ -93,7 +93,7 @@ Leve com você:
 
 Importante: retire a autorização do exame na Unidade Solicitante (UBS, Policlínica ou Hospital) antes da consulta. Se já retirou, é só comparecer no horário.
 
-{{6}}
+Preparo: {{6}}. Qualquer dúvida, procure a unidade de saúde.
 ```
 
 **Footer**
@@ -105,7 +105,7 @@ DGS - D'Artibale Gestão em Saúde
 - `Confirmado, estarei lá`
 - `Não poderei mais ir`
 
-**Variáveis**: `{{1}}` nome · `{{2}}` data · `{{3}}` hora · `{{4}}` procedimento · `{{5}}` local · `{{6}}` `procedures.preparation_instructions` (jejum, bexiga cheia, etc. — quando o procedimento não tiver preparo, preencher com um texto neutro curto, ex.: `Qualquer dúvida, procure a unidade de saúde do seu bairro.`, porque a Meta **não aceita variável vazia**).
+**Variáveis**: `{{1}}` nome · `{{2}}` data · `{{3}}` hora · `{{4}}` procedimento · `{{5}}` local · `{{6}}` `procedures.preparation_instructions` (jejum, bexiga cheia, etc. — quando o procedimento não tiver preparo, preencher com `Nenhum preparo especial necessário`, porque a Meta **não aceita variável vazia**). `{{6}}` vem embrulhada em `Preparo: {{6}}. Qualquer dúvida, procure a unidade de saúde.` no body — a Meta rejeita variável na primeira ou na última posição do texto (erro `Leading or Trailing Params Not Allowed`), e **só pontuação depois da variável não basta** (testado: `{{6}}.` sozinho ainda foi rejeitado, precisou de palavras reais depois).
 
 O botão "Não poderei mais ir" aqui é valioso: pega a desistência de última hora com 24h de antecedência, tempo suficiente pra secretaria repor a vaga.
 

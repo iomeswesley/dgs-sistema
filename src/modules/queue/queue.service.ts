@@ -262,18 +262,16 @@ function buildTemplateParams(template: TemplateKind, appointment: JobAppointment
   const time = formatTime(appointment.scheduledAt);
 
   if (template === "LEMBRETE") {
+    // O template embrulha a variável em "Preparo: {{6}}. Qualquer dúvida,
+    // procure a unidade de saúde." — a Meta rejeita variável na última
+    // posição do texto, só palavra ou pontuação sozinha depois não basta,
+    // precisou de texto de verdade. Tira o ponto final daqui pra não duplicar.
+    const preparation = (
+      appointment.procedure.preparationInstructions?.trim() || "Nenhum preparo especial necessário"
+    ).replace(/\.+$/, "");
+
     return {
-      body: [
-        firstName,
-        date,
-        time,
-        appointment.procedure.name,
-        local,
-        // A Meta não aceita variável em branco; procedimento sem preparo
-        // cadastrado recebe um texto neutro.
-        appointment.procedure.preparationInstructions?.trim() ||
-          "Qualquer dúvida, procure a unidade de saúde do seu bairro.",
-      ],
+      body: [firstName, date, time, appointment.procedure.name, local, preparation],
     };
   }
 

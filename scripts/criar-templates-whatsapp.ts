@@ -90,7 +90,7 @@ const TEMPLATES: TemplatePayload[] = [
           "",
           "Importante: retire a autorização do exame na Unidade Solicitante (UBS, Policlínica ou Hospital) antes da consulta. Se já retirou, é só comparecer no horário.",
           "",
-          "{{6}}",
+          "Preparo: {{6}}. Qualquer dúvida, procure a unidade de saúde.",
         ].join("\n"),
         example: {
           body_text: [
@@ -100,7 +100,7 @@ const TEMPLATES: TemplatePayload[] = [
               "09:15",
               "Ultrassonografia obstétrica",
               "Policlínica - Av. Eugênio Krause, 2265, Centro",
-              "Compareça com a bexiga cheia: beba 1 litro de água uma hora antes.",
+              "Compareça com a bexiga cheia: beba 1 litro de água uma hora antes",
             ],
           ],
         },
