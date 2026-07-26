@@ -8,7 +8,7 @@ Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que interm
 
 Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil único**, todo mundo da equipe pode tudo. O controle vem da tabela `audit_logs`, não de permissões — decisão explícita do usuário.
 
-- Repo: local, branch `master`. Sem remote configurado ainda.
+- Repo: [github.com/iomeswesley/dgs-sistema](https://github.com/iomeswesley/dgs-sistema) (privado), branch `master`.
 - Deploy: previsto para Vercel (`vercel.json` + `api/index.js` já prontos). Ainda não publicado.
 - Banco de **produção**: Postgres/Supabase, **projeto novo e dedicado** — não reaproveitar o da barbearia-saas nem o do agendamento-quadra. Ainda não criado.
 - Banco de **dev local**: PostgreSQL 17 instalado na máquina via winget (serviço Windows `postgresql-x64-17`, sempre rodando), banco `sistema_dgs`, usuário `postgres` senha `dgs_local_dev`. `.env` local já existe (não versionado) apontando pra ele — ver seção "Ambiente local" abaixo antes de recriar nada.
