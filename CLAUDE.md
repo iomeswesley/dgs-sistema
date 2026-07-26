@@ -61,7 +61,7 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 ## Convenções de código
 
 - **Antes de qualquer commit**: `npm run typecheck` (server + web) e `npm test` limpos.
-- **Depois de validado, `git push` sem perguntar** — mesma instrução dos outros projetos do usuário. Ações destrutivas continuam exigindo confirmação.
+- **`git push` e deploy na Vercel (`vercel --prod`) só quando o usuário pedir explicitamente** (decisão de 2026-07-26, substitui a instrução anterior de "push sem perguntar"). Pode continuar commitando local normalmente — só a subida pro GitHub/produção fica pausada. Ações destrutivas continuam exigindo confirmação.
 - Backend segue o padrão da barbearia-saas: módulos em `src/modules/<nome>/` com `.routes.ts` / `.service.ts` / `.repository.ts`, alias `@/*` → `src/*`, rotas lançam `AppError` e deixam o `errorHandler` responder.
 - **Nunca `alert()`/`window.confirm()`** — sempre `ConfirmModal` (`web/src/components/ConfirmModal.tsx`), inclusive para aviso de um botão só (`hideCancel`).
 - Todo `<select>` usa a classe `.field`, que já traz `color-scheme: light dark` + fundo sólido. Sem isso o dropdown nativo abre branco no dark mode.
