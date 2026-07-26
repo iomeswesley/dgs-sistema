@@ -33,9 +33,10 @@ const envSchema = z.object({
   // WhatsApp" não aparece nas Configurações.
   WHATSAPP_APP_ID: z.string().optional(),
   WHATSAPP_SIGNUP_CONFIG_ID: z.string().optional(),
-  // Teto de mensagens por dia, espelhando o tier atual do número na Meta.
-  // A fila para ao bater esse limite e reporta o que não coube, em vez de
-  // queimar a qualidade do número tentando enviar tudo.
+  // Teto de mensagens por dia — fallback quando a consulta à Graph API falha
+  // ou não há conta conectada (sandbox/dev). Em produção, o limite real vem
+  // do messaging_limit_tier do número (ver whatsapp-account.service.ts),
+  // que a própria Meta sobe sozinha conforme o histórico de qualidade.
   WHATSAPP_DAILY_LIMIT: z.coerce.number().int().positive().default(250),
 
   // E-mail transacional (recuperação de senha). Sem chave, o link é só

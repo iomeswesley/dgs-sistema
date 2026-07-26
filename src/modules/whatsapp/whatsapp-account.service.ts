@@ -17,6 +17,70 @@ export interface ConnectionStatus {
   phoneNumberId: string | null;
   businessName: string | null;
   connectedAt: Date | null;
+  qualityRating: string | null;
+  messagingLimitTier: string | null;
+  dailyLimit: number;
+}
+
+/**
+ * O tier já reflete o limite atual do número — a Meta sobe sozinha conforme
+ * o histórico de qualidade (250 -> 1K -> 10K -> 100K -> ilimitado). Nomes de
+ * enum variam um pouco entre versões da API, então mapeia os dois jeitos.
+ */
+const TIER_LIMITS: Record<string, number> = {
+  TIER_50: 50,
+  TIER_250: 250,
+  TIER_1K: 1_000,
+  TIER_10K: 10_000,
+  TIER_100K: 100_000,
+  TIER_UNLIMITED: 1_000_000,
+  UNLIMITED: 1_000_000,
+};
+
+export interface PhoneNumberStatus {
+  qualityRating: string | null;
+  messagingLimitTier: string | null;
+  dailyLimit: number;
+}
+
+let statusCache: { value: PhoneNumberStatus; fetchedAt: number } | null = null;
+const STATUS_CACHE_MS = 5 * 60 * 1000;
+
+/**
+ * Consulta quality_rating e messaging_limit_tier na Graph API. Cacheado por
+ * 5 minutos: é chamado a cada carregamento da fila, não vale bater na Meta
+ * toda hora. Falha na consulta nunca trava o envio — cai pro limite do .env.
+ */
+export async function getPhoneNumberStatus(): Promise<PhoneNumberStatus | null> {
+  const credentials = await getActiveCredentials();
+  if (!credentials) return null;
+
+  if (statusCache && Date.now() - statusCache.fetchedAt < STATUS_CACHE_MS) {
+    return statusCache.value;
+  }
+
+  try {
+    const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${credentials.phoneNumberId}`);
+    url.searchParams.set("fields", "quality_rating,messaging_limit_tier");
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${credentials.accessToken}` } });
+    const payload = (await res.json().catch(() => ({}))) as {
+      quality_rating?: string;
+      messaging_limit_tier?: string;
+    };
+    if (!res.ok) throw new Error("Falha ao consultar status do número na Meta");
+
+    const tier = payload.messaging_limit_tier ?? null;
+    const value: PhoneNumberStatus = {
+      qualityRating: payload.quality_rating ?? null,
+      messagingLimitTier: tier,
+      dailyLimit: (tier && TIER_LIMITS[tier]) || env.WHATSAPP_DAILY_LIMIT,
+    };
+    statusCache = { value, fetchedAt: Date.now() };
+    return value;
+  } catch (err) {
+    console.error("[WHATSAPP] Falha ao consultar quality_rating/tier:", (err as Error).message);
+    return { qualityRating: null, messagingLimitTier: null, dailyLimit: env.WHATSAPP_DAILY_LIMIT };
+  }
 }
 
 /**
@@ -41,6 +105,9 @@ export async function isWhatsappConfigured(): Promise<boolean> {
 
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
   const account = await prisma.whatsappAccount.findFirst({ orderBy: { connectedAt: "desc" } });
+  const phoneStatus = await getPhoneNumberStatus();
+  const dailyLimit = phoneStatus?.dailyLimit ?? env.WHATSAPP_DAILY_LIMIT;
+
   if (account) {
     return {
       connected: true,
@@ -49,6 +116,9 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
       phoneNumberId: account.phoneNumberId,
       businessName: account.businessName,
       connectedAt: account.connectedAt,
+      qualityRating: phoneStatus?.qualityRating ?? null,
+      messagingLimitTier: phoneStatus?.messagingLimitTier ?? null,
+      dailyLimit,
     };
   }
   if (env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID) {
@@ -59,9 +129,22 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
       businessName: null,
       connectedAt: null,
+      qualityRating: phoneStatus?.qualityRating ?? null,
+      messagingLimitTier: phoneStatus?.messagingLimitTier ?? null,
+      dailyLimit,
     };
   }
-  return { connected: false, source: null, wabaId: null, phoneNumberId: null, businessName: null, connectedAt: null };
+  return {
+    connected: false,
+    source: null,
+    wabaId: null,
+    phoneNumberId: null,
+    businessName: null,
+    connectedAt: null,
+    qualityRating: null,
+    messagingLimitTier: null,
+    dailyLimit: env.WHATSAPP_DAILY_LIMIT,
+  };
 }
 
 /**

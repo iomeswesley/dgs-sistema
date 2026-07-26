@@ -973,8 +973,18 @@ interface WhatsappSignupConfig {
     phoneNumberId: string | null;
     businessName: string | null;
     connectedAt: string | null;
+    qualityRating: string | null;
+    messagingLimitTier: string | null;
+    dailyLimit: number;
   };
 }
+
+const QUALITY_LABEL: Record<string, string> = {
+  GREEN: "Boa",
+  YELLOW: "Média",
+  RED: "Baixa — risco de bloqueio, considere reconectar em outro número",
+  UNKNOWN: "Desconhecida",
+};
 
 declare global {
   interface Window {
@@ -1120,6 +1130,12 @@ function WhatsappTab() {
                     ? "Via variável de ambiente (sandbox/dev)."
                     : `WABA ${status.wabaId} · número ${status.phoneNumberId}`}
                   {status.connectedAt && ` · conectado em ${formatDate(status.connectedAt)}`}
+                </p>
+                <p className="mt-1 text-ink-faint">
+                  Qualidade do número: {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
+                  {" · "}
+                  Limite diário: {status.dailyLimit.toLocaleString("pt-BR")} mensagens
+                  {status.messagingLimitTier && ` (tier ${status.messagingLimitTier})`}
                 </p>
               </>
             ) : (

@@ -5,6 +5,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
 
 /*
   Fila de envio.
@@ -43,14 +44,18 @@ export interface QueueCapacity {
 }
 
 export async function queueCapacity(): Promise<QueueCapacity> {
-  const [used, pending] = await Promise.all([
+  const [used, pending, status] = await Promise.all([
     sentToday(),
     prisma.messageJob.count({ where: { status: "PENDENTE" } }),
+    getPhoneNumberStatus(),
   ]);
+  // O tier já reflete o limite real do número (a Meta sobe sozinha conforme
+  // o histórico) — o .env só serve de fallback, sandbox ou falha na consulta.
+  const dailyLimit = status?.dailyLimit ?? env.WHATSAPP_DAILY_LIMIT;
   return {
-    dailyLimit: env.WHATSAPP_DAILY_LIMIT,
+    dailyLimit,
     used,
-    remaining: Math.max(0, env.WHATSAPP_DAILY_LIMIT - used),
+    remaining: Math.max(0, dailyLimit - used),
     pending,
   };
 }
