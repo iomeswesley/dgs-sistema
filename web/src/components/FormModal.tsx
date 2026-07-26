@@ -34,8 +34,16 @@ export function FormModal({
 
   useEffect(() => {
     if (!open) return;
-    // Foca o primeiro campo: quem abre o modal já quer digitar.
+    // Foca o primeiro campo: quem abre o modal já quer digitar. Só na
+    // abertura — não pode depender de props que mudam a cada tecla
+    // digitada (como `onCancel`, recriada a cada render do form), senão o
+    // foco pula de volta pro primeiro campo a cada caractere.
     dialogRef.current?.querySelector<HTMLElement>("input, select, textarea")?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onCancel();
     };
