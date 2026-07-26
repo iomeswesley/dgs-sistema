@@ -155,6 +155,62 @@ const TEMPLATES: TemplatePayload[] = [
       },
     ],
   },
+  // Formato atual usado manualmente pela equipe (fora deste sistema) —
+  // registrado como template aprovado "de reserva", pra sair do risco de
+  // bloqueio (lista de transmissão + reencaminhamento) enquanto o
+  // confirmacao_consulta (mais enxuto) ainda está em análise. Ver
+  // TEMPLATES-WHATSAPP.md para a comparação e a sugestão de migração.
+  {
+    name: "confirmacao_consulta_completa",
+    language: "pt_BR",
+    category: "UTILITY",
+    components: [
+      {
+        type: "BODY",
+        text: [
+          "Olá, tudo bem? Me chamo {{1}}, falo em nome da DGS, prestadora de serviços para a Secretaria de Saúde de {{2}}.",
+          "",
+          "Eu gostaria de confirmar seu agendamento para a consulta em {{3}} para:",
+          "",
+          "Paciente: {{4}}",
+          "Data: {{5}}",
+          "Horário: {{6}}",
+          "",
+          "Endereço: {{7}}",
+          "",
+          "Importante:",
+          "Antes da consulta, o paciente deve retirar a autorização do exame na Unidade Solicitante (Unidade Básica, Policlínica ou Hospital). Caso já esteja ciente e tenha retirado a autorização, basta comparecer na data e horário informados nesta mensagem.",
+          "",
+          "Lembrando que você precisa levar em mãos:",
+          "Documento de Identificação",
+          "Encaminhamento Médico",
+          "",
+          "Responda SIM para confirmar ou NÃO para cancelar.",
+        ].join("\n"),
+        example: {
+          body_text: [
+            [
+              "Raylane",
+              "Penha",
+              "Ultrassonografia",
+              "Arthur Miguel Cardoso da Silva",
+              "23/07/2026",
+              "09:15",
+              "Policlínica - Av. Eugênio Krause, 2265, Centro, Penha - SC",
+            ],
+          ],
+        },
+      },
+      { type: "FOOTER", text: "DGS - D'Artibale Gestão em Saúde" },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "Sim" },
+          { type: "QUICK_REPLY", text: "Não" },
+        ],
+      },
+    ],
+  },
 ];
 
 async function main() {

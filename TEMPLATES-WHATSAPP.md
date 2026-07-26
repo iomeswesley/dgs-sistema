@@ -134,6 +134,53 @@ Usado quando a secretaria manda lista complementar pra preencher horários vagos
 
 ---
 
+## Template 4 — Formato atual (reserva, enquanto o Template 1 não é aprovado)
+
+- **Nome**: `confirmacao_consulta_completa`
+- **Categoria**: `UTILITY`
+
+É o texto que a equipe já manda manualmente hoje (ver diagnóstico no topo deste arquivo),
+adaptado só o mínimo pra passar na validação da Meta: o nome de quem confirma virou variável
+(`{{1}}`) em vez de fixo, porque o envio agora é automático — não tem uma pessoa específica
+disparando cada mensagem.
+
+**Body**
+```
+Olá, tudo bem? Me chamo {{1}}, falo em nome da DGS, prestadora de serviços para a Secretaria de Saúde de {{2}}.
+
+Eu gostaria de confirmar seu agendamento para a consulta em {{3}} para:
+
+Paciente: {{4}}
+Data: {{5}}
+Horário: {{6}}
+
+Endereço: {{7}}
+
+Importante:
+Antes da consulta, o paciente deve retirar a autorização do exame na Unidade Solicitante (Unidade Básica, Policlínica ou Hospital). Caso já esteja ciente e tenha retirado a autorização, basta comparecer na data e horário informados nesta mensagem.
+
+Lembrando que você precisa levar em mãos:
+Documento de Identificação
+Encaminhamento Médico
+
+Responda SIM para confirmar ou NÃO para cancelar.
+```
+
+**Botões**: `Sim` · `Não`
+
+**Por que registrar mesmo sendo pior**: é o único jeito de ter *algum* template aprovado rápido
+— a Meta aprova o que já é familiar/testado mais rápido que texto novo, às vezes. Serve de
+plano B enquanto o Template 1 (`confirmacao_consulta`, ~320 caracteres, uma pergunta só) está
+em análise.
+
+**Sugestão de migração**: depois que os dois estiverem aprovados, comparar taxa de resposta e
+tempo até confirmar entre os dois na prática, e desativar este (deixar de enfileirar, sem
+precisar apagar da Meta) a favor do Template 1 assim que o enxuto mostrar resultado melhor —
+é o que o diagnóstico no topo deste arquivo já indica que deve acontecer (mensagem mais curta,
+uma pergunta só, sobe taxa de resposta).
+
+---
+
 ## Práticas de envio que protegem o número
 
 - **Opt-out honrado de verdade**: quem responder "SAIR"/"PARE"/"NÃO QUERO RECEBER" entra em `patients.opted_out` e nunca mais recebe nada. É a defesa mais barata contra denúncia.
