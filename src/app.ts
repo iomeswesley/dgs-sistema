@@ -25,6 +25,7 @@ import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData } from "@/modules/queue/cadence.service.js";
 import { sendDailySummary } from "@/modules/reports/daily-summary.service.js";
+import { PRIVACY_POLICY_HTML } from "@/legal/privacy.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -175,6 +176,10 @@ export function createApp() {
   app.use(suggestionsRouter);
 
   app.use("/api", notFoundHandler);
+
+  // Exigida pela Meta pra validar o app do WhatsApp Business — fora do SPA
+  // em React porque precisa existir sem depender do bundle do frontend.
+  app.get("/privacidade", (_req, res) => res.type("html").send(PRIVACY_POLICY_HTML));
 
   /* ---------------- Frontend (SPA) ---------------- */
 
