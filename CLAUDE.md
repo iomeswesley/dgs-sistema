@@ -48,8 +48,9 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 - `modules/lists/list-report.ts` — geração do CSV do relatório de uma lista, reaproveitada pelo export manual e pelo e-mail automático ao concluir
 - `lib/email.ts` — wrapper do Resend com stub em log quando falta `RESEND_API_KEY`
 - Reposição de vagas: `GET /api/agendas/:id/open-slots` (+ `/export`) lista os horários que abriram (recusa/sem resposta/sem telefone); lista complementar (`isComplementary`) dispara com o template `VAGA_ABERTA` em vez de `CONFIRMACAO`
+- `modules/whatsapp/whatsapp-account.service.ts` — credenciais do WhatsApp: prioriza a conta conectada via Embedded Signup (tabela `WhatsappAccount`, sempre no máximo uma linha) e cai pro `.env` (`WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`) só como fallback de sandbox/dev. `signup.routes.ts` expõe a troca do `code` do Embedded Signup por token de longa duração — ver aba WhatsApp em Configurações
 
-**Frontend** (`web/src/`): login, shell, Listas, Revisão (tabela + arquivo lado a lado + sugestão de confirmações), Acompanhamento, Fechamento, Indicadores, Configurações (5 abas), Equipe e auditoria, `StatusBand`, `ConfirmModal`, `FormModal`, `ui.tsx`.
+**Frontend** (`web/src/`): login, shell, Listas, Revisão (tabela + arquivo lado a lado + sugestão de confirmações), Acompanhamento, Fechamento, Indicadores, Configurações (7 abas, incluindo WhatsApp/Embedded Signup), Equipe e auditoria, `StatusBand`, `ConfirmModal`, `FormModal`, `ui.tsx`.
 
 **Nunca executado de verdade**: a chamada à API de extração e o envio real de WhatsApp — falta credencial. Os testes cobrem a lógica pura (telefone, classificação de resposta, mapeamento da extração, alertas de fechamento), não a integração.
 
@@ -88,7 +89,8 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 ## Pendências externas (bloqueiam ir pra produção — dev local já funciona sem elas)
 
 1. Projeto Supabase dedicado de produção + trocar `DATABASE_URL`/`DIRECT_URL` no `.env` (hoje aponta pro Postgres local).
-2. Número de WhatsApp Business + app na Meta, e os **templates submetidos para aprovação** (maior lead time do projeto) — `npm run templates` depois de ter `WHATSAPP_BUSINESS_ACCOUNT_ID` e um token com `whatsapp_business_management`.
+2. Número de WhatsApp Business + app na Meta (app dedicado `dgs-system`, **não** o `innovaIA` — esse é da barbearia), e os **templates submetidos para aprovação** (maior lead time do projeto) — `npm run templates` depois de ter `WHATSAPP_BUSINESS_ACCOUNT_ID` e um token com `whatsapp_business_management`.
+   - Conectar a conta pelo sistema (Configurações → WhatsApp → Embedded Signup) em vez de configurar token/IDs à mão exige, no app `dgs-system`: análise aprovada (`whatsapp_business_management`, `business_management` — em andamento), ícone do app, URL de Política de Privacidade, e criar a "Configuration" do Embedded Signup (WhatsApp → Configuração da API) pra gerar `WHATSAPP_APP_ID`/`WHATSAPP_SIGNUP_CONFIG_ID`.
 3. Chave da API Anthropic (`ANTHROPIC_API_KEY`) para a extração e a classificação de respostas ambíguas.
 4. Chave do Resend (`RESEND_API_KEY`) para relatório automático por e-mail e resumo diário.
 5. PDFs reais de 2–3 prefeituras para calibrar o prompt de extração (só fotos até agora) — `npm run extrair -- caminho/do/arquivo.pdf`.
