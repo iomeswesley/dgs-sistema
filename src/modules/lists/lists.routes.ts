@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/prisma.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
@@ -13,6 +14,19 @@ import { recordAudit } from "@/modules/audit/audit.service.js";
 
 export const listsRouter = Router();
 listsRouter.use("/api/lists", requireAuth);
+
+/**
+ * Roda depois da resposta HTTP já ter sido enviada. Em dev/servidor
+ * tradicional isso já funcionava sozinho (o processo continua vivo), mas na
+ * Vercel a função é congelada logo depois da resposta — sem `waitUntil`, a
+ * extração ficava pausada no meio e só retomava (já com a transação do
+ * Prisma expirada) quando uma requisição nova acordava a mesma instância,
+ * às vezes dezenas de segundos depois. `waitUntil` é no-op fora da Vercel.
+ */
+function runInBackground(task: Promise<unknown>, onError: (err: unknown) => void): void {
+  const guarded = task.catch(onError);
+  waitUntil(guarded);
+}
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -108,7 +122,7 @@ listsRouter.post(
     // segundos e o navegador não precisa esperar. O painel acompanha pelo
     // status da lista.
     if (extractionConfigured) {
-      extractAndStage(list.id).catch((err) =>
+      runInBackground(extractAndStage(list.id), (err) =>
         console.error(`[LISTA ${list.id}] Falha na extração:`, (err as Error).message)
       );
     }
@@ -211,7 +225,7 @@ listsRouter.post(
 
     await prisma.list.update({ where: { id }, data: { status: "EXTRAINDO", extractionError: null } });
     res.json({ ok: true });
-    extractAndStage(id).catch((err) =>
+    runInBackground(extractAndStage(id), (err) =>
       console.error(`[LISTA ${id}] Falha no reprocessamento:`, (err as Error).message)
     );
   })

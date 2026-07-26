@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { waitUntil } from "@vercel/functions";
 import { env } from "@/config/env.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { parseInboundReplies, parseStatusUpdates, verifyWebhookSignature } from "@/lib/whatsapp.js";
@@ -34,20 +35,28 @@ whatsappRouter.post(
 
     res.sendStatus(200);
 
-    for (const reply of parseInboundReplies(req.body)) {
-      try {
-        await handleInboundReply(reply);
-      } catch (err) {
-        console.error("[WEBHOOK] Falha ao processar resposta:", (err as Error).message);
-      }
-    }
-
-    for (const update of parseStatusUpdates(req.body)) {
-      try {
-        await handleStatusUpdate(update);
-      } catch (err) {
-        console.error("[WEBHOOK] Falha ao processar status:", (err as Error).message);
-      }
-    }
+    // waitUntil: na Vercel a função é congelada logo depois do sendStatus
+    // (o 'finish' do response), então sem isso os loops abaixo corriam o
+    // risco de ficar pausados no meio — resposta de paciente perdida ou só
+    // processada quando outra requisição acordasse a mesma instância.
+    waitUntil(processWebhookEvents(req.body));
   })
 );
+
+async function processWebhookEvents(body: unknown): Promise<void> {
+  for (const reply of parseInboundReplies(body)) {
+    try {
+      await handleInboundReply(reply);
+    } catch (err) {
+      console.error("[WEBHOOK] Falha ao processar resposta:", (err as Error).message);
+    }
+  }
+
+  for (const update of parseStatusUpdates(body)) {
+    try {
+      await handleStatusUpdate(update);
+    } catch (err) {
+      console.error("[WEBHOOK] Falha ao processar status:", (err as Error).message);
+    }
+  }
+}

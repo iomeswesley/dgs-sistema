@@ -30,26 +30,32 @@ export async function extractAndStage(listId: number): Promise<void> {
     const { result } = await extractList(Buffer.from(list.fileData), list.mimeType);
     const mapped = mapExtraction(result);
 
-    await prisma.$transaction(async (tx) => {
-      // Reprocessamento apaga os rascunhos anteriores — só é permitido antes
-      // da aprovação, então não há mensagem enviada pra perder.
-      await tx.appointment.deleteMany({ where: { listId } });
+    await prisma.$transaction(
+      async (tx) => {
+        // Reprocessamento apaga os rascunhos anteriores — só é permitido
+        // antes da aprovação, então não há mensagem enviada pra perder.
+        await tx.appointment.deleteMany({ where: { listId } });
 
-      for (const draft of mapped.drafts) {
-        await createAppointmentFromDraft(tx, listId, list.municipalityId, list.agendaId, draft, mapped);
-      }
+        for (const draft of mapped.drafts) {
+          await createAppointmentFromDraft(tx, listId, list.municipalityId, list.agendaId, draft, mapped);
+        }
 
-      await tx.list.update({
-        where: { id: listId },
-        data: {
-          status: "EM_REVISAO",
-          sourceFormat: mapped.sourceFormat,
-          extractionRaw: result as unknown as Prisma.InputJsonValue,
-          extractionError: null,
-          extractedAt: new Date(),
-        },
-      });
-    });
+        await tx.list.update({
+          where: { id: listId },
+          data: {
+            status: "EM_REVISAO",
+            sourceFormat: mapped.sourceFormat,
+            extractionRaw: result as unknown as Prisma.InputJsonValue,
+            extractionError: null,
+            extractedAt: new Date(),
+          },
+        });
+      },
+      // Padrão do Prisma é 5s — uma lista grande faz várias queries por
+      // linha (resolver médico/procedimento/unidade/paciente), então o
+      // padrão estoura fácil. 60s dá folga pra listas de centenas de linhas.
+      { timeout: 60_000 }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha desconhecida na extração";
     await prisma.list.update({
