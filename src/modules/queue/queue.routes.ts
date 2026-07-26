@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { processQueue, queueCapacity } from "./queue.service.js";
+import { enqueueReminders, enqueueRetries, purgeExpiredData } from "./cadence.service.js";
+import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { isWhatsappConfigured } from "@/modules/whatsapp/whatsapp-account.service.js";
 
 export const queueRouter = Router();
@@ -44,5 +46,30 @@ queueRouter.post(
       data: { status: "PENDENTE", scheduledFor: new Date() },
     });
     res.json({ requeued: result.count });
+  })
+);
+
+/**
+ * Roda a cadência do dia inteira na mão — os mesmos passos do cron
+ * (/api/cron/queue), pra usar enquanto o cron horário não está ativo (plano
+ * Hobby só roda 1x/dia): lembrete de véspera, reenvio por telefone
+ * alternativo, envio da fila, fechamento de quem passou do horário sem
+ * responder, e expurgo LGPD do que passou do prazo de retenção.
+ */
+queueRouter.post(
+  "/api/queue/run-cadence",
+  asyncHandler(async (_req, res) => {
+    const reminders = await enqueueReminders();
+    const retries = await enqueueRetries();
+    const processed = await processQueue();
+    const closed = await closeExpiredAppointments();
+    const purged = await purgeExpiredData();
+    res.json({
+      ...processed,
+      remindersQueued: reminders.queued,
+      retriesQueued: retries.queued,
+      closedAsNoAnswer: closed,
+      purged,
+    });
   })
 );

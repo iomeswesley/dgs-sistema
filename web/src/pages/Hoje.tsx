@@ -107,6 +107,37 @@ export function Hoje() {
     }
   }
 
+  /**
+   * Sem o cron horário ativo (plano Hobby), a cadência do dia — lembrete de
+   * véspera, reenvio por telefone alternativo, envio, fechamento de quem
+   * passou do horário e expurgo LGPD — só roda quando alguém clica aqui.
+   */
+  async function runCadence() {
+    setBusy(true);
+    try {
+      const result = await api.post<{
+        sent: number;
+        failed: number;
+        deferred: number;
+        remainingToday: number;
+        remindersQueued: number;
+        retriesQueued: number;
+        closedAsNoAnswer: number;
+      }>("/api/queue/run-cadence");
+      setProcessResult(
+        `${result.sent} enviadas, ${result.failed} falharam · ${result.remindersQueued} lembretes e ` +
+          `${result.retriesQueued} reenvios criados · ${result.closedAsNoAnswer} fechados sem resposta. ` +
+          `Cabem mais ${result.remainingToday} hoje.`
+      );
+      data.reload();
+      summary.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao rodar a cadência.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const capacity = data.data?.capacity;
 
   return (
@@ -116,11 +147,16 @@ export function Hoje() {
         title="Acompanhamento"
         description="Como está a resposta das listas disparadas, por período."
         actions={
-          capacity && capacity.pending > 0 ? (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={processQueue}>
-              Enviar {Math.min(capacity.pending, capacity.remaining)} da fila
+          <div className="flex gap-2">
+            {capacity && capacity.pending > 0 && (
+              <button type="button" className="btn btn-quiet" disabled={busy} onClick={processQueue}>
+                Enviar {Math.min(capacity.pending, capacity.remaining)} da fila
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={runCadence}>
+              Rodar cadência do dia
             </button>
-          ) : undefined
+          </div>
         }
       />
 

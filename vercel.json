@@ -14,15 +14,5 @@
       "source": "/(.*)",
       "destination": "/api/index"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/queue",
-      "schedule": "0 11 * * *"
-    },
-    {
-      "path": "/api/cron/daily-summary",
-      "schedule": "0 21 * * *"
-    }
   ]
 }
