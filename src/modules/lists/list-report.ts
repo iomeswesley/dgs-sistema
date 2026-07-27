@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { toCsv } from "@/lib/csv.js";
+import { formatPhone } from "@/lib/phone.js";
 import { REFUSAL_REASON_LABEL, STATUS_LABEL } from "@/lib/labels.js";
 
 /**
@@ -28,9 +29,10 @@ export async function buildListReportCsv(listId: number): Promise<{ csv: string;
   });
 
   const csv = toCsv(
-    ["Paciente", "CNS", "Data/Hora", "Procedimento", "Médico", "Situação", "Motivo", "Observação"],
+    ["Paciente", "Telefone", "CNS", "Data/Hora", "Procedimento", "Médico", "Situação", "Motivo", "Observação"],
     appointments.map((appointment) => [
       appointment.patient.name,
+      appointment.selectedPhone ? formatPhone(appointment.selectedPhone) : "",
       appointment.patient.cns ?? "",
       appointment.scheduledAt.toLocaleString("pt-BR"),
       appointment.procedure.name,

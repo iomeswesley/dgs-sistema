@@ -73,6 +73,7 @@ export function Revisao() {
     [id]
   );
 
+  const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -94,6 +95,18 @@ export function Revisao() {
   for (const appointment of appointments) {
     counts[appointment.status] = (counts[appointment.status] ?? 0) + 1;
   }
+
+  // Busca por nome (parcial, sem acento/caixa) ou telefone (só os dígitos,
+  // compara contra qualquer telefone conhecido do paciente, não só o
+  // selecionado — a equipe pode estar procurando pelo número 2 ou 3).
+  const searchDigits = search.replace(/\D/g, "");
+  const searchName = search.trim().toLocaleLowerCase("pt-BR");
+  const filteredAppointments = appointments.filter((appointment) => {
+    if (!searchName) return true;
+    const nameMatch = appointment.patient.name.toLocaleLowerCase("pt-BR").includes(searchName);
+    const phoneMatch = searchDigits.length > 0 && appointment.phones.some((phone) => phone.includes(searchDigits));
+    return nameMatch || phoneMatch;
+  });
 
   const pending = appointments.filter(
     (appointment) => (appointment.rawLine?.issues?.length ?? 0) > 0
@@ -252,6 +265,21 @@ export function Revisao() {
         )}
       </div>
 
+      <div className="mb-3">
+        <input
+          type="search"
+          className="field max-w-sm"
+          placeholder="Buscar por nome ou telefone…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        {search && (
+          <p className="mt-1 text-xs text-ink-faint">
+            {filteredAppointments.length} de {appointments.length} pacientes
+          </p>
+        )}
+      </div>
+
       <div className="grid gap-5 xl:grid-cols-[1fr_minmax(320px,420px)]">
         <div className="min-w-0">
           <Table
@@ -266,7 +294,7 @@ export function Revisao() {
               </tr>
             }
           >
-            {appointments.map((appointment) => {
+            {filteredAppointments.map((appointment) => {
               const issues = appointment.rawLine?.issues ?? [];
               const isEditing = editing === appointment.id;
               return (
