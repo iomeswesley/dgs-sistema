@@ -54,7 +54,7 @@ export async function extractAndStage(listId: number): Promise<void> {
       // Padrão do Prisma é 5s — uma lista grande faz várias queries por
       // linha (resolver médico/procedimento/unidade/paciente), então o
       // padrão estoura fácil. 60s dá folga pra listas de centenas de linhas.
-      { timeout: 60_000 }
+      { maxWait: 10_000, timeout: 60_000 }
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha desconhecida na extração";
