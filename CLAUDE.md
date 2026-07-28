@@ -10,22 +10,26 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 - Repo: [github.com/iomeswesley/dgs-sistema](https://github.com/iomeswesley/dgs-sistema) (privado), branch `master`.
 - Deploy: previsto para Vercel (`vercel.json` + `api/index.js` já prontos). Ainda não publicado.
-- Banco de **produção**: Postgres/Supabase, **projeto novo e dedicado** — não reaproveitar o da barbearia-saas nem o do agendamento-quadra. Ainda não criado.
-- Banco de **dev local**: PostgreSQL 17 instalado na máquina via winget (serviço Windows `postgresql-x64-17`, sempre rodando), banco `sistema_dgs`, usuário `postgres` senha `dgs_local_dev`. `.env` local já existe (não versionado) apontando pra ele — ver seção "Ambiente local" abaixo antes de recriar nada.
+- Banco de **produção**: Postgres/Supabase, projeto dedicado (`aws-0-sa-east-1.pooler.supabase.com`), já criado. **Guardado só em `.env.production`** (git-ignorado, não versionado) — não é o que o `.env` ativo usa no dia a dia. Ver "Ambiente local" abaixo.
+- Banco de **dev local**: Postgres 17 em container Docker (`docker-compose.yml` na raiz, serviço `postgres`, container `dgs-postgres`), banco `sistema_dgs`, usuário `postgres`, senha `dgs_local_dev`, porta 5432. É o que o `.env` ativo usa por padrão. (O antigo texto aqui descrevia Postgres via winget/serviço Windows — era o ambiente do irmão do usuário rodando o projeto no Windows dele, não esta máquina. Neste Mac não havia Postgres nenhum instalado até 2026-07-27.)
 
-## Estado atual (2026-07-25)
+## Estado atual (2026-07-27)
 
-**Fase 1 e Fase 2 do PLANO.md implementadas por inteiro.** Falta só ligar às credenciais reais de produção — ver [INSTALACAO.md](INSTALACAO.md). O fluxo já foi **validado rodando de verdade**: login funcionando com sessão real, banco local com as migrations aplicadas, navegação testada no navegador.
+**Fase 1 e Fase 2 do PLANO.md implementadas por inteiro.** Diferente do que este arquivo dizia até 2026-07-27, as credenciais reais de produção (Supabase, Anthropic, WhatsApp) **já estão ligadas** — ver [INSTALACAO.md](INSTALACAO.md) e "Ambiente local" abaixo. O fluxo já foi **validado rodando de verdade**: login funcionando com sessão real, navegação testada no navegador contra o banco de produção.
 
-Validado: typecheck (server + web), 62 testes e build limpos; login e navegação conferidos no navegador contra banco real.
+Validado: typecheck (server + web), 62 testes e build limpos; login e navegação conferidos no navegador. Falta confirmar se o disparo de WhatsApp chega mesmo no paciente (o card "Enviar teste" em Configurações → WhatsApp foi feito pra isso).
 
 ## Ambiente local (já configurado nesta máquina)
 
-- Postgres local rodando (ver acima). `.env` na raiz do projeto (git-ignorado) já tem `DATABASE_URL`/`DIRECT_URL` apontando pra ele, `SESSION_SECRET` gerado, e o resto das chaves (Anthropic/WhatsApp/Resend) vazias — então extração, WhatsApp e e-mail caem nos stubs (log no console), mas login/cadastro/navegação funcionam de ponta a ponta.
-- Usuário de teste já criado: `wesley@dgs.local`. Senha gerada uma vez pelo `npm run seed` — se perdida, gerar outra com `npm run seed -- "Nome" outro-email@dgs.local` (não reseta a existente) ou redefinir depois de logar com outra conta.
-- **Corrigido**: `npm run dev:api` agora força `PORT=3000` via `cross-env`, porque o harness de preview injeta `PORT=5173` (a porta do Vite) no ambiente e o `--env-file` do Node não sobrescreve variável já existente — sem o `cross-env` a API tentava subir na mesma porta do Vite e o login falhava com 502. Não reverter esse script.
-- Pra rodar: `npm run dev` (sobe API na 3000 + Vite na 5173 com proxy `/api`), ou usar o preview do harness com o config `dgs-web` (aponta pra porta 5173).
-- Cadastro está **vazio** de propósito (nenhum município/médico/procedimento) — é o estado real de primeiro acesso, não precisa popular a menos que peçam.
+**Histórico rápido, pra não repetir o erro**: entre 2026-07-25 e 2026-07-27 o `.env` desta máquina apontou sem querer pro Supabase de produção (`ANTHROPIC_API_KEY`/`WHATSAPP_ACCESS_TOKEN` já eram reais também) — cada request cruzava a rede até São Paulo e a Revisão de lista chegou a levar 7-9s pra carregar. Corrigido em 2026-07-27: dev volta a usar Postgres local via Docker, rápido (as mesmas rotas caíram pra 15-120ms).
+
+- **Banco ativo**: Postgres local em Docker. Subir com `docker compose up -d` (usa o `docker-compose.yml` da raiz); esperar ficar `healthy` com `docker inspect --format='{{.State.Health.Status}}' dgs-postgres`. Migrations com `npx prisma migrate deploy` (nunca `migrate dev` — ver "Convenções operacionais"). Primeiro usuário com `npm run seed -- "Nome" email@dgs.local`.
+- **`.env.production` guarda a string de conexão real do Supabase** (e as demais chaves) pra quando o projeto for de fato publicado — não é carregado automaticamente por nada, é só referência. **Nunca copiar esses valores de volta pro `.env` ativo sem confirmar explicitamente com o usuário antes** — foi exatamente essa troca sem querer que causou o incidente de 2026-07-25/27 (rodei `npm run seed` achando que era local e criei usuário em produção).
+- `ANTHROPIC_API_KEY` e `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` no `.env` ativo **continuam reais** (não dependem do banco) — extração e envio de WhatsApp funcionam de verdade mesmo com o banco local. Só `RESEND_API_KEY` está vazia (e-mail cai no stub). **"Disparar confirmações" e a cadência do dia mandam WhatsApp de verdade** mesmo em dev — pra testar sem risco, usar o card "Enviar teste" em Configurações → WhatsApp (`POST /api/whatsapp/signup/test-send`), que nunca consulta paciente/agendamento no banco.
+- `wesley@dgs.local` era o usuário de equipe documentado aqui antes — ele existe no banco de **produção** (Supabase), não no Postgres local novo. No banco local atual não há usuário até alguém rodar `npm run seed`.
+- **Corrigido**: `npm run dev:api` força `PORT=3000` via `cross-env`, porque o harness de preview injeta `PORT=5173` (a porta do Vite) no ambiente e o `--env-file` do Node não sobrescreve variável já existente — sem o `cross-env` a API tentava subir na mesma porta do Vite e o login falhava com 502. Não reverter esse script.
+- Pra rodar: `npm run dev` (sobe API na 3000 + Vite na 5173 com proxy `/api`), ou usar o preview do harness com o config `dgs-web` (aponta pra porta 5173). Trocar algo no `.env` exige reiniciar o processo da API (`tsx watch` só recarrega o `--env-file` quando o processo reinicia — tocar em `src/server.ts` força o restart sem precisar matar o terminal).
+- Cadastro está **vazio** de propósito (nenhum município/médico/procedimento) — é o estado real de primeiro acesso local, não precisa popular a menos que peçam.
 
 **Backend** (`src/`):
 - `config/env`, `lib/` (prisma, auth scrypt, phone E.164, whatsapp, templates, timezone, csv, http, errorReporting)
@@ -89,11 +93,11 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 
 ## Pendências externas (bloqueiam ir pra produção — dev local já funciona sem elas)
 
-1. Projeto Supabase dedicado de produção + trocar `DATABASE_URL`/`DIRECT_URL` no `.env` (hoje aponta pro Postgres local).
-2. Número de WhatsApp Business + app na Meta (app dedicado `dgs-system`, **não** o `innovaIA` — esse é da barbearia), e os **templates submetidos para aprovação** (maior lead time do projeto) — `npm run templates` depois de ter `WHATSAPP_BUSINESS_ACCOUNT_ID` e um token com `whatsapp_business_management`.
-   - Conectar a conta pelo sistema (Configurações → WhatsApp → Embedded Signup) em vez de configurar token/IDs à mão exige, no app `dgs-system`: análise aprovada (`whatsapp_business_management`, `business_management` — em andamento), ícone do app, URL de Política de Privacidade, e criar a "Configuration" do Embedded Signup (WhatsApp → Configuração da API) pra gerar `WHATSAPP_APP_ID`/`WHATSAPP_SIGNUP_CONFIG_ID`.
-3. Chave da API Anthropic (`ANTHROPIC_API_KEY`) para a extração e a classificação de respostas ambíguas.
-4. Chave do Resend (`RESEND_API_KEY`) para relatório automático por e-mail e resumo diário.
+1. ~~Projeto Supabase dedicado de produção~~ — **feito**, mas guardado em `.env.production` (git-ignorado), não em uso no dia a dia: dev roda no Postgres local via Docker (ver "Ambiente local"). Publicar de verdade = trocar `DATABASE_URL`/`DIRECT_URL` do `.env` ativo pelos valores de `.env.production`, com confirmação explícita antes — decisão de 2026-07-27, depois do incidente de apontar sem querer pra produção.
+2. ~~Número de WhatsApp Business + token~~ — **feito**: `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` reais no `.env`, conectado como fallback "via variável de ambiente" (tier `TIER_250` confirmado em Configurações → WhatsApp). Falta confirmar se os **templates foram de fato aprovados e o envio chega no paciente** — o usuário não tinha certeza em 2026-07-27. Use o card "Enviar teste" pra checar isso com o próprio número antes de confiar em disparo real.
+   - Conectar a conta pelo sistema (Configurações → WhatsApp → Embedded Signup), como alternativa ao token direto no `.env`, ainda exige no app `dgs-system`: análise aprovada (`whatsapp_business_management`, `business_management`), ícone do app, URL de Política de Privacidade, e a "Configuration" do Embedded Signup pra gerar `WHATSAPP_APP_ID`/`WHATSAPP_SIGNUP_CONFIG_ID`.
+3. ~~Chave da API Anthropic~~ — **feito**: `ANTHROPIC_API_KEY` real no `.env`, extração não cai mais em stub.
+4. Chave do Resend (`RESEND_API_KEY`) para relatório automático por e-mail e resumo diário. Ainda vazia.
 5. PDFs reais de 2–3 prefeituras para calibrar o prompt de extração (só fotos até agora) — `npm run extrair -- caminho/do/arquivo.pdf`.
 6. Valores de `doctor_fee` e `city_rate` por procedimento.
 7. Plano **Pro** da Vercel pro cron horário da fila funcionar em produção (Hobby só roda cron 1x/dia). **Decisão atual**: por enquanto sem cron nenhum — `vercel.json` não agenda `/api/cron/queue` nem `/api/cron/daily-summary` (as rotas continuam existindo, só não são chamadas sozinhas). A equipe roda a cadência do dia (lembrete D-1, reenvio por telefone alternativo, envio, fechamento de quem passou do horário, expurgo LGPD) na mão, pelo botão "Rodar cadência do dia" em Acompanhamento (`POST /api/queue/run-cadence`). Quando decidir automatizar de novo: reativar os crons no `vercel.json` (o `/api/cron/queue` horário exige o plano Pro).
