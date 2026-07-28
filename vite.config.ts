@@ -18,7 +18,10 @@ export default defineConfig({
     // Em dev o React roda no 5173 e a API no 3000; o proxy faz o cookie de
     // sessão funcionar como se fosse a mesma origem.
     proxy: {
-      "/api": "http://localhost:3000",
+      "/api": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
     },
   },
 });
