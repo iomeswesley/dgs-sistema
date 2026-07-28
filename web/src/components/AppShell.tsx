@@ -18,11 +18,24 @@ const NAV = [
   { to: "/equipe", label: "Equipe", hint: "Acessos e auditoria" },
 ];
 
+const SIDEBAR_STORAGE_KEY = "dgs-sidebar-collapsed";
+
 export function AppShell() {
   const { user, signOut } = useSession();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1"
+  );
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
 
   async function handleSignOut() {
     await signOut();
@@ -32,15 +45,31 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen md:flex">
-      <nav className="flex flex-col bg-board text-board-ink md:h-screen md:w-60 md:shrink-0 md:sticky md:top-0">
+      <nav
+        className={`relative flex flex-col bg-board text-board-ink md:h-screen md:shrink-0 md:sticky md:top-0 md:transition-[width] md:duration-150 ${
+          collapsed ? "md:w-16" : "md:w-60"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          className="absolute -right-3 top-6 hidden h-6 w-6 items-center justify-center rounded-full border border-board-line bg-board text-board-ink-muted hover:text-board-ink md:flex"
+        >
+          <span aria-hidden>{collapsed ? "›" : "‹"}</span>
+          <span className="sr-only">{collapsed ? "Expandir menu" : "Recolher menu"}</span>
+        </button>
+
         <div className="flex items-center justify-between px-5 py-4 md:block md:py-6">
           <div>
-            <div className="text-lg font-bold tracking-tight">DGS</div>
-            <div className="mt-1 flex gap-0.5" aria-hidden>
-              <span className="h-1 w-6 rounded-full bg-mark-green" />
-              <span className="h-1 w-3 rounded-full bg-mark-yellow" />
-              <span className="h-1 w-2 rounded-full bg-mark-red" />
-            </div>
+            <div className="text-lg font-bold tracking-tight">{collapsed ? "D" : "DGS"}</div>
+            {!collapsed && (
+              <div className="mt-1 flex gap-0.5" aria-hidden>
+                <span className="h-1 w-6 rounded-full bg-mark-green" />
+                <span className="h-1 w-3 rounded-full bg-mark-yellow" />
+                <span className="h-1 w-2 rounded-full bg-mark-red" />
+              </div>
+            )}
           </div>
           {/* No celular a prancheta não tem rodapé, então tema e saída ficam
               aqui — sem isso não haveria como sair da sessão no telefone. */}
@@ -67,17 +96,24 @@ export function AppShell() {
             <li key={item.to} className="shrink-0 md:shrink">
               <NavLink
                 to={item.to}
+                title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
                   [
                     "block rounded-lg px-3 py-2 text-sm transition-colors",
+                    collapsed ? "md:text-center" : "",
                     isActive
                       ? "bg-board-raised font-semibold text-board-ink"
                       : "text-board-ink-muted hover:bg-board-raised/60 hover:text-board-ink",
                   ].join(" ")
                 }
               >
-                {item.label}
-                <span className="hidden md:block text-[0.6875rem] font-normal text-board-ink-muted">{item.hint}</span>
+                <span className={collapsed ? "md:hidden" : ""}>{item.label}</span>
+                {collapsed && <span className="hidden md:inline">{item.label.slice(0, 2)}</span>}
+                {!collapsed && (
+                  <span className="hidden md:block text-[0.6875rem] font-normal text-board-ink-muted">
+                    {item.hint}
+                  </span>
+                )}
               </NavLink>
             </li>
           ))}
@@ -87,16 +123,22 @@ export function AppShell() {
           <button
             type="button"
             onClick={toggleTheme}
+            title={collapsed ? `Tema ${theme === "dark" ? "claro" : "escuro"}` : undefined}
             className="mb-3 text-xs text-board-ink-muted hover:text-board-ink"
           >
-            Tema {theme === "dark" ? "claro" : "escuro"}
+            {collapsed ? (theme === "dark" ? "☀" : "☾") : `Tema ${theme === "dark" ? "claro" : "escuro"}`}
           </button>
-          <div className="truncate text-sm font-medium">{user?.name}</div>
-          <div className="truncate text-xs text-board-ink-muted">{user?.email}</div>
+          {!collapsed && (
+            <>
+              <div className="truncate text-sm font-medium">{user?.name}</div>
+              <div className="truncate text-xs text-board-ink-muted">{user?.email}</div>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setConfirmingSignOut(true)}
-            className="mt-2 text-xs text-board-ink-muted underline underline-offset-2 hover:text-board-ink"
+            title={collapsed ? "Sair" : undefined}
+            className="mt-2 block text-xs text-board-ink-muted underline underline-offset-2 hover:text-board-ink"
           >
             Sair
           </button>
