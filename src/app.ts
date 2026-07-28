@@ -61,7 +61,7 @@ export function createApp() {
           // própria origem. https://www.facebook.com é o popup/iframe do
           // Embedded Signup do WhatsApp.
           frameSrc: ["'self'", "blob:", "https://www.facebook.com"],
-          frameAncestors: ["'none'"],
+          frameAncestors: ["'self'"],
           objectSrc: ["'none'"],
         },
       },
