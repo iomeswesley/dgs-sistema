@@ -1163,6 +1163,8 @@ function WhatsappTab() {
         </div>
       )}
 
+      {status?.connected && <WhatsappTestSend />}
+
       <ConfirmModal
         open={disconnecting}
         title="Desconectar o WhatsApp?"
@@ -1174,5 +1176,95 @@ function WhatsappTab() {
         onCancel={() => setDisconnecting(false)}
       />
     </>
+  );
+}
+
+const TEMPLATE_OPTIONS = [
+  { value: "CONFIRMACAO", label: "Confirmação de consulta" },
+  { value: "LEMBRETE", label: "Lembrete de véspera" },
+  { value: "VAGA_ABERTA", label: "Vaga aberta" },
+] as const;
+
+/**
+ * Manda um template com dados fictícios pra um número próprio, nunca pra
+ * paciente — o backend (`/api/whatsapp/signup/test-send`) não consulta
+ * agendamento nenhum, só usa o telefone digitado aqui.
+ */
+function WhatsappTestSend() {
+  const [phone, setPhone] = useState("");
+  const [template, setTemplate] = useState<(typeof TEMPLATE_OPTIONS)[number]["value"]>("CONFIRMACAO");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function handleSend() {
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.post<{ stubbed: boolean }>("/api/whatsapp/signup/test-send", {
+        phone,
+        template,
+      });
+      setNotice(
+        result.stubbed
+          ? "Sem credencial real configurada — o envio só foi logado no servidor, nada saiu pelo WhatsApp."
+          : "Mensagem de teste enviada. Confira no celular informado."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao enviar o teste.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="card mt-3 p-4">
+      <p className="eyebrow">Enviar teste</p>
+      <p className="mt-1 text-sm text-ink-muted">
+        Manda o template com dados fictícios pra um número seu, pra conferir formatação e entrega sem
+        risco de mensagem chegar num paciente de verdade.
+      </p>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <Field label="Seu número (com DDD)">
+          <input
+            className="field"
+            placeholder="(47) 99999-9999"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+          />
+        </Field>
+        <Field label="Template">
+          <select className="field" value={template} onChange={(event) => setTemplate(event.target.value as typeof template)}>
+            {TEMPLATE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <button
+        type="button"
+        className="btn btn-primary mt-3"
+        disabled={sending || !phone.trim()}
+        onClick={() => void handleSend()}
+      >
+        {sending ? "Enviando…" : "Enviar teste"}
+      </button>
+
+      {notice && (
+        <div className="mt-3">
+          <Callout>{notice}</Callout>
+        </div>
+      )}
+      {error && (
+        <div className="mt-3">
+          <ErrorNote message={error} />
+        </div>
+      )}
+    </div>
   );
 }

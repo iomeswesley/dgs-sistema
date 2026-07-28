@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { TemplateKind } from "@prisma/client";
 import { env } from "@/config/env.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { requireAuth, currentUserId } from "@/middleware/auth.js";
 import { parseBody } from "@/lib/http.js";
+import { normalizePhoneList } from "@/lib/phone.js";
+import { sendTemplate } from "@/lib/whatsapp.js";
+import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import {
   disconnectAccount,
   exchangeSignupCode,
@@ -77,3 +81,47 @@ whatsappSignupRouter.delete(
     res.json({ status: await getConnectionStatus() });
   })
 );
+
+const testSendSchema = z.object({
+  phone: z.string().min(8),
+  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA"]),
+});
+
+/**
+ * Manda um template com dados fictícios pra um número escolhido pela própria
+ * equipe — nunca busca paciente/agendamento no banco. Existe pra conferir se
+ * o envio e a formatação do template funcionam sem risco de mandar mensagem
+ * de teste pra um telefone de paciente de verdade.
+ */
+whatsappSignupRouter.post(
+  "/api/whatsapp/signup/test-send",
+  asyncHandler(async (req, res) => {
+    const { phone, template } = parseBody(req, testSendSchema);
+
+    const [normalized] = normalizePhoneList([phone]);
+    if (!normalized) throw new AppError("Telefone inválido.", 400);
+    if (normalized.kind !== "mobile") throw new AppError("Só celular recebe WhatsApp.", 400);
+
+    const params = buildTestParams(template);
+    const result = await sendTemplate(normalized.e164, TEMPLATE_NAMES[template], params);
+    res.json(result);
+  })
+);
+
+function buildTestParams(template: TemplateKind) {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const date = tomorrow.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const time = "10:00";
+  const firstName = "Teste";
+  const municipality = "Município de Teste";
+  const procedure = "Procedimento de Teste";
+  const local = "Unidade de Teste";
+
+  if (template === "LEMBRETE") {
+    return { body: [firstName, date, time, procedure, local, "Nenhum preparo especial necessário"] };
+  }
+  if (template === "VAGA_ABERTA") {
+    return { body: [firstName, municipality, procedure, date, time, local] };
+  }
+  return { header: [municipality], body: [firstName, municipality, date, time, procedure, local] };
+}
