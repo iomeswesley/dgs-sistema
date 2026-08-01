@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, PageHeader } from "../components/AppShell";
 import { StatusBand } from "../components/StatusBand";
@@ -45,6 +45,15 @@ export function Listas() {
   const [agendaId, setAgendaId] = useState<string>("");
   const [isComplementary, setIsComplementary] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Enquanto alguma lista está EXTRAINDO, o status só muda sozinho no banco
+  // — sem isso a listagem ficava presa até a equipe apertar F5.
+  const hasExtracting = (lists.data?.lists ?? []).some((list) => list.status === "EXTRAINDO");
+  useEffect(() => {
+    if (!hasExtracting) return;
+    const interval = setInterval(() => lists.reload(), 3000);
+    return () => clearInterval(interval);
+  }, [hasExtracting, lists.reload]);
 
   const agendaOptions = (agendas.data?.agendas ?? []).filter(
     (agenda) => String(agenda.municipalityId) === municipalityId

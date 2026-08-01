@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -87,6 +87,15 @@ export function Revisao() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Enquanto a extração roda em segundo plano (EXTRAINDO), o status só muda
+  // sozinho no banco — sem isso a tela ficava presa até a equipe apertar F5.
+  const extracting = detail.data?.list.status === "EXTRAINDO";
+  useEffect(() => {
+    if (!extracting) return;
+    const interval = setInterval(() => detail.reload(), 3000);
+    return () => clearInterval(interval);
+  }, [extracting, detail.reload]);
 
   if (detail.loading) return <Spinner label="Carregando a lista…" />;
   if (detail.error) return <ErrorNote message={detail.error} />;
