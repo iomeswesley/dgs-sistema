@@ -6,7 +6,7 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
 import { approveList, editAppointment, extractAndStage, removeAppointment } from "./lists.service.js";
-import { enqueueList, queueCapacity } from "@/modules/queue/queue.service.js";
+import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { buildListReportCsv } from "./list-report.js";
 import { emailConfigured, sendEmail } from "@/lib/email.js";
@@ -243,8 +243,12 @@ listsRouter.post(
   "/api/lists/:id/dispatch",
   asyncHandler(async (req, res) => {
     const result = await enqueueList(routeId(req), currentUserId(req));
+    // Dispara na hora, sem esperar alguém ir em Acompanhamento clicar em
+    // "Rodar cadência do dia" — esse fica só pra monitorar e pra reenvio/
+    // lembrete, não pro disparo inicial.
+    const processed = await processQueue();
     const capacity = await queueCapacity();
-    res.json({ ...result, capacity });
+    res.json({ ...result, ...processed, capacity });
   })
 );
 

@@ -177,12 +177,21 @@ export function Revisao() {
         await api.post(`/api/lists/${list.id}/reprocess`);
         setNotice("Reprocessando a lista…");
       } else if (confirmAction === "dispatch") {
-        const result = await api.post<{ queued: number; skipped: number; capacity: { remaining: number } }>(
-          `/api/lists/${list.id}/dispatch`
-        );
+        const result = await api.post<{
+          queued: number;
+          skipped: number;
+          sent: number;
+          failed: number;
+          deferred: number;
+          capacity: { remaining: number };
+        }>(`/api/lists/${list.id}/dispatch`);
         setNotice(
-          `${result.queued} mensagens na fila.` +
-            (result.skipped > 0 ? ` ${result.skipped} ignoradas (opt-out ou já enfileiradas).` : "") +
+          `${result.sent} mensagens enviadas` +
+            (result.failed > 0 ? `, ${result.failed} falharam` : "") +
+            (result.skipped > 0 ? `. ${result.skipped} ignoradas (opt-out ou já enfileiradas)` : "") +
+            (result.deferred > 0
+              ? `. ${result.deferred} continuam na fila (limite diário) — saem quando rodar a cadência de novo.`
+              : ".") +
             ` Cabem mais ${result.capacity.remaining} envios hoje.`
         );
       } else {
@@ -491,7 +500,7 @@ export function Revisao() {
             : confirmAction === "reprocess"
               ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
               : confirmAction === "dispatch"
-                ? `As mensagens entram na fila e saem respeitando o limite diário da Meta. ${
+                ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
                     pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
                   }`
                 : "O relatório com o resultado de cada paciente é enviado por e-mail para a secretaria, se houver contato cadastrado."

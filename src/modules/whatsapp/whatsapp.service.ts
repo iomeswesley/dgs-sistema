@@ -18,11 +18,28 @@ import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
   Tudo é idempotente por `wamid` — a Meta reentrega o mesmo evento sem aviso.
 */
 
+/**
+ * A Meta às vezes manda o campo "from" do webhook sem o 9º dígito do
+ * celular brasileiro (ex: 554797760610 em vez de 5547997760610) — bug
+ * conhecido, documentado só em fóruns de desenvolvedor, não na doc oficial.
+ * Como resposta de WhatsApp só vem de celular (nunca fixo), é seguro
+ * reconstruir o candidato com o 9 de volta e tentar os dois formatos.
+ */
+function phoneCandidates(from: string): string[] {
+  const digits = from.replace(/\D/g, "");
+  const candidates = [digits];
+  // 55 + DDD (2) + assinante sem o 9 (8) = 12 dígitos.
+  if (digits.length === 12 && digits.startsWith("55")) {
+    candidates.push(`55${digits.slice(2, 4)}9${digits.slice(4)}`);
+  }
+  return candidates;
+}
+
 /** Encontra o agendamento mais recente que espera resposta desse telefone. */
 async function findAppointmentForPhone(phone: string) {
   return prisma.appointment.findFirst({
     where: {
-      selectedPhone: phone,
+      selectedPhone: { in: phoneCandidates(phone) },
       status: { in: ["ENVIADO", "ENTREGUE"] },
     },
     orderBy: { scheduledAt: "asc" },
@@ -69,13 +86,14 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
   // Opt-out vale mesmo sem agendamento casado: alguém pedindo pra sair não
   // pode continuar recebendo só porque não achamos a linha dele.
   if (intent === "opt_out") {
+    const candidates = phoneCandidates(reply.from);
     await prisma.patient.updateMany({
-      where: { phones: { has: reply.from } },
+      where: { phones: { hasSome: candidates } },
       data: { optedOut: true, optedOutAt: new Date() },
     });
     // Cancela o que ainda não saiu pra esse número.
     await prisma.messageJob.updateMany({
-      where: { phone: reply.from, status: "PENDENTE" },
+      where: { phone: { in: candidates }, status: "PENDENTE" },
       data: { status: "CANCELADO", lastError: "Paciente pediu para não receber mensagens" },
     });
     return;
