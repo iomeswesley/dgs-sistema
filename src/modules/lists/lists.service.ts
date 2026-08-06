@@ -29,6 +29,7 @@ export async function extractAndStage(listId: number): Promise<void> {
   try {
     const { result } = await extractList(Buffer.from(list.fileData), list.mimeType);
     const mapped = mapExtraction(result);
+    result.warnings = [...result.warnings, ...(await unitAddressWarnings(list.agendaId, mapped.executingUnit))];
 
     await prisma.$transaction(
       async (tx) => {
@@ -64,6 +65,55 @@ export async function extractAndStage(listId: number): Promise<void> {
     });
     throw err;
   }
+}
+
+/**
+ * A confirmação de WhatsApp monta o "local" a partir da unidade da agenda
+ * vinculada (nome + endereço) — nunca do que a extração lê no arquivo, porque
+ * o SISREG não imprime endereço. Sem agenda vinculada, ou com a unidade sem
+ * endereço cadastrado, a mensagem sai incompleta (só município) sem avisar
+ * ninguém — por isso o aviso entra aqui, antes da revisão.
+ */
+async function unitAddressWarnings(agendaId: number | null, executingUnit: string | null): Promise<string[]> {
+  if (!agendaId) {
+    return [
+      "Lista sem agenda vinculada: a confirmação vai sair só com o nome do município, sem unidade nem endereço. Vincule uma agenda em Configurações → Agendas.",
+    ];
+  }
+
+  const agenda = await prisma.agenda.findUnique({ where: { id: agendaId }, include: { unit: true } });
+  if (!agenda?.unit) {
+    return [
+      "Agenda vinculada não tem unidade cadastrada: a confirmação vai sair sem unidade nem endereço. Ajuste em Configurações → Agendas.",
+    ];
+  }
+
+  const warnings: string[] = [];
+  if (!agenda.unit.address) {
+    warnings.push(
+      `Unidade "${agenda.unit.name}" não tem endereço cadastrado: a confirmação vai sair sem endereço. Cadastre em Configurações → Cadastro → Unidades.`
+    );
+  }
+  if (executingUnit && !unitNamesMatch(executingUnit, agenda.unit.name)) {
+    warnings.push(
+      `Unidade lida no arquivo ("${executingUnit}") não bate com a unidade da agenda vinculada ("${agenda.unit.name}") — confira se a agenda certa foi escolhida.`
+    );
+  }
+  return warnings;
+}
+
+const DIACRITICS = new RegExp(`[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`, "g");
+
+function unitNamesMatch(a: string, b: string): boolean {
+  const normalize = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(DIACRITICS, "")
+      .toUpperCase()
+      .trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  return na === nb || na.includes(nb) || nb.includes(na);
 }
 
 type TxClient = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
