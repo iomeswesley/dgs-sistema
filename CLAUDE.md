@@ -4,7 +4,7 @@ Leia isto no início de qualquer sessão nova. O desenho completo do produto est
 
 ## O que é
 
-Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que intermedia secretarias municipais de saúde e médicos contratados em SC. Recebe listas diárias de agendamento (PDF ou foto), extrai com IA, dispara confirmação por WhatsApp com botões Sim/Não e concilia o atendimento em três checagens.
+Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que intermedia secretarias municipais de saúde e médicos contratados em SC. Recebe listas diárias de agendamento (PDF nativo gerado pelo SISREG ou CELK — nunca foto), extrai localmente sem IA, dispara confirmação por WhatsApp com botões Sim/Não e concilia o atendimento em três checagens.
 
 Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil único**, todo mundo da equipe pode tudo. O controle vem da tabela `audit_logs`, não de permissões — decisão explícita do usuário.
 
@@ -17,7 +17,7 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 **Fase 1 e Fase 2 do PLANO.md implementadas por inteiro.** Diferente do que este arquivo dizia até 2026-07-27, as credenciais reais de produção (Supabase, Anthropic, WhatsApp) **já estão ligadas** — ver [INSTALACAO.md](INSTALACAO.md) e "Ambiente local" abaixo. O fluxo já foi **validado rodando de verdade**: login funcionando com sessão real, navegação testada no navegador contra o banco de produção.
 
-Validado: typecheck (server + web), 62 testes e build limpos; login e navegação conferidos no navegador. Falta confirmar se o disparo de WhatsApp chega mesmo no paciente (o card "Enviar teste" em Configurações → WhatsApp foi feito pra isso).
+Validado: typecheck (server + web), 86 testes e build limpos; login e navegação conferidos no navegador. Falta confirmar se o disparo de WhatsApp chega mesmo no paciente (o card "Enviar teste" em Configurações → WhatsApp foi feito pra isso).
 
 ## Ambiente local (já configurado nesta máquina)
 
@@ -81,10 +81,23 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 - **Minimização de dados diante de pedido de autoridade pública ou do titular (LGPD art. 18)**: nunca abrir acesso à base inteira. Usar `npx tsx --env-file=.env scripts/exportar-dados-paciente.ts --cns=... [--incluir-mensagens]` — traz só o essencial de UM paciente (nome, telefones, agendamentos); conteúdo de mensagem e nota interna da equipe são opt-in, não vêm por padrão. Confirmar legitimidade do pedido com o jurídico antes de repassar qualquer coisa.
 - Manter este arquivo e o PLANO.md atualizados a cada mudança relevante.
 
+## Extração de listas: local, sem IA (2026-08-06)
+
+A extração **não chama mais nenhuma API de IA**. Decisão de 2026-08-05, implementada em 2026-08-06: só entra PDF nativo (SISREG ou CELK) — a prefeitura não manda mais foto — e a leitura é um parser determinístico local (`pdf-parse` pra texto + regex), de graça e instantâneo (~0,5s contra ~30-120s da IA antes).
+
+- `src/modules/extraction/parsers/detect.ts` — reconhece o formato pela assinatura no cabeçalho/rodapé do PDF (`SISREG`, `CELK` ou `OUTRO`).
+- `src/modules/extraction/parsers/celk.ts` — CELK exporta uma linha de texto por paciente, direto: regex simples resolve.
+- `src/modules/extraction/parsers/sisreg.ts` — SISREG quebra cada célula em uma linha separada, sem alinhamento de coluna, e a fragmentação **varia dentro do mesmo arquivo** (nome de campo às vezes sozinho na linha, às vezes colado ao campo seguinte por tab — ex.: código de solicitação com o dia da semana). O parser não confia em posição de linha: junta tudo do registro numa string e vai consumindo por **padrão de campo**, na ordem: código de solicitação → dia da semana → data → hora → CNS (15 dígitos, tolera 1 espaço perdido no meio) → nome → nascimento (idem, tolera quebra no último dígito do ano) → idade → origem (`CIDADE - UF`) → telefone(s) (tolera quebra logo após o hífen) → unidade solicitante → vaga (`1ª VEZ`/`RETORNO`) → CID-10 (lido só pra saber onde o registro termina — **nunca entra no resultado**, LGPD). Testado e validado campo a campo contra os 4 PDFs reais/exemplo disponíveis (100% de recall: 14/14, 50/50, 30/30, 23/23 pacientes, batendo com a contagem declarada no rodapé de cada relatório).
+- `src/modules/extraction/parsers/shared.ts` — telefone (formatado e cru) e datas, compartilhado pelos dois parsers.
+- `extraction.service.ts` mantém a mesma assinatura de antes (`extractList(file, mimeType) -> { result, usage }`) — só troca o motor por dentro. `usage` fica zerado (não há tokens, mas o campo continua existindo pra não quebrar `scripts/extrair.ts`). `extractionConfigured` agora é sempre `true` (não depende de chave nenhuma).
+- Upload só aceita `application/pdf` agora (`ACCEPTED_TYPES` em `lists.routes.ts`, `accept=".pdf"` em `web/src/pages/Listas.tsx`) — imagem foi removida do fluxo inteiro.
+- Formato `OUTRO` (não reconhecido) não trava a lista: ela cai em revisão vazia, com aviso pedindo preenchimento manual — não há mais fallback pra IA reconhecer.
+- `extraction.prompt.ts` foi apagado (só existia pro prompt da IA). `@anthropic-ai/sdk` continua no projeto — ainda é usado por `modules/replies` (classificação de resposta ambígua), feature separada que não foi tocada.
+- `pdf-parse` (`^2.4.5`) é dependência real agora, não só de teste — usa a API `PDFParse` (não a função antiga `pdf(buffer)` da v1).
+
 ## Notas técnicas que não são óbvias
 
-- **A extração usa `claude-opus-5` com structured output** (`output_config.format` com JSON Schema escrito à mão, não derivado do zod — a API só aceita um subconjunto do JSON Schema). Precisa do `@anthropic-ai/sdk` ≥ 0.115: versões anteriores não tipam `output_config`. Streaming é obrigatório com `max_tokens` alto (64k) pra não estourar o timeout de HTTP.
-- **O prompt de extração descreve a estrutura, não um roteiro de passos** — modelos atuais rendem menos com prompt prescritivo. Ao ajustar, manter a regra central: campo ilegível vira `null` com confiança baixa, nunca um chute.
+- **A extração de listas não usa mais IA** (ver seção acima) — histórico: chegou a rodar com `claude-opus-5`, depois `claude-haiku-4-5-20251001`, antes de virar parser local em 2026-08-06. `@anthropic-ai/sdk` continua no projeto só por causa de `modules/replies` (classificação de resposta ambígua) — regra central lá: campo ilegível vira `null`/`"unknown"` com confiança baixa, nunca um chute.
 - **`react-router-dom` fica na versão mais recente (7.18.x) mesmo com um aviso do `npm audit`.** O aviso é GHSA-2w69-qvjg-hvjx (CSRF em **RSC mode**), que não se aplica: usamos SPA com `BrowserRouter`, sem React Server Components nem server actions. A "correção" que o npm sugere é descer para 7.11.0, que é afetada por **13 outros** avisos. Não descer de versão.
 - `@theme inline` no `index.css` mapeia os tokens do Tailwind para variáveis CSS próprias, que trocam no seletor `.dark`. Por isso as utilidades (`bg-sheet`, `text-ink`…) acompanham o tema sozinhas.
 - O build do Vite sai em `dist-web/` e o Express serve dali em produção (`WEB_DIST` em `src/app.ts`); em dev são dois processos (`npm run dev` sobe os dois, com proxy `/api` do Vite para a porta 3000).
@@ -96,8 +109,8 @@ Validado: typecheck (server + web), 62 testes e build limpos; login e navegaçã
 1. ~~Projeto Supabase dedicado de produção~~ — **feito**, mas guardado em `.env.production` (git-ignorado), não em uso no dia a dia: dev roda no Postgres local via Docker (ver "Ambiente local"). Publicar de verdade = trocar `DATABASE_URL`/`DIRECT_URL` do `.env` ativo pelos valores de `.env.production`, com confirmação explícita antes — decisão de 2026-07-27, depois do incidente de apontar sem querer pra produção.
 2. ~~Número de WhatsApp Business + token~~ — **feito**: `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` reais no `.env`, conectado como fallback "via variável de ambiente" (tier `TIER_250` confirmado em Configurações → WhatsApp). Falta confirmar se os **templates foram de fato aprovados e o envio chega no paciente** — o usuário não tinha certeza em 2026-07-27. Use o card "Enviar teste" pra checar isso com o próprio número antes de confiar em disparo real.
    - Conectar a conta pelo sistema (Configurações → WhatsApp → Embedded Signup), como alternativa ao token direto no `.env`, ainda exige no app `dgs-system`: análise aprovada (`whatsapp_business_management`, `business_management`), ícone do app, URL de Política de Privacidade, e a "Configuration" do Embedded Signup pra gerar `WHATSAPP_APP_ID`/`WHATSAPP_SIGNUP_CONFIG_ID`.
-3. ~~Chave da API Anthropic~~ — **feito**: `ANTHROPIC_API_KEY` real no `.env`, extração não cai mais em stub.
+3. ~~Chave da API Anthropic para extração~~ — **não é mais pendência**: a extração de listas parou de usar IA em 2026-08-06 (ver "Extração de listas: local, sem IA"). `ANTHROPIC_API_KEY` no `.env` ainda importa só pra `modules/replies` (classificação de resposta ambígua).
 4. Chave do Resend (`RESEND_API_KEY`) para relatório automático por e-mail e resumo diário. Ainda vazia.
-5. PDFs reais de 2–3 prefeituras para calibrar o prompt de extração (só fotos até agora) — `npm run extrair -- caminho/do/arquivo.pdf`.
+5. ~~PDFs reais de 2–3 prefeituras para calibrar o prompt de extração~~ — **feito**: os parsers SISREG e CELK foram validados campo a campo contra 4 PDFs reais/exemplo de 2 prefeituras (Pomerode, Camboriú) — ver seção "Extração de listas: local, sem IA". Continua valendo testar contra PDF novo com `npm run extrair -- caminho/do/arquivo.pdf` sempre que aparecer uma prefeitura nova ou um formato `OUTRO`.
 6. Valores de `doctor_fee` e `city_rate` por procedimento.
 7. Plano **Pro** da Vercel pro cron horário da fila funcionar em produção (Hobby só roda cron 1x/dia). **Decisão atual**: por enquanto sem cron nenhum — `vercel.json` não agenda `/api/cron/queue` nem `/api/cron/daily-summary` (as rotas continuam existindo, só não são chamadas sozinhas). A equipe roda a cadência do dia (lembrete D-1, reenvio por telefone alternativo, envio, fechamento de quem passou do horário, expurgo LGPD) na mão, pelo botão "Rodar cadência do dia" em Acompanhamento (`POST /api/queue/run-cadence`). Quando decidir automatizar de novo: reativar os crons no `vercel.json` (o `/api/cron/queue` horário exige o plano Pro).

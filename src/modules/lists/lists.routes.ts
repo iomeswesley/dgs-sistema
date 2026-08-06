@@ -29,7 +29,9 @@ function runInBackground(task: Promise<unknown>, onError: (err: unknown) => void
 }
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"];
+// Só PDF nativo (SISREG ou CELK) — a prefeitura não manda mais foto, e a
+// extração é local (sem IA), que só lê texto de PDF de verdade.
+const ACCEPTED_TYPES = ["application/pdf"];
 
 const uploadSchema = z.object({
   municipalityId: z.number().int().positive(),
@@ -93,7 +95,7 @@ listsRouter.post(
     const data = parseBody(req, uploadSchema);
 
     if (!ACCEPTED_TYPES.includes(data.mimeType)) {
-      throw new AppError("Envie um PDF ou uma foto (JPG, PNG ou WebP).", 400);
+      throw new AppError("Envie um PDF gerado pelo SISREG ou CELK.", 400);
     }
 
     const fileData = Buffer.from(data.fileBase64, "base64");

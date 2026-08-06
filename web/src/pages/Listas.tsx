@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, PageHeader } from "../components/AppShell";
 import { StatusBand } from "../components/StatusBand";
-import { Callout, ErrorNote, Field, Spinner } from "../components/ui";
+import { ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
@@ -112,15 +112,6 @@ export function Listas() {
         description="Cada arquivo recebido de uma prefeitura vira uma lista: leitura automática, revisão da equipe e só então o disparo."
       />
 
-      {lists.data && !lists.data.extractionConfigured && (
-        <div className="mb-5">
-          <Callout tone="warn">
-            A leitura automática está desligada (falta a chave da API no servidor). As listas enviadas
-            entram direto em revisão, com os pacientes cadastrados à mão.
-          </Callout>
-        </div>
-      )}
-
       <div className="card mb-6 p-5">
         <p className="eyebrow">Enviar lista</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -176,11 +167,11 @@ export function Listas() {
         </label>
 
         <div className="mt-3">
-          <Field label="Arquivo" hint="PDF ou foto da agenda (JPG, PNG ou WebP), até 20 MB.">
+          <Field label="Arquivo" hint="PDF da agenda gerado pelo SISREG ou CELK, até 20 MB.">
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp"
+              accept=".pdf,application/pdf"
               className="field"
               disabled={uploading}
               onChange={(event) => {
@@ -214,7 +205,7 @@ export function Listas() {
       {lists.data?.lists.length === 0 && !lists.loading && (
         <EmptyState
           title="Nenhuma lista ainda"
-          description="Envie o PDF ou a foto da agenda acima. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
+          description="Envie o PDF da agenda acima. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
         />
       )}
 
