@@ -4,6 +4,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { extractList } from "@/modules/extraction/extraction.service.js";
 import { mapExtraction, type AppointmentDraft } from "@/modules/extraction/extraction.mapper.js";
 import { normalizePhoneList } from "@/lib/phone.js";
+import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 
 /*
@@ -94,26 +95,12 @@ async function unitAddressWarnings(agendaId: number | null, executingUnit: strin
       `Unidade "${agenda.unit.name}" não tem endereço cadastrado: a confirmação vai sair sem endereço. Cadastre em Configurações → Cadastro → Unidades.`
     );
   }
-  if (executingUnit && !unitNamesMatch(executingUnit, agenda.unit.name)) {
+  if (executingUnit && !namesMatch(executingUnit, agenda.unit.name)) {
     warnings.push(
       `Unidade lida no arquivo ("${executingUnit}") não bate com a unidade da agenda vinculada ("${agenda.unit.name}") — confira se a agenda certa foi escolhida.`
     );
   }
   return warnings;
-}
-
-const DIACRITICS = new RegExp(`[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`, "g");
-
-function unitNamesMatch(a: string, b: string): boolean {
-  const normalize = (value: string) =>
-    value
-      .normalize("NFD")
-      .replace(DIACRITICS, "")
-      .toUpperCase()
-      .trim();
-  const na = normalize(a);
-  const nb = normalize(b);
-  return na === nb || na.includes(nb) || nb.includes(na);
 }
 
 type TxClient = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;

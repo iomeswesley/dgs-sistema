@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, PageHeader } from "../components/AppShell";
+import { FormModal } from "../components/FormModal";
 import { StatusBand } from "../components/StatusBand";
 import { ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
@@ -33,18 +34,78 @@ interface Agenda {
   doctor: { name: string };
 }
 
+interface Doctor {
+  id: number;
+  name: string;
+}
+
+interface Unit {
+  id: number;
+  name: string;
+  municipalityId: number;
+  address: string | null;
+}
+
+interface Procedure {
+  id: number;
+  name: string;
+}
+
+interface ListPreview {
+  sourceFormat: string;
+  parsed: {
+    municipality: string | null;
+    executingUnit: string | null;
+    doctor: string | null;
+    procedure: string | null;
+    firstScheduledAt: string | null;
+  };
+  rowCount: number;
+  warnings: string[];
+  suggestedMunicipalityId: number | null;
+  suggestedUnitId: number | null;
+  suggestedDoctorId: number | null;
+  suggestedProcedureId: number | null;
+  suggestedAgendaId: number | null;
+  needsAgendaConfirmation: boolean;
+}
+
 const MAX_BYTES = 20 * 1024 * 1024;
 
 export function Listas() {
   const lists = useApi<{ lists: ListSummary[]; extractionConfigured: boolean }>("/api/lists");
   const municipalities = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
   const agendas = useApi<{ agendas: Agenda[] }>("/api/agendas");
+  const doctors = useApi<{ doctors: Doctor[] }>("/api/catalog/doctors");
+  const units = useApi<{ units: Unit[] }>("/api/catalog/units");
+  const procedures = useApi<{ procedures: Procedure[] }>("/api/catalog/procedures");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [municipalityId, setMunicipalityId] = useState<string>("");
   const [agendaId, setAgendaId] = useState<string>("");
   const [isComplementary, setIsComplementary] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Preview: lê o arquivo na hora (rápido, local, sem IA) assim que
+  // escolhido, pra sugerir município/agenda antes do envio de verdade.
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<ListPreview | null>(null);
+
+  // Popup de confirmação: aparece só quando o preview reconhece município e
+  // médico, mas não existe agenda cadastrada pra essa data — é o vínculo
+  // que carrega o endereço pra mensagem de WhatsApp.
+  const [agendaModalOpen, setAgendaModalOpen] = useState(false);
+  const [agendaForm, setAgendaForm] = useState({
+    doctorId: "",
+    unitId: "",
+    procedureId: "",
+    date: "",
+    shift: "INTEGRAL",
+    capacity: "",
+  });
+  const [agendaBusy, setAgendaBusy] = useState(false);
+  const [agendaError, setAgendaError] = useState<string | null>(null);
 
   // Enquanto alguma lista está EXTRAINDO, o status só muda sozinho no banco
   // — sem isso a listagem ficava presa até a equipe apertar F5.
@@ -58,8 +119,130 @@ export function Listas() {
   const agendaOptions = (agendas.data?.agendas ?? []).filter(
     (agenda) => String(agenda.municipalityId) === municipalityId
   );
+  const agendaModalUnitOptions = (units.data?.units ?? []).filter(
+    (unit) => String(unit.municipalityId) === municipalityId
+  );
 
-  async function handleUpload(file: File) {
+  // btoa não aceita a string inteira de uma vez em arquivos grandes;
+  // converter em blocos evita estourar a pilha de argumentos.
+  async function fileToBase64(file: File): Promise<string> {
+    const buffer = await file.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
+    return btoa(binary);
+  }
+
+  function resetUploadForm() {
+    if (fileRef.current) fileRef.current.value = "";
+    setPendingFile(null);
+    setPreview(null);
+    setIsComplementary(false);
+    setMunicipalityId("");
+    setAgendaId("");
+  }
+
+  async function doUpload(file: File, resolvedMunicipalityId: string, resolvedAgendaId: string) {
+    setUploading(true);
+    setError(null);
+    try {
+      await api.post("/api/lists", {
+        municipalityId: Number(resolvedMunicipalityId),
+        agendaId: resolvedAgendaId ? Number(resolvedAgendaId) : null,
+        isComplementary,
+        originalName: file.name,
+        mimeType: file.type || "application/pdf",
+        fileBase64: await fileToBase64(file),
+      });
+      resetUploadForm();
+      lists.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao enviar o arquivo.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  /**
+   * Ao escolher o arquivo: lê na hora (rápido, local, sem IA) e sugere
+   * município/agenda. Some dá pra completar sozinho, o resto fica pra
+   * equipe conferir e apertar "Enviar lista" — nunca sobe nada sem esse
+   * passo, mesmo quando tudo bate automaticamente.
+   */
+  async function handleFileSelected(file: File) {
+    if (file.size > MAX_BYTES) {
+      setError("Arquivo maior que 20 MB. Divida em partes.");
+      return;
+    }
+
+    setPendingFile(file);
+    setError(null);
+    setPreview(null);
+    setPreviewing(true);
+    try {
+      const { preview: result } = await api.post<{ preview: ListPreview }>("/api/lists/preview", {
+        mimeType: file.type || "application/pdf",
+        fileBase64: await fileToBase64(file),
+      });
+      setPreview(result);
+
+      if (result.suggestedMunicipalityId) setMunicipalityId(String(result.suggestedMunicipalityId));
+      if (result.suggestedAgendaId) setAgendaId(String(result.suggestedAgendaId));
+
+      if (result.needsAgendaConfirmation) {
+        setAgendaForm({
+          doctorId: result.suggestedDoctorId ? String(result.suggestedDoctorId) : "",
+          unitId: result.suggestedUnitId ? String(result.suggestedUnitId) : "",
+          procedureId: result.suggestedProcedureId ? String(result.suggestedProcedureId) : "",
+          date: result.parsed.firstScheduledAt?.slice(0, 10) ?? "",
+          shift: "INTEGRAL",
+          capacity: "",
+        });
+        setAgendaModalOpen(true);
+      }
+    } catch {
+      // Preview é só uma ajuda — se falhar (formato não reconhecido, etc.),
+      // a equipe ainda preenche os campos e envia manualmente, como antes.
+      setPreview(null);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function confirmAgenda() {
+    if (!agendaForm.doctorId || !agendaForm.date) {
+      setAgendaError("Médico e data são obrigatórios.");
+      return;
+    }
+    setAgendaBusy(true);
+    setAgendaError(null);
+    try {
+      const { agenda } = await api.post<{ agenda: { id: number } }>("/api/agendas", {
+        doctorId: Number(agendaForm.doctorId),
+        municipalityId: Number(municipalityId),
+        unitId: agendaForm.unitId ? Number(agendaForm.unitId) : null,
+        procedureId: agendaForm.procedureId ? Number(agendaForm.procedureId) : null,
+        date: agendaForm.date,
+        shift: agendaForm.shift,
+        capacity: agendaForm.capacity ? Number(agendaForm.capacity) : null,
+      });
+      setAgendaId(String(agenda.id));
+      setAgendaModalOpen(false);
+      agendas.reload();
+    } catch (err) {
+      setAgendaError(err instanceof Error ? err.message : "Falha ao criar a agenda.");
+    } finally {
+      setAgendaBusy(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!pendingFile) {
+      setError("Escolha o arquivo antes de enviar.");
+      return;
+    }
     if (!municipalityId) {
       setError("Escolha o município antes de enviar.");
       return;
@@ -68,40 +251,7 @@ export function Listas() {
       setError("Lista complementar precisa estar vinculada a uma agenda — é o que garante o disparo só pras vagas abertas.");
       return;
     }
-    if (file.size > MAX_BYTES) {
-      setError("Arquivo maior que 20 MB. Divida em partes.");
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-    try {
-      const buffer = await file.arrayBuffer();
-      // btoa não aceita a string inteira de uma vez em arquivos grandes;
-      // converter em blocos evita estourar a pilha de argumentos.
-      let binary = "";
-      const bytes = new Uint8Array(buffer);
-      for (let i = 0; i < bytes.length; i += 8192) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-      }
-
-      await api.post("/api/lists", {
-        municipalityId: Number(municipalityId),
-        agendaId: agendaId ? Number(agendaId) : null,
-        isComplementary,
-        originalName: file.name,
-        mimeType: file.type || "application/pdf",
-        fileBase64: btoa(binary),
-      });
-      if (fileRef.current) fileRef.current.value = "";
-      setIsComplementary(false);
-      setAgendaId("");
-      lists.reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao enviar o arquivo.");
-    } finally {
-      setUploading(false);
-    }
+    await doUpload(pendingFile, municipalityId, agendaId);
   }
 
   return (
@@ -114,6 +264,35 @@ export function Listas() {
 
       <div className="card mb-6 p-5">
         <p className="eyebrow">Enviar lista</p>
+
+        <div className="mt-3">
+          <Field
+            label="Arquivo"
+            hint="PDF da agenda gerado pelo SISREG ou CELK, até 20 MB. Escolher o arquivo já tenta preencher o resto sozinho."
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="field"
+              disabled={uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleFileSelected(file);
+              }}
+            />
+          </Field>
+        </div>
+
+        {previewing && <p className="mt-3 text-sm text-ink-muted">Lendo o arquivo…</p>}
+        {preview && !previewing && (
+          <p className="mt-3 text-sm text-ink-muted">
+            {preview.sourceFormat === "OUTRO"
+              ? "Formato não reconhecido — confira ou preencha os campos abaixo à mão."
+              : `Formato ${preview.sourceFormat} reconhecido, ${preview.rowCount} paciente(s). Confira os campos abaixo antes de enviar.`}
+          </p>
+        )}
+
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field label="Município">
             <select
@@ -138,7 +317,7 @@ export function Listas() {
             hint={
               isComplementary
                 ? "Obrigatório para lista complementar."
-                : "Opcional — liga a sugestão de confirmações à capacidade cadastrada."
+                : "Opcional — liga a sugestão de confirmações e o endereço da unidade à mensagem."
             }
           >
             <select
@@ -166,23 +345,17 @@ export function Listas() {
           Esta é uma lista complementar (reposição de vagas abertas de uma agenda já disparada)
         </label>
 
-        <div className="mt-3">
-          <Field label="Arquivo" hint="PDF da agenda gerado pelo SISREG ou CELK, até 20 MB.">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,application/pdf"
-              className="field"
-              disabled={uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleUpload(file);
-              }}
-            />
-          </Field>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!pendingFile || uploading || previewing}
+            onClick={() => void handleSubmit()}
+          >
+            {uploading ? "Enviando…" : "Enviar lista"}
+          </button>
         </div>
 
-        {uploading && <p className="mt-3 text-sm text-ink-muted">Enviando…</p>}
         {error && (
           <div className="mt-3">
             <ErrorNote message={error} />
@@ -198,6 +371,97 @@ export function Listas() {
           </p>
         )}
       </div>
+
+      <FormModal
+        open={agendaModalOpen}
+        title="Confirmar agenda desta lista"
+        description={
+          preview?.parsed.doctor
+            ? `O arquivo indica ${preview.parsed.doctor}${preview.parsed.executingUnit ? ` em ${preview.parsed.executingUnit}` : ""}, mas não existe agenda cadastrada pra essa data. Confirme (ou complete) antes de enviar — é o vínculo que dá o endereço pra mensagem de WhatsApp.`
+            : "Não existe agenda cadastrada pra essa data. Confirme antes de enviar."
+        }
+        submitLabel="Confirmar e continuar"
+        busy={agendaBusy}
+        error={agendaError}
+        onSubmit={confirmAgenda}
+        onCancel={() => setAgendaModalOpen(false)}
+      >
+        <Field label="Médico">
+          <select
+            className="field"
+            value={agendaForm.doctorId}
+            onChange={(event) => setAgendaForm({ ...agendaForm, doctorId: event.target.value })}
+            required
+          >
+            <option value="">Selecione…</option>
+            {doctors.data?.doctors.map((doctor) => (
+              <option key={doctor.id} value={doctor.id}>
+                {doctor.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Unidade" hint="Dá o endereço que entra na mensagem de WhatsApp.">
+          <select
+            className="field"
+            value={agendaForm.unitId}
+            onChange={(event) => setAgendaForm({ ...agendaForm, unitId: event.target.value })}
+          >
+            <option value="">Não especificada</option>
+            {agendaModalUnitOptions.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+                {!unit.address ? " (sem endereço cadastrado)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Procedimento" hint="Opcional — deixe em branco se a agenda cobre vários.">
+          <select
+            className="field"
+            value={agendaForm.procedureId}
+            onChange={(event) => setAgendaForm({ ...agendaForm, procedureId: event.target.value })}
+          >
+            <option value="">Não especificado</option>
+            {procedures.data?.procedures.map((procedure) => (
+              <option key={procedure.id} value={procedure.id}>
+                {procedure.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Data">
+            <input
+              type="date"
+              className="field"
+              value={agendaForm.date}
+              onChange={(event) => setAgendaForm({ ...agendaForm, date: event.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Turno">
+            <select
+              className="field"
+              value={agendaForm.shift}
+              onChange={(event) => setAgendaForm({ ...agendaForm, shift: event.target.value })}
+            >
+              <option value="MANHA">Manhã</option>
+              <option value="TARDE">Tarde</option>
+              <option value="INTEGRAL">Dia todo</option>
+            </select>
+          </Field>
+          <Field label="Capacidade">
+            <input
+              type="number"
+              min={1}
+              className="field"
+              value={agendaForm.capacity}
+              onChange={(event) => setAgendaForm({ ...agendaForm, capacity: event.target.value })}
+            />
+          </Field>
+        </div>
+      </FormModal>
 
       {lists.loading && <Spinner />}
       {lists.error && <ErrorNote message={lists.error} />}

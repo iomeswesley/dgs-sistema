@@ -6,6 +6,7 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
 import { approveList, editAppointment, extractAndStage, removeAppointment } from "./lists.service.js";
+import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { buildListReportCsv } from "./list-report.js";
@@ -86,6 +87,34 @@ listsRouter.get(
       lists: lists.map((list) => ({ ...list, counts: byList.get(list.id) ?? {} })),
       extractionConfigured,
     });
+  })
+);
+
+const previewSchema = z.object({
+  mimeType: z.string().min(1),
+  fileBase64: z.string().min(1),
+});
+
+/**
+ * Roda antes de a lista existir no banco — só lê o arquivo (rápido, local)
+ * e sugere município/unidade/agenda pra pré-preencher o formulário de
+ * upload. Não persiste nada; a equipe ainda confirma no envio de verdade.
+ */
+listsRouter.post(
+  "/api/lists/preview",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, previewSchema);
+    if (!ACCEPTED_TYPES.includes(data.mimeType)) {
+      throw new AppError("Envie um PDF gerado pelo SISREG ou CELK.", 400);
+    }
+    const fileData = Buffer.from(data.fileBase64, "base64");
+    if (fileData.length === 0) throw new AppError("Arquivo vazio.", 400);
+    if (fileData.length > MAX_UPLOAD_BYTES) {
+      throw new AppError("Arquivo maior que 20 MB. Divida em partes.", 413);
+    }
+
+    const preview = await previewList(fileData, data.mimeType);
+    res.json({ preview });
   })
 );
 

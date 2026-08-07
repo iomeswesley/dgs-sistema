@@ -700,16 +700,24 @@ function AgendasTab() {
   const doctors = useApi<{ doctors: Doctor[] }>("/api/catalog/doctors");
   const municipalities = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
   const procedures = useApi<{ procedures: Procedure[] }>("/api/catalog/procedures");
+  const units = useApi<{ units: Unit[] }>("/api/catalog/units");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     doctorId: "",
     municipalityId: "",
+    unitId: "",
     procedureId: "",
     date: "",
     shift: "INTEGRAL",
     capacity: "",
   });
+  // A unidade é o que dá o endereço pra mensagem de WhatsApp — só faz
+  // sentido escolher depois do município, senão a lista viria cheia de
+  // unidades de outras cidades.
+  const unitOptions = (units.data?.units ?? []).filter(
+    (unit) => String(unit.municipalityId) === form.municipalityId
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -727,13 +735,22 @@ function AgendasTab() {
       await api.post("/api/agendas", {
         doctorId: Number(form.doctorId),
         municipalityId: Number(form.municipalityId),
+        unitId: form.unitId ? Number(form.unitId) : null,
         procedureId: form.procedureId ? Number(form.procedureId) : null,
         date: form.date,
         shift: form.shift,
         capacity: form.capacity ? Number(form.capacity) : null,
       });
       setOpen(false);
-      setForm({ doctorId: "", municipalityId: "", procedureId: "", date: "", shift: "INTEGRAL", capacity: "" });
+      setForm({
+        doctorId: "",
+        municipalityId: "",
+        unitId: "",
+        procedureId: "",
+        date: "",
+        shift: "INTEGRAL",
+        capacity: "",
+      });
       data.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
@@ -786,6 +803,7 @@ function AgendasTab() {
               <Th>Data</Th>
               <Th>Médico</Th>
               <Th>Município</Th>
+              <Th>Unidade</Th>
               <Th align="right">Capacidade</Th>
               <Th align="right">Vagas abertas</Th>
               <Th align="right">Ações</Th>
@@ -803,6 +821,7 @@ function AgendasTab() {
                 {agenda.procedure && <p className="text-xs text-ink-faint">{agenda.procedure.name}</p>}
               </Td>
               <Td muted>{agenda.municipality.name}</Td>
+              <Td muted>{agenda.unit ? agenda.unit.name : <span className="italic text-ink-faint">sem unidade</span>}</Td>
               <Td align="right" muted>
                 {agenda.capacity ?? "—"}
               </Td>
@@ -862,13 +881,32 @@ function AgendasTab() {
           <select
             className="field"
             value={form.municipalityId}
-            onChange={(e) => setForm({ ...form, municipalityId: e.target.value })}
+            onChange={(e) => setForm({ ...form, municipalityId: e.target.value, unitId: "" })}
             required
           >
             <option value="">Selecione…</option>
             {municipalities.data?.municipalities.map((municipality) => (
               <option key={municipality.id} value={municipality.id}>
                 {municipality.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Unidade"
+          hint="Dá o endereço que entra na mensagem de WhatsApp — sem isso, a confirmação sai só com o nome do município."
+        >
+          <select
+            className="field"
+            value={form.unitId}
+            onChange={(e) => setForm({ ...form, unitId: e.target.value })}
+            disabled={!form.municipalityId}
+          >
+            <option value="">Não especificada</option>
+            {unitOptions.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+                {!unit.address ? " (sem endereço cadastrado)" : ""}
               </option>
             ))}
           </select>
