@@ -72,6 +72,19 @@ interface ListPreview {
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
+// O PDF traz o nome do município em CAIXA ALTA; o cadastro segue Title Case
+// ("Blumenau", "Indaial"). Só ajusta capitalização — nunca inventa acento
+// que o PDF não tinha, então o nome ainda pode precisar de correção manual
+// antes de confirmar o cadastro.
+const LOWERCASE_WORDS = new Set(["de", "da", "do", "das", "dos", "e"]);
+function toTitleCase(value: string): string {
+  return value
+    .toLowerCase()
+    .split(" ")
+    .map((word, index) => (index > 0 && LOWERCASE_WORDS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
 export function Listas() {
   const lists = useApi<{ lists: ListSummary[]; extractionConfigured: boolean }>("/api/lists");
   const municipalities = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
@@ -91,6 +104,15 @@ export function Listas() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<ListPreview | null>(null);
+
+  // Popup de cadastro: aparece quando o preview leu um nome de município no
+  // PDF, mas nenhum município cadastrado bate com ele — sem isso a equipe
+  // tinha que sair da tela, cadastrar em Configurações e voltar pra escolher
+  // na mão.
+  const [municipalityModalOpen, setMunicipalityModalOpen] = useState(false);
+  const [municipalityForm, setMunicipalityForm] = useState({ name: "" });
+  const [municipalityBusy, setMunicipalityBusy] = useState(false);
+  const [municipalityError, setMunicipalityError] = useState<string | null>(null);
 
   // Popup de confirmação: aparece só quando o preview reconhece município e
   // médico, mas não existe agenda cadastrada pra essa data — é o vínculo
@@ -191,6 +213,11 @@ export function Listas() {
       if (result.suggestedMunicipalityId) setMunicipalityId(String(result.suggestedMunicipalityId));
       if (result.suggestedAgendaId) setAgendaId(String(result.suggestedAgendaId));
 
+      if (!result.suggestedMunicipalityId && result.parsed.municipality) {
+        setMunicipalityForm({ name: toTitleCase(result.parsed.municipality) });
+        setMunicipalityModalOpen(true);
+      }
+
       if (result.needsAgendaConfirmation) {
         setAgendaForm({
           doctorId: result.suggestedDoctorId ? String(result.suggestedDoctorId) : "",
@@ -208,6 +235,54 @@ export function Listas() {
       setPreview(null);
     } finally {
       setPreviewing(false);
+    }
+  }
+
+  async function confirmMunicipality() {
+    if (!municipalityForm.name.trim()) {
+      setMunicipalityError("Nome é obrigatório.");
+      return;
+    }
+    setMunicipalityBusy(true);
+    setMunicipalityError(null);
+    try {
+      const { municipality } = await api.post<{ municipality: { id: number } }>("/api/catalog/municipalities", {
+        name: municipalityForm.name.trim(),
+      });
+      setMunicipalityId(String(municipality.id));
+      setMunicipalityModalOpen(false);
+      await municipalities.reload();
+
+      // O preview não verificou agenda pra esse município (ele nem existia
+      // ainda) — refaz essa checagem na mão, contra as agendas já
+      // carregadas, pra saber se ainda falta o popup de agenda.
+      const firstScheduledAt = preview?.parsed.firstScheduledAt;
+      const suggestedDoctorName = doctors.data?.doctors.find((d) => d.id === preview?.suggestedDoctorId)?.name;
+      if (preview?.suggestedDoctorId && firstScheduledAt && suggestedDoctorName) {
+        const existingAgenda = (agendas.data?.agendas ?? []).find(
+          (agenda) =>
+            agenda.municipalityId === municipality.id &&
+            agenda.doctor.name === suggestedDoctorName &&
+            agenda.date.slice(0, 10) === firstScheduledAt.slice(0, 10)
+        );
+        if (existingAgenda) {
+          setAgendaId(String(existingAgenda.id));
+        } else {
+          setAgendaForm({
+            doctorId: String(preview.suggestedDoctorId),
+            unitId: preview.suggestedUnitId ? String(preview.suggestedUnitId) : "",
+            procedureId: preview.suggestedProcedureId ? String(preview.suggestedProcedureId) : "",
+            date: firstScheduledAt.slice(0, 10),
+            shift: "INTEGRAL",
+            capacity: "",
+          });
+          setAgendaModalOpen(true);
+        }
+      }
+    } catch (err) {
+      setMunicipalityError(err instanceof Error ? err.message : "Falha ao cadastrar o município.");
+    } finally {
+      setMunicipalityBusy(false);
     }
   }
 
@@ -371,6 +446,31 @@ export function Listas() {
           </p>
         )}
       </div>
+
+      <FormModal
+        open={municipalityModalOpen}
+        title="Cadastrar município"
+        description={
+          preview?.parsed.municipality
+            ? `O arquivo indica o município "${preview.parsed.municipality}", mas ele ainda não está cadastrado. Confirme o nome e cadastre antes de continuar.`
+            : "Município não cadastrado. Confirme o nome e cadastre antes de continuar."
+        }
+        submitLabel="Cadastrar e continuar"
+        busy={municipalityBusy}
+        error={municipalityError}
+        onSubmit={confirmMunicipality}
+        onCancel={() => setMunicipalityModalOpen(false)}
+      >
+        <Field label="Nome">
+          <input
+            type="text"
+            className="field"
+            value={municipalityForm.name}
+            onChange={(event) => setMunicipalityForm({ name: event.target.value })}
+            required
+          />
+        </Field>
+      </FormModal>
 
       <FormModal
         open={agendaModalOpen}
