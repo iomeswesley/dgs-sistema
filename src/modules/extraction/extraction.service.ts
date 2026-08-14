@@ -1,4 +1,3 @@
-import { PDFParse } from "pdf-parse";
 import { AppError } from "@/middleware/errorHandler.js";
 import { detectFormat } from "./parsers/detect.js";
 import { parseCelk } from "./parsers/celk.js";
@@ -29,6 +28,16 @@ export async function extractList(
     throw new AppError(`Tipo de arquivo não suportado para extração: ${mimeType}. Envie um PDF.`, 400);
   }
 
+  // Import tardio de propósito: o módulo `pdf-parse` (via `pdfjs-dist`)
+  // tenta carregar `@napi-rs/canvas` assim que é importado, e derruba o
+  // processo inteiro com `ReferenceError: DOMMatrix is not defined` se o
+  // binário nativo da plataforma não estiver disponível (achado em
+  // produção na Vercel/Linux — funciona local no Windows, mas o binário
+  // Linux não fica disponível no bundle serverless). Import dinâmico aqui
+  // isola o crash pra só quando alguém sobe um PDF de verdade, em vez de
+  // derrubar toda rota do app (login, listagem etc.) no carregamento do
+  // módulo.
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: file });
   let text: string;
   try {
