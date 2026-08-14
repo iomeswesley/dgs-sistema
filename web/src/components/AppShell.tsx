@@ -1,5 +1,16 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import {
+  BarChart3,
+  CalendarCheck,
+  ClipboardCheck,
+  ClipboardList,
+  Moon,
+  Settings,
+  Sun,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import { useSession } from "../lib/session";
 import { useTheme } from "../lib/theme";
 import { ConfirmModal } from "./ConfirmModal";
@@ -9,13 +20,13 @@ import { ConfirmModal } from "./ConfirmModal";
   folha clara à direita. No celular a prancha vira uma barra inferior.
 */
 
-const NAV = [
-  { to: "/listas", label: "Listas", hint: "Receber e revisar" },
-  { to: "/hoje", label: "Acompanhamento", hint: "Respostas do dia" },
-  { to: "/fechamento", label: "Fechamento", hint: "Atendidos e pagos" },
-  { to: "/indicadores", label: "Indicadores", hint: "Histórico e taxas" },
-  { to: "/configuracoes", label: "Configurações", hint: "Cadastros e valores" },
-  { to: "/equipe", label: "Equipe", hint: "Acessos e auditoria" },
+const NAV: { to: string; label: string; hint: string; icon: LucideIcon }[] = [
+  { to: "/listas", label: "Listas", hint: "Receber e revisar", icon: ClipboardList },
+  { to: "/hoje", label: "Acompanhamento", hint: "Respostas do dia", icon: CalendarCheck },
+  { to: "/fechamento", label: "Fechamento", hint: "Atendidos e pagos", icon: ClipboardCheck },
+  { to: "/indicadores", label: "Indicadores", hint: "Histórico e taxas", icon: BarChart3 },
+  { to: "/configuracoes", label: "Configurações", hint: "Cadastros e valores", icon: Settings },
+  { to: "/equipe", label: "Equipe", hint: "Acessos e auditoria", icon: UsersRound },
 ];
 
 const SIDEBAR_STORAGE_KEY = "dgs-sidebar-collapsed";
@@ -77,9 +88,11 @@ export function AppShell() {
             <button
               type="button"
               onClick={toggleTheme}
-              className="rounded-md px-2 py-1 text-xs text-board-ink-muted hover:text-board-ink"
+              title={`Tema ${theme === "dark" ? "claro" : "escuro"}`}
+              className="rounded-md p-1.5 text-board-ink-muted hover:text-board-ink"
             >
-              {theme === "dark" ? "Claro" : "Escuro"}
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+              <span className="sr-only">{`Tema ${theme === "dark" ? "claro" : "escuro"}`}</span>
             </button>
             <button
               type="button"
@@ -92,31 +105,37 @@ export function AppShell() {
         </div>
 
         <ul className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:gap-0.5 md:overflow-visible md:pb-0">
-          {NAV.map((item) => (
-            <li key={item.to} className="shrink-0 md:shrink">
-              <NavLink
-                to={item.to}
-                title={collapsed ? item.label : undefined}
-                className={({ isActive }) =>
-                  [
-                    "block rounded-lg px-3 py-2 text-sm transition-colors",
-                    collapsed ? "md:text-center" : "",
-                    isActive
-                      ? "bg-board-raised font-semibold text-board-ink"
-                      : "text-board-ink-muted hover:bg-board-raised/60 hover:text-board-ink",
-                  ].join(" ")
-                }
-              >
-                <span className={collapsed ? "md:hidden" : ""}>{item.label}</span>
-                {collapsed && <span className="hidden md:inline">{item.label.slice(0, 2)}</span>}
-                {!collapsed && (
-                  <span className="hidden md:block text-[0.6875rem] font-normal text-board-ink-muted">
-                    {item.hint}
-                  </span>
-                )}
-              </NavLink>
-            </li>
-          ))}
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            return (
+              <li key={item.to} className="shrink-0 md:shrink">
+                <NavLink
+                  to={item.to}
+                  title={collapsed ? item.label : undefined}
+                  className={({ isActive }) =>
+                    [
+                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+                      collapsed ? "md:justify-center" : "",
+                      isActive
+                        ? "bg-accent/15 font-semibold text-accent"
+                        : "text-board-ink-muted hover:bg-board-raised/60 hover:text-board-ink",
+                    ].join(" ")
+                  }
+                >
+                  <Icon size={18} className="shrink-0" aria-hidden />
+                  {!collapsed && (
+                    <span className="hidden min-w-0 md:block">
+                      <span className="block truncate">{item.label}</span>
+                      <span className="block truncate text-[0.6875rem] font-normal text-board-ink-muted">
+                        {item.hint}
+                      </span>
+                    </span>
+                  )}
+                  <span className="md:hidden">{item.label}</span>
+                </NavLink>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="mt-auto hidden border-t border-board-line px-5 py-4 md:block">
@@ -124,9 +143,10 @@ export function AppShell() {
             type="button"
             onClick={toggleTheme}
             title={collapsed ? `Tema ${theme === "dark" ? "claro" : "escuro"}` : undefined}
-            className="mb-3 text-xs text-board-ink-muted hover:text-board-ink"
+            className="mb-3 flex items-center gap-2 text-xs text-board-ink-muted hover:text-board-ink"
           >
-            {collapsed ? (theme === "dark" ? "☀" : "☾") : `Tema ${theme === "dark" ? "claro" : "escuro"}`}
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+            {!collapsed && `Tema ${theme === "dark" ? "claro" : "escuro"}`}
           </button>
           {!collapsed && (
             <>

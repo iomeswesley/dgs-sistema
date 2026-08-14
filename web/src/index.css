@@ -43,6 +43,12 @@
   --accent: #0e7c86;
   --accent-hover: #0b626a;
   --accent-soft: #e0f1f2;
+
+  /* Sombras de elevação — discretas, só pra separar cartão do fundo e dar
+     feedback de hover. Mesma escala usada nos produtos irmãos (agenda-saas/
+     odonto-saas): 2 camadas, a de baixo mais espalhada e mais fraca. */
+  --shadow-card: 0 1px 2px 0 rgb(22 32 44 / 0.08), 0 1px 3px 1px rgb(22 32 44 / 0.05);
+  --shadow-hover: 0 1px 3px 0 rgb(22 32 44 / 0.12), 0 4px 8px 3px rgb(22 32 44 / 0.06);
 }
 
 .dark {
@@ -75,6 +81,9 @@
   --accent: #2aa5b0;
   --accent-hover: #38b9c4;
   --accent-soft: #10303a;
+
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 3px 1px rgb(0 0 0 / 0.18);
+  --shadow-hover: 0 1px 3px 0 rgb(0 0 0 / 0.45), 0 4px 8px 3px rgb(0 0 0 / 0.22);
 }
 
 @theme inline {
@@ -167,7 +176,13 @@
   .card {
     background-color: var(--sheet);
     border: 1px solid var(--rule);
-    border-radius: 10px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  a.card:hover,
+  button.card:hover {
+    box-shadow: var(--shadow-hover);
   }
 
   .btn {
@@ -175,13 +190,13 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 7px;
+    border-radius: 8px;
     padding: 0.5rem 0.9rem;
     font-size: 0.875rem;
     font-weight: 600;
     border: 1px solid transparent;
     cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .btn-primary {
@@ -190,6 +205,7 @@
   }
   .btn-primary:hover:not(:disabled) {
     background-color: var(--accent-hover);
+    box-shadow: var(--shadow-card);
   }
 
   .btn-quiet {
@@ -210,7 +226,7 @@
     width: 100%;
     background-color: var(--sheet);
     border: 1px solid var(--rule);
-    border-radius: 7px;
+    border-radius: 8px;
     padding: 0.55rem 0.75rem;
     font-size: 0.9375rem;
     color: var(--ink);
