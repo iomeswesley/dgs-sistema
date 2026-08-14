@@ -15,8 +15,8 @@ Dois problemas graves nesse processo:
 
 ### Núcleo (função primária)
 
-1. **Recebe os PDFs/fotos diários** como upload no painel.
-2. **Extrai os dados com IA (Claude)** — um único pipeline que entende qualquer formato de lista, devolvendo estrutura (nome, telefones, procedimento, médico, data/hora, município).
+1. **Recebe os PDFs diários** como upload no painel (só PDF nativo gerado pelo sistema da prefeitura — SISREG ou CELK; decisão de 2026-08-05, não recebe mais foto).
+2. **Extrai os dados localmente, sem IA** — parser determinístico por formato (detectado pelo cabeçalho/rodapé do próprio PDF), devolvendo estrutura (nome, telefones, procedimento, médico, data/hora, município). Trocado de "extração com Claude" pra parser local em 2026-08-06 — ver CLAUDE.md, seção "Extração de listas: local, sem IA".
 3. **Tela de revisão humana** — a equipe confere/corrige antes de qualquer disparo; linhas de baixa confiança destacadas, PDF original lado a lado.
 4. **Disparo em massa via WhatsApp Cloud API** — template aprovado com botões **"Sim, vou comparecer" / "Não poderei ir"**, através de uma fila com throttle que respeita o limite diário da Meta.
 5. **Compila as respostas** — webhook recebe cliques dos botões e status de entrega; dashboard mostra confirmados, recusados (com motivo), sem resposta e falhas.
@@ -179,7 +179,7 @@ Sistema fecha o número de recusados → gera **relatório de horários vagos** 
 - [ ] Chave da API Anthropic pra extração.
 - [ ] Conta Vercel (novo projeto) + Sentry.
 - [ ] PDFs reais de 2–3 prefeituras diferentes pra calibrar o prompt de extração.
-- [ ] Valores de `doctor_fee` e `city_rate` por procedimento.
+- [ ] ~~Valores de `doctor_fee` e `city_rate` por procedimento~~ — **fora de escopo por decisão do usuário (2026-08-09)**: o módulo financeiro (repasse/faturamento/margem, linhas 107-108 acima) não entra nesta fase do projeto. Escopo atual é só agendamento + confirmação de comparecimento via WhatsApp.
 
 ## Convenções de trabalho
 
