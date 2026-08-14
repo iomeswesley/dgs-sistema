@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
+<title>Política de Privacidade — Sistema DGS</title>
+<link rel="icon" type="image/png" href="/favicon.png" />
+<style>
+  :root {
+    --sheet: #ffffff;
+    --ink: #16202c;
+    --ink-muted: #55636f;
+    --rule: #e2e8ee;
+    --accent: #0e7c86;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --sheet: #131a22;
+      --ink: #e6ecf2;
+      --ink-muted: #93a2ae;
+      --rule: #263140;
+      --accent: #2aa5b0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--sheet);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 48px 16px 72px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .updated { color: var(--ink-muted); font-size: 12px; margin: 0 0 28px; }
+  h2 { font-size: 15px; margin: 30px 0 10px; color: var(--ink); }
+  h2:first-of-type { margin-top: 4px; }
+  p, li { font-size: 13.5px; line-height: 1.7; color: var(--ink-muted); }
+  ul { margin: 8px 0; padding-left: 20px; }
+  a { color: var(--accent); }
+  strong { color: var(--ink); }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Política de Privacidade</h1>
+    <p class="updated">Última atualização: agosto de 2026</p>
+
+    <h2>1. Quem somos</h2>
+    <p>O Sistema DGS é uma ferramenta interna da <strong>D'Artibale Gestão em Saúde (DGS)</strong>, empresa que intermedia secretarias municipais de saúde de Santa Catarina e médicos contratados para atendimento da população. Esta política descreve como tratamos os dados de pacientes agendados por meio das listas de atendimento recebidas das prefeituras.</p>
+
+    <h2>2. Quais dados tratamos</h2>
+    <ul>
+      <li><strong>De pacientes</strong>: nome, telefone (WhatsApp), data de nascimento, procedimento agendado, data e horário da consulta, unidade de saúde e município. O código CID-10, quando presente na lista original da prefeitura, nunca é armazenado nem enviado por mensagem.</li>
+      <li><strong>Das mensagens de WhatsApp</strong>: confirmação de comparecimento (sim/não), reagendamento e respostas em texto livre trocadas com o paciente sobre o agendamento.</li>
+      <li><strong>Da equipe DGS</strong>: nome, e-mail e senha de acesso (armazenada com hash, nunca em texto puro).</li>
+    </ul>
+
+    <h2>3. Por que tratamos esses dados</h2>
+    <p>Para confirmar consultas agendadas pela rede pública de saúde, reduzir faltas (no-show) e conciliar o atendimento realizado com o que foi agendado, a pedido das secretarias municipais de saúde contratantes.</p>
+
+    <h2>4. Com quem compartilhamos</h2>
+    <ul>
+      <li><strong>Meta (WhatsApp Business Platform)</strong>: as mensagens de confirmação trafegam pela infraestrutura da Meta para chegar ao WhatsApp do paciente.</li>
+      <li><strong>Secretaria municipal de saúde</strong> responsável pela lista de agendamento: recebe relatório de confirmação e comparecimento dos próprios pacientes daquele município.</li>
+    </ul>
+    <p>Não vendemos dados pessoais a terceiros e não usamos os dados para publicidade.</p>
+
+    <h2>5. Por quanto tempo guardamos</h2>
+    <p>Dados de conversas do WhatsApp são retidos apenas pelo prazo necessário à confirmação e ao fechamento do atendimento; passado esse prazo, são expurgados automaticamente conforme rotina de retenção da LGPD. Os demais dados do agendamento são mantidos pelo prazo necessário à prestação do serviço à secretaria contratante e a eventuais obrigações legais.</p>
+
+    <h2>6. Seus direitos (LGPD)</h2>
+    <p>Você tem direito a confirmar a existência de tratamento, acessar, corrigir e solicitar a exclusão dos seus dados. Pedidos de titular ou de autoridade pública são atendidos com minimização de dados — nunca é aberto acesso à base inteira, apenas ao necessário para o pedido específico. Para exercer esses direitos, entre em contato pelos canais abaixo.</p>
+
+    <h2>7. Contato</h2>
+    <p>Dúvidas sobre esta política ou sobre o tratamento dos seus dados podem ser dirigidas à D'Artibale Gestão em Saúde (DGS) ou à secretaria municipal de saúde responsável pelo seu agendamento.</p>
+
+    <hr>
+  </div>
+</body>
+</html>
