@@ -62,7 +62,7 @@ Nenhuma aberta desta rodada — as 5 pendências de 2026-08-15 foram todas resol
 - `modules/queue` — fila com throttle e teto diário da Meta
 - `modules/whatsapp` — webhook (respostas, statuses de entrega, opt-out), idempotente por wamid
 - `modules/closings` — checks 2 e 3 + `closings.alerts.ts` (módulo puro de inconsistências)
-- `modules/indicators` — as 4 taxas + repasse/faturamento/margem, e export CSV
+- `modules/indicators` — as 4 taxas + repasse/faturamento/margem, e export CSV. Núcleo puro em `indicators.ts` (testado, `indicators.test.ts`), `indicators.service.ts` só busca no banco e chama ele — mesmo padrão de `suggestions`/`closings`. **Repasse/faturamento/margem continuam calculados, mas a UI esconde os três** (🚧 "em desenvolvimento" em Indicadores e em Configurações → Procedimentos por médico) — fora de escopo desde 2026-08-09, decisão reforçada em 2026-08-15.
 - `modules/team` — equipe (criar, redefinir senha, ativar/desativar, trocar a própria) e leitura da trilha de auditoria
 - `modules/suggestions` — `suggestions.ts` (puro, testado) calcula overbooking pela taxa histórica; `suggestions.service.ts` busca o histórico em cascata (médico+procedimento → médico → município → global)
 - `modules/queue/cadence.service` — lembrete D-1, reenvio pelo telefone alternativo e expurgo LGPD; acionado pelo cron diário (`GET /api/cron/queue`, 9h Brasília — ver `vercel.json`) ou na mão por `POST /api/queue/run-cadence`
