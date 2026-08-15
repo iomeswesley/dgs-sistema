@@ -27,10 +27,11 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 **Cadastro de produção está vazio de propósito** (checado e limpo em 2026-08-15 — havia um resquício de teste de 2026-07-27 esquecido lá, removido). Precisa popular com município/unidade/médico/procedimento reais antes do cliente operar pra valer.
 
-### Pendências abertas (2026-08-15)
-- Botão de **excluir lista** não existe na tela de Listas (só existe excluir linha/agendamento dentro de uma lista). Pedido do usuário: adicionar, com `ConfirmModal` no padrão do resto do sistema. **Ainda não construído.**
+### Pendências abertas
+Nenhuma aberta desta rodada — as 5 pendências de 2026-08-15 foram todas resolvidas (ver abaixo). Próxima pendência de verdade é popular o cadastro de produção antes do cliente operar (ver "Estado atual" acima).
 
-### Resolvido nesta sessão (2026-08-15)
+### Resolvido em 2026-08-15
+- **Excluir lista**: `DELETE /api/lists/:id` (`deleteList()` em `lists.service.ts`) apaga lista + agendamentos + fila de mensagens (cascade no schema). Bloqueia com 409 se já DISPARADA/CONCLUIDA — WhatsApp real já foi pro paciente, nesse caso só dá pra remover linha por linha. Botão em cada card de Listas e nas ações da Revisão, com `ConfirmModal`.
 - **Município não pré-preenchia no preview do upload**: não era bug de lógica — o `/api/lists/preview` estava caindo por causa do crash de extração em produção (`DOMMatrix`/worker, já corrigidos em `2ff37fa`/`1bb0bc1`), e o frontend engolia o erro em silêncio. Testado com PDF real de produção (Camboriú): município/unidade/agenda batem certinho. `Listas.tsx` agora mostra erro visível quando o preview falha, em vez de falhar calado.
 - **Checagem de unidade/endereço antes de aprovar e disparar**: `checkUnit()` (`lists.service.ts`) compara a unidade da agenda vinculada (cadastro) com o texto que a extração leu no PDF, exposta como `unitCheck` em `GET /api/lists/:id`. `approveList()` **bloqueia no backend** (409) se houver problema (sem agenda, agenda sem unidade, unidade sem endereço, ou PDF×cadastro não batendo) e a equipe não tiver marcado `confirmUnitMismatch`. Revisão mostra o comparativo "PDF diz / Cadastro diz" com checkbox obrigatório antes de Aprovar/Disparar. Tela de envio de lista agora mostra o endereço que vai pra mensagem assim que uma agenda é selecionada, com aviso se não bate com o que o PDF trouxe.
 - **Relatório automático por e-mail + contato de secretaria removidos de vez**: `contactName`/`contactPhone`/`contactEmail` tirados do schema `Municipality` (migration `20260815020000`, aplicada em produção — campos estavam vazios, sem dado real perdido). `POST /api/lists/:id/conclude` só marca `CONCLUIDA` agora; relatório continua disponível só por download manual ("Exportar"). `lib/email.ts` continua existindo — ainda usado pelo resumo diário ao gestor (`daily-summary.service.ts`), que é feature separada e não foi tocada.
