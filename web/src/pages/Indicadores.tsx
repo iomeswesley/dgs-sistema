@@ -144,7 +144,7 @@ export function Indicadores() {
               <Th align="right">Guias</Th>
               <Th align="right">Confirmação</Th>
               <Th align="right">Comparecimento</Th>
-              <Th align="right">Margem</Th>
+              <Th align="right">Margem 🚧</Th>
             </tr>
           }
         >
@@ -163,7 +163,11 @@ export function Indicadores() {
               </Td>
               <Td align="right">{formatPercent(row.confirmationRate)}</Td>
               <Td align="right">{formatPercent(row.attendanceRate)}</Td>
-              <Td align="right">{formatMoney(row.margin)}</Td>
+              {/* Financeiro em desenvolvimento — nunca mostra valor, mesmo que
+                  algum sobre de antes da decisão de escopo de 2026-08-09. */}
+              <Td align="right" muted>
+                —
+              </Td>
             </tr>
           ))}
         </Table>

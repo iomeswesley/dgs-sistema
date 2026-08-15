@@ -5,7 +5,7 @@ import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatDate, formatMoney } from "../lib/format";
+import { formatDate } from "../lib/format";
 
 interface Municipality {
   id: number;
@@ -62,7 +62,7 @@ export function Configuracoes() {
       <PageHeader
         eyebrow="Cadastros"
         title="Configurações"
-        description="A base que o resto do sistema usa. Sem valor cadastrado, o fechamento não calcula repasse nem margem."
+        description="A base que o resto do sistema usa."
       />
 
       <div className="mb-5 flex gap-1 overflow-x-auto border-b border-rule">
@@ -489,6 +489,14 @@ function DoctorProceduresTab() {
         </button>
       </div>
 
+      <div className="mb-3">
+        <Callout>
+          🚧 O financeiro (valor pago ao médico, cobrado da prefeitura e margem) está <b>em desenvolvimento</b> —
+          os campos ficam desabilitados por enquanto. Tempo por consulta e esperado/dia continuam valendo normal
+          (alimentam a sugestão de confirmações).
+        </Callout>
+      </div>
+
       {doctors.loading && <Spinner />}
       {rows.length > 0 && (
         <Table
@@ -498,15 +506,13 @@ function DoctorProceduresTab() {
               <Th>Procedimento</Th>
               <Th align="right">Min/consulta</Th>
               <Th align="right">Esperado/dia</Th>
-              <Th align="right">Paga ao médico</Th>
-              <Th align="right">Cobra da prefeitura</Th>
-              <Th align="right">Margem</Th>
+              <Th align="right">Paga ao médico 🚧</Th>
+              <Th align="right">Cobra da prefeitura 🚧</Th>
+              <Th align="right">Margem 🚧</Th>
             </tr>
           }
         >
           {rows.map(({ doctor, item }) => {
-            const fee = item.doctorFee ? Number(item.doctorFee) : null;
-            const rate = item.cityRate ? Number(item.cityRate) : null;
             return (
               <tr key={item.id}>
                 <Td>{doctor.name}</Td>
@@ -517,9 +523,18 @@ function DoctorProceduresTab() {
                 <Td align="right" muted>
                   {item.expectedPerDay ?? "—"}
                 </Td>
-                <Td align="right">{formatMoney(fee)}</Td>
-                <Td align="right">{formatMoney(rate)}</Td>
-                <Td align="right">{fee !== null && rate !== null ? formatMoney(rate - fee) : "—"}</Td>
+                {/* Financeiro em desenvolvimento: mostra sempre "—", nunca o valor
+                    cadastrado antigo (se algum sobrou de antes da decisão de
+                    escopo de 2026-08-09). */}
+                <Td align="right" muted>
+                  —
+                </Td>
+                <Td align="right" muted>
+                  —
+                </Td>
+                <Td align="right" muted>
+                  —
+                </Td>
               </tr>
             );
           })}
@@ -528,14 +543,15 @@ function DoctorProceduresTab() {
 
       {rows.length === 0 && !doctors.loading && (
         <p className="card p-8 text-center text-sm text-ink-muted">
-          Nenhum valor configurado. Sem isso o fechamento não calcula repasse nem margem.
+          Nenhum procedimento configurado por médico ainda. Sem isso a sugestão de confirmações não sabe o
+          esperado por dia.
         </p>
       )}
 
       <FormModal
         open={open}
         title="Procedimento por médico"
-        description="Define a capacidade do dia e os valores que alimentam o financeiro."
+        description="Define tempo por consulta e esperado/dia (alimenta a sugestão de confirmações). Os valores financeiros estão em desenvolvimento."
         busy={busy}
         error={error}
         onSubmit={save}
@@ -590,22 +606,26 @@ function DoctorProceduresTab() {
               onChange={(e) => setForm({ ...form, expectedPerDay: e.target.value })}
             />
           </Field>
-          <Field label="Valor pago ao médico">
+          <Field label="Valor pago ao médico" hint="Em desenvolvimento.">
             <input
               className="field"
               inputMode="decimal"
-              placeholder="0,00"
+              placeholder="Em desenvolvimento"
               value={form.doctorFee}
               onChange={(e) => setForm({ ...form, doctorFee: e.target.value })}
+              disabled
+              title="Em desenvolvimento — ainda não disponível."
             />
           </Field>
-          <Field label="Valor cobrado da prefeitura">
+          <Field label="Valor cobrado da prefeitura" hint="Em desenvolvimento.">
             <input
               className="field"
               inputMode="decimal"
-              placeholder="0,00"
+              placeholder="Em desenvolvimento"
               value={form.cityRate}
               onChange={(e) => setForm({ ...form, cityRate: e.target.value })}
+              disabled
+              title="Em desenvolvimento — ainda não disponível."
             />
           </Field>
         </div>
