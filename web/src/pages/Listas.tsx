@@ -229,10 +229,17 @@ export function Listas() {
         });
         setAgendaModalOpen(true);
       }
-    } catch {
+    } catch (err) {
       // Preview é só uma ajuda — se falhar (formato não reconhecido, etc.),
       // a equipe ainda preenche os campos e envia manualmente, como antes.
+      // Mas o erro precisa aparecer: antes ficava silencioso e parecia só
+      // "não preencheu município sozinho" sem explicação nenhuma.
       setPreview(null);
+      setError(
+        err instanceof Error
+          ? `Não consegui pré-ler o PDF (${err.message}). Preencha os campos manualmente.`
+          : "Não consegui pré-ler o PDF. Preencha os campos manualmente."
+      );
     } finally {
       setPreviewing(false);
     }
