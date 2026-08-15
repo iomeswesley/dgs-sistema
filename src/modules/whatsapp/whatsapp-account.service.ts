@@ -22,6 +22,15 @@ export interface ConnectionStatus {
   dailyLimit: number;
 }
 
+export interface WhatsappAccountSummary {
+  id: number;
+  wabaId: string;
+  phoneNumberId: string;
+  businessName: string | null;
+  active: boolean;
+  connectedAt: Date;
+}
+
 /**
  * O tier já reflete o limite atual do número — a Meta sobe sozinha conforme
  * o histórico de qualidade (250 -> 1K -> 10K -> 100K -> ilimitado). Nomes de
@@ -84,12 +93,17 @@ export async function getPhoneNumberStatus(): Promise<PhoneNumberStatus | null> 
 }
 
 /**
- * Credenciais ativas: a conta conectada via Embedded Signup tem prioridade
- * sobre o .env — o .env só serve pra sandbox/dev antes de qualquer conexão
- * existir. Sempre no máximo uma linha na tabela (ver comentário no schema).
+ * Credenciais ativas: a conta conectada via Embedded Signup com `active:
+ * true` tem prioridade sobre o .env — o .env só serve pra sandbox/dev antes
+ * de qualquer conexão existir. Pode haver mais de uma conta conectada
+ * (failover manual — ver `WhatsappAccount` no schema), mas só uma fica
+ * ativa por vez; se por algum motivo nenhuma estiver marcada ativa, cai pra
+ * mais recente em vez de ficar sem enviar nada.
  */
 export async function getActiveCredentials(): Promise<WhatsappCredentials | null> {
-  const account = await prisma.whatsappAccount.findFirst({ orderBy: { connectedAt: "desc" } });
+  const account =
+    (await prisma.whatsappAccount.findFirst({ where: { active: true }, orderBy: { connectedAt: "desc" } })) ??
+    (await prisma.whatsappAccount.findFirst({ orderBy: { connectedAt: "desc" } }));
   if (account) {
     return { accessToken: account.accessToken, phoneNumberId: account.phoneNumberId, wabaId: account.wabaId };
   }
@@ -103,8 +117,22 @@ export async function isWhatsappConfigured(): Promise<boolean> {
   return (await getActiveCredentials()) !== null;
 }
 
+export async function listAccounts(): Promise<WhatsappAccountSummary[]> {
+  const accounts = await prisma.whatsappAccount.findMany({ orderBy: { connectedAt: "desc" } });
+  return accounts.map((account) => ({
+    id: account.id,
+    wabaId: account.wabaId,
+    phoneNumberId: account.phoneNumberId,
+    businessName: account.businessName,
+    active: account.active,
+    connectedAt: account.connectedAt,
+  }));
+}
+
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
-  const account = await prisma.whatsappAccount.findFirst({ orderBy: { connectedAt: "desc" } });
+  const account =
+    (await prisma.whatsappAccount.findFirst({ where: { active: true }, orderBy: { connectedAt: "desc" } })) ??
+    (await prisma.whatsappAccount.findFirst({ orderBy: { connectedAt: "desc" } }));
   const phoneStatus = await getPhoneNumberStatus();
   const dailyLimit = phoneStatus?.dailyLimit ?? env.WHATSAPP_DAILY_LIMIT;
 
@@ -190,20 +218,27 @@ export interface SaveConnectionInput {
   connectedById: number;
 }
 
-/** Substitui a conexão ativa (só existe uma por vez, ver schema). */
+/**
+ * Adiciona uma conexão nova, sem mexer nas que já existem — é assim que o
+ * failover de dois números funciona: conectar um segundo número não troca
+ * qual está em uso, só fica disponível pra ativação manual depois (ver
+ * `setActiveAccount`). Exceção: se for a primeira conta de todas, já entra
+ * ativa (preserva o comportamento de sempre — conectar já habilita o
+ * envio, sem passo extra).
+ */
 export async function saveConnection(input: SaveConnectionInput): Promise<void> {
-  await prisma.$transaction([
-    prisma.whatsappAccount.deleteMany({}),
-    prisma.whatsappAccount.create({
-      data: {
-        wabaId: input.wabaId,
-        phoneNumberId: input.phoneNumberId,
-        businessName: input.businessName,
-        accessToken: input.accessToken,
-        connectedById: input.connectedById,
-      },
-    }),
-  ]);
+  const isFirst = (await prisma.whatsappAccount.count()) === 0;
+
+  await prisma.whatsappAccount.create({
+    data: {
+      wabaId: input.wabaId,
+      phoneNumberId: input.phoneNumberId,
+      businessName: input.businessName,
+      accessToken: input.accessToken,
+      connectedById: input.connectedById,
+      active: isFirst,
+    },
+  });
 
   await recordAudit({
     userId: input.connectedById,
@@ -213,7 +248,46 @@ export async function saveConnection(input: SaveConnectionInput): Promise<void> 
   });
 }
 
-export async function disconnectAccount(userId: number): Promise<void> {
-  await prisma.whatsappAccount.deleteMany({});
-  await recordAudit({ userId, action: "whatsapp.disconnected", entity: "WhatsappAccount" });
+/** Troca qual conta está ativa — é o botão de failover manual na tela. */
+export async function setActiveAccount(accountId: number, userId: number): Promise<void> {
+  const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
+  if (!account) throw new Error("Conta do WhatsApp não encontrada.");
+
+  await prisma.$transaction([
+    prisma.whatsappAccount.updateMany({ data: { active: false } }),
+    prisma.whatsappAccount.update({ where: { id: accountId }, data: { active: true } }),
+  ]);
+
+  await recordAudit({
+    userId,
+    action: "whatsapp.activated",
+    entity: "WhatsappAccount",
+    entityId: accountId,
+    metadata: { wabaId: account.wabaId, phoneNumberId: account.phoneNumberId },
+  });
+}
+
+/**
+ * Remove uma conta específica. Se era a ativa e sobrou alguma outra, promove
+ * a mais recente automaticamente — nunca deixa o sistema sem nenhuma conta
+ * ativa enquanto existir pelo menos uma conectada.
+ */
+export async function removeAccount(accountId: number, userId: number): Promise<void> {
+  const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
+  if (!account) return;
+
+  await prisma.whatsappAccount.delete({ where: { id: accountId } });
+
+  if (account.active) {
+    const next = await prisma.whatsappAccount.findFirst({ orderBy: { connectedAt: "desc" } });
+    if (next) await prisma.whatsappAccount.update({ where: { id: next.id }, data: { active: true } });
+  }
+
+  await recordAudit({
+    userId,
+    action: "whatsapp.disconnected",
+    entity: "WhatsappAccount",
+    entityId: accountId,
+    metadata: { wabaId: account.wabaId, phoneNumberId: account.phoneNumberId },
+  });
 }

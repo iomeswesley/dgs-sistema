@@ -1017,6 +1017,15 @@ interface WhatsappSignupConfig {
   };
 }
 
+interface WhatsappAccountSummary {
+  id: number;
+  wabaId: string;
+  phoneNumberId: string;
+  businessName: string | null;
+  active: boolean;
+  connectedAt: string;
+}
+
 const QUALITY_LABEL: Record<string, string> = {
   GREEN: "Boa",
   YELLOW: "Média",
@@ -1054,10 +1063,17 @@ function loadFacebookSdk(appId: string): Promise<void> {
 
 function WhatsappTab() {
   const data = useApi<WhatsappSignupConfig>("/api/whatsapp/signup/config");
+  const accounts = useApi<{ accounts: WhatsappAccountSummary[] }>("/api/whatsapp/signup/accounts");
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [disconnecting, setDisconnecting] = useState(false);
+  const [switching, setSwitching] = useState<number | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
   const signupData = useRef<{ wabaId: string; phoneNumberId: string; businessName: string | null } | null>(null);
+
+  function reloadAll() {
+    data.reload();
+    accounts.reload();
+  }
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -1096,7 +1112,7 @@ function WhatsappTab() {
             }
             try {
               await api.post("/api/whatsapp/signup/callback", { code, ...signupData.current });
-              data.reload();
+              reloadAll();
             } catch (err) {
               setError(err instanceof Error ? err.message : "Falha ao concluir a conexão.");
             } finally {
@@ -1117,31 +1133,47 @@ function WhatsappTab() {
     }
   }
 
-  async function disconnect() {
-    setConnecting(true);
+  async function activate(accountId: number) {
+    setError(null);
+    setSwitching(accountId);
     try {
-      await api.delete("/api/whatsapp/signup");
-      data.reload();
+      await api.post(`/api/whatsapp/signup/accounts/${accountId}/activate`, {});
+      reloadAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao desconectar.");
+      setError(err instanceof Error ? err.message : "Falha ao trocar o número ativo.");
     } finally {
-      setConnecting(false);
-      setDisconnecting(false);
+      setSwitching(null);
+    }
+  }
+
+  async function remove(accountId: number) {
+    setError(null);
+    try {
+      await api.delete(`/api/whatsapp/signup/accounts/${accountId}`);
+      reloadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao remover o número.");
+    } finally {
+      setRemovingId(null);
     }
   }
 
   const status = data.data?.status;
   const missingAppConfig = data.data && (!data.data.appId || !data.data.configId);
+  const accountList = accounts.data?.accounts ?? [];
+  const removingAccount = accountList.find((account) => account.id === removingId);
 
   return (
     <>
       <Callout>
-        Conecte a conta do WhatsApp Business da DGS pra habilitar o envio de mensagens. É um login único —
-        depois de conectado, o token fica salvo e o sistema usa direto, sem precisar voltar aqui.
+        Conecte a conta do WhatsApp Business da DGS pra habilitar o envio de mensagens. Dá pra conectar um
+        segundo número de reserva e trocar qual está em uso a qualquer momento, sem mexer em nada além
+        desta tela — útil se o número em uso for bloqueado pela Meta.
       </Callout>
 
-      {data.loading && <Spinner />}
+      {(data.loading || accounts.loading) && <Spinner />}
       {data.error && <ErrorNote message={data.error} />}
+      {accounts.error && <ErrorNote message={accounts.error} />}
       {error && (
         <div className="my-3">
           <ErrorNote message={error} />
@@ -1155,63 +1187,104 @@ function WhatsappTab() {
         </p>
       )}
 
-      {status && (
-        <div className="card mt-3 flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="text-sm">
-            {status.connected ? (
-              <>
+      {status?.source === "env" && (
+        <div className="card mt-3 p-4 text-sm">
+          <p className="font-medium text-ink">Conectado — via variável de ambiente (sandbox/dev)</p>
+          <p className="text-ink-faint">
+            Número {status.phoneNumberId} · qualidade {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
+          </p>
+        </div>
+      )}
+
+      {status?.source !== "env" && (
+        <>
+          {accountList.length === 0 && !accounts.loading && (
+            <p className="card mt-3 p-4 text-sm text-ink-muted">Nenhuma conta do WhatsApp conectada ainda.</p>
+          )}
+
+          {accountList.map((account) => (
+            <div
+              key={account.id}
+              className={`card mt-3 flex flex-wrap items-center justify-between gap-3 p-4 ${
+                account.active ? "border-accent" : ""
+              }`}
+            >
+              <div className="text-sm">
                 <p className="font-medium text-ink">
-                  Conectado{status.businessName ? ` — ${status.businessName}` : ""}
+                  {account.businessName ?? "Sem nome de exibição"}
+                  {account.active && (
+                    <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
+                      Ativo
+                    </span>
+                  )}
                 </p>
                 <p className="text-ink-faint">
-                  {status.source === "env"
-                    ? "Via variável de ambiente (sandbox/dev)."
-                    : `WABA ${status.wabaId} · número ${status.phoneNumberId}`}
-                  {status.connectedAt && ` · conectado em ${formatDate(status.connectedAt)}`}
+                  WABA {account.wabaId} · número {account.phoneNumberId}
                 </p>
                 <p className="mt-1 text-ink-faint">
-                  Qualidade do número: {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
-                  {" · "}
-                  Limite diário: {status.dailyLimit.toLocaleString("pt-BR")} mensagens
-                  {status.messagingLimitTier && ` (tier ${status.messagingLimitTier})`}
+                  Conectado em {formatDate(account.connectedAt)}
+                  {account.active && status && (
+                    <>
+                      {" · "}
+                      Qualidade: {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
+                      {" · "}
+                      Limite diário: {status.dailyLimit.toLocaleString("pt-BR")} mensagens
+                    </>
+                  )}
                 </p>
-              </>
-            ) : (
-              <p className="text-ink-muted">Nenhuma conta do WhatsApp conectada ainda.</p>
-            )}
-          </div>
+              </div>
 
-          {status.source !== "env" && !missingAppConfig && (
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-primary" disabled={connecting} onClick={connect}>
-                {status.connected ? "Reconectar / trocar número" : "Conectar WhatsApp"}
-              </button>
-              {status.connected && (
+              <div className="flex gap-2">
+                {!account.active && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={switching === account.id}
+                    onClick={() => void activate(account.id)}
+                  >
+                    {switching === account.id ? "Trocando…" : "Usar este número"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-quiet"
-                  disabled={connecting}
-                  onClick={() => setDisconnecting(true)}
+                  disabled={switching === account.id}
+                  onClick={() => setRemovingId(account.id)}
                 >
-                  Desconectar
+                  Remover
                 </button>
-              )}
+              </div>
+            </div>
+          ))}
+
+          {!missingAppConfig && (
+            <div className="mt-3">
+              <button type="button" className="btn btn-quiet" disabled={connecting} onClick={connect}>
+                {connecting
+                  ? "Conectando…"
+                  : accountList.length > 0
+                    ? "Conectar outro número (reserva)"
+                    : "Conectar WhatsApp"}
+              </button>
             </div>
           )}
-        </div>
+        </>
       )}
 
       {status?.connected && <WhatsappTestSend />}
 
       <ConfirmModal
-        open={disconnecting}
-        title="Desconectar o WhatsApp?"
-        description="O envio de mensagens para de funcionar até uma nova conexão ser feita."
-        confirmLabel="Desconectar"
+        open={removingId !== null}
+        title="Remover este número?"
+        description={
+          removingAccount?.active
+            ? "Esse é o número em uso agora — removendo, o disparo de mensagens para até você conectar ou ativar outro."
+            : "O envio continua pelo número ativo. Só remove esse de reserva."
+        }
+        confirmLabel="Remover"
         danger
-        busy={connecting}
-        onConfirm={disconnect}
-        onCancel={() => setDisconnecting(false)}
+        onConfirm={() => removingId !== null && void remove(removingId)}
+        onCancel={() => setRemovingId(null)}
       />
     </>
   );

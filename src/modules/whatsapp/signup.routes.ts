@@ -10,10 +10,12 @@ import { normalizePhoneList } from "@/lib/phone.js";
 import { sendTemplate } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import {
-  disconnectAccount,
   exchangeSignupCode,
   getConnectionStatus,
+  listAccounts,
+  removeAccount,
   saveConnection,
+  setActiveAccount,
   subscribeAppToWaba,
 } from "./whatsapp-account.service.js";
 
@@ -74,11 +76,33 @@ whatsappSignupRouter.post(
   })
 );
 
-whatsappSignupRouter.delete(
-  "/api/whatsapp/signup",
+/** Lista todas as contas conectadas — base do seletor de failover na tela. */
+whatsappSignupRouter.get(
+  "/api/whatsapp/signup/accounts",
+  asyncHandler(async (_req, res) => {
+    res.json({ accounts: await listAccounts() });
+  })
+);
+
+/** Troca qual conta está ativa (o botão de failover manual). */
+whatsappSignupRouter.post(
+  "/api/whatsapp/signup/accounts/:id/activate",
   asyncHandler(async (req, res) => {
-    await disconnectAccount(currentUserId(req));
-    res.json({ status: await getConnectionStatus() });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new AppError("ID inválido.", 400);
+    await setActiveAccount(id, currentUserId(req));
+    res.json({ status: await getConnectionStatus(), accounts: await listAccounts() });
+  })
+);
+
+/** Remove uma conta específica (não apaga as outras, ver removeAccount). */
+whatsappSignupRouter.delete(
+  "/api/whatsapp/signup/accounts/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new AppError("ID inválido.", 400);
+    await removeAccount(id, currentUserId(req));
+    res.json({ status: await getConnectionStatus(), accounts: await listAccounts() });
   })
 );
 

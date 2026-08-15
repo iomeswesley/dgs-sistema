@@ -380,6 +380,12 @@ model WhatsappMessage {
 // Provedor de Tecnologia da Meta). Um único cliente (a própria DGS) usa o
 // sistema, então basta uma linha — o serviço mantém no máximo uma ativa em
 // vez de multi-tenant de verdade. Token vive só aqui, nunca em log/auditoria.
+// Suporta mais de uma linha de propósito (failover manual — ver CLAUDE.md):
+// a equipe pode conectar um segundo número de reserva e trocar qual está
+// ativo pela tela, sem precisar mexer em .env, se o número em uso for
+// bloqueado. `active` decide qual credencial o sistema usa pra enviar —
+// só uma linha por vez tem `active: true` (garantido pela aplicação, não
+// por constraint de banco).
 model WhatsappAccount {
   id             Int       @id @default(autoincrement())
   wabaId         String
@@ -387,6 +393,7 @@ model WhatsappAccount {
   businessName   String?
   accessToken    String
   tokenExpiresAt DateTime?
+  active         Boolean   @default(true)
   connectedById  Int?
   connectedAt    DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
