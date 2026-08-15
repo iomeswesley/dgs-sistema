@@ -28,15 +28,27 @@ export async function extractList(
     throw new AppError(`Tipo de arquivo não suportado para extração: ${mimeType}. Envie um PDF.`, 400);
   }
 
-  // Import tardio de propósito: o módulo `pdf-parse` (via `pdfjs-dist`)
-  // tenta carregar `@napi-rs/canvas` assim que é importado, e derruba o
-  // processo inteiro com `ReferenceError: DOMMatrix is not defined` se o
-  // binário nativo da plataforma não estiver disponível (achado em
-  // produção na Vercel/Linux — funciona local no Windows, mas o binário
-  // Linux não fica disponível no bundle serverless). Import dinâmico aqui
-  // isola o crash pra só quando alguém sobe um PDF de verdade, em vez de
-  // derrubar toda rota do app (login, listagem etc.) no carregamento do
-  // módulo.
+  // O `pdf-parse` (via `pdfjs-dist`) tenta carregar `@napi-rs/canvas` assim
+  // que é importado, pra ter DOMMatrix/ImageData/Path2D disponíveis — coisa
+  // que só serve pra RENDERIZAR página como imagem, o que a gente nunca
+  // faz (só lê texto). Na Vercel/Linux o binário nativo do canvas não fica
+  // disponível no bundle serverless (funciona local no Windows, onde o
+  // binário da plataforma está instalado) e o pdfjs-dist derruba o
+  // processo inteiro com `ReferenceError: DOMMatrix is not defined` — tem
+  // um `new DOMMatrix()` incondicional no topo do módulo de canvas dele,
+  // sem checar se existe. Solução: definir um "boneco" dessas três classes
+  // ANTES de importar, só o suficiente pra existir — o pdfjs-dist só
+  // tenta carregar o canvas de verdade quando `globalThis.DOMMatrix` ainda
+  // não existe, então isso evita a importação nativa por completo.
+  for (const name of ["DOMMatrix", "ImageData", "Path2D"] as const) {
+    if (!(name in globalThis)) {
+      (globalThis as Record<string, unknown>)[name] = class {};
+    }
+  }
+
+  // Import tardio: mesmo com o boneco acima, isola qualquer outra
+  // superfície de erro desse pacote pra só quando um PDF é de fato
+  // enviado, em vez de rodar no carregamento do módulo pra toda rota.
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: file });
   let text: string;

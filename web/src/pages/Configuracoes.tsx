@@ -1204,18 +1204,25 @@ function WhatsappTab() {
 
       {status?.source === "env" && (
         <div className="card mt-3 p-4 text-sm">
-          <p className="font-medium text-ink">Conectado — via variável de ambiente (sandbox/dev)</p>
+          <p className="font-medium text-ink">Em uso agora — via variável de ambiente (sandbox/dev)</p>
           <p className="text-ink-faint">
             Número {status.phoneNumberId} · qualidade {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
+          </p>
+          <p className="mt-1 text-ink-faint">
+            Isso é só o fallback do <code>.env</code> — conecte um número abaixo pra passar a gerenciar pela tela,
+            com failover entre dois números.
           </p>
         </div>
       )}
 
-      {status?.source !== "env" && (
-        <>
-          {accountList.length === 0 && !accounts.loading && (
-            <p className="card mt-3 p-4 text-sm text-ink-muted">Nenhuma conta do WhatsApp conectada ainda.</p>
-          )}
+      <>
+        {accountList.length === 0 && !accounts.loading && (
+          <p className="card mt-3 p-4 text-sm text-ink-muted">
+            {status?.source === "env"
+              ? "Nenhum número conectado pela tela ainda — o envio está usando só o fallback do .env acima."
+              : "Nenhuma conta do WhatsApp conectada ainda."}
+          </p>
+        )}
 
           {accountList.map((account) => (
             <div
@@ -1319,8 +1326,7 @@ function WhatsappTab() {
               </button>
             </div>
           )}
-        </>
-      )}
+      </>
 
       {status?.connected && <WhatsappTestSend />}
 
