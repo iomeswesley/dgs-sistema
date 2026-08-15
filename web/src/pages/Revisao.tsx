@@ -95,6 +95,7 @@ export function Revisao() {
     "approve" | "dispatch" | "conclude" | "reprocess" | "delete" | null
   >(null);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Precisa ser marcado antes de aprovar sempre que o comparativo de
@@ -232,6 +233,30 @@ export function Revisao() {
     }
   }
 
+  /**
+   * Atualiza a lista sem o spinner de página inteira (`detail.reload()`
+   * troca `loading` pra `true` e substitui a tela toda) — só pra conferir
+   * se chegou confirmação nova depois do disparo, sem perder o lugar na
+   * tabela nem a busca em andamento.
+   */
+  async function handleRefresh() {
+    if (!id) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const [listResult, suggestionResult] = await Promise.all([
+        api.get<ListDetail>(`/api/lists/${id}`),
+        api.get<{ suggestion: ListSuggestion | null }>(`/api/suggestions/list/${id}`),
+      ]);
+      detail.setData(listResult);
+      suggestion.setData(suggestionResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao atualizar.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -242,6 +267,15 @@ export function Revisao() {
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn btn-quiet" onClick={() => navigate("/listas")}>
               Voltar
+            </button>
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={refreshing}
+              onClick={() => void handleRefresh()}
+              title="Conferir se chegou confirmação nova, sem sair da tela"
+            >
+              {refreshing ? "Atualizando…" : "Atualizar"}
             </button>
             <a className="btn btn-quiet" href={`/api/indicators/list-report?listId=${list.id}`}>
               Exportar
