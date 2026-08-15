@@ -44,6 +44,9 @@ whatsappRouter.post(
 );
 
 async function processWebhookEvents(body: unknown): Promise<void> {
+  // TEMP-DEBUG: remover depois de diagnosticar por que o teste não chegou.
+  console.log("[WEBHOOK][DEBUG] payload:", JSON.stringify(body));
+
   for (const reply of parseInboundReplies(body)) {
     try {
       await handleInboundReply(reply);
