@@ -43,11 +43,10 @@ interface Doctor {
   procedures: DoctorProcedure[];
 }
 
-type Tab = "municipios" | "unidades" | "medicos" | "procedimentos" | "valores" | "agendas" | "whatsapp";
+type Tab = "municipios" | "medicos" | "procedimentos" | "valores" | "agendas" | "whatsapp";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "municipios", label: "Municípios" },
-  { id: "unidades", label: "Unidades" },
   { id: "medicos", label: "Médicos" },
   { id: "procedimentos", label: "Procedimentos" },
   { id: "valores", label: "Procedimentos por médico" },
@@ -84,7 +83,6 @@ export function Configuracoes() {
       </div>
 
       {tab === "municipios" && <MunicipalitiesTab />}
-      {tab === "unidades" && <UnitsTab />}
       {tab === "medicos" && <DoctorsTab />}
       {tab === "procedimentos" && <ProceduresTab />}
       {tab === "valores" && <DoctorProceduresTab />}
@@ -94,34 +92,64 @@ export function Configuracoes() {
   );
 }
 
-/* ---------------- Municípios ---------------- */
+/* ---------------- Municípios + Unidades ----------------
+   Um fluxo só: cada município já mostra suas unidades embaixo, com "Nova
+   unidade" direto ali (sem precisar escolher o município nem trocar de
+   aba). Antes eram duas telas separadas — juntar evita ida e volta pra
+   cadastrar o básico de uma prefeitura nova. */
 
 function MunicipalitiesTab() {
   const data = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", state: "SC" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const units = useApi<{ units: Unit[] }>("/api/catalog/units");
 
-  async function save() {
-    setBusy(true);
-    setError(null);
+  const [municipalityModalOpen, setMunicipalityModalOpen] = useState(false);
+  const [municipalityForm, setMunicipalityForm] = useState({ name: "", state: "SC" });
+  const [municipalityBusy, setMunicipalityBusy] = useState(false);
+  const [municipalityError, setMunicipalityError] = useState<string | null>(null);
+
+  // Unidade nova sempre nasce vinculada a um município já visível na tela —
+  // por isso o modal guarda qual município abriu ele, em vez de ter select.
+  const [unitModalMunicipality, setUnitModalMunicipality] = useState<Municipality | null>(null);
+  const [unitForm, setUnitForm] = useState({ name: "", address: "" });
+  const [unitBusy, setUnitBusy] = useState(false);
+  const [unitError, setUnitError] = useState<string | null>(null);
+
+  async function saveMunicipality() {
+    setMunicipalityBusy(true);
+    setMunicipalityError(null);
     try {
-      await api.post("/api/catalog/municipalities", form);
-      setOpen(false);
-      setForm({ name: "", state: "SC" });
+      await api.post("/api/catalog/municipalities", municipalityForm);
+      setMunicipalityModalOpen(false);
+      setMunicipalityForm({ name: "", state: "SC" });
       data.reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao salvar.");
+      setMunicipalityError(err instanceof Error ? err.message : "Falha ao salvar.");
     } finally {
-      setBusy(false);
+      setMunicipalityBusy(false);
+    }
+  }
+
+  async function saveUnit() {
+    if (!unitModalMunicipality) return;
+    setUnitBusy(true);
+    setUnitError(null);
+    try {
+      await api.post("/api/catalog/units", { ...unitForm, municipalityId: unitModalMunicipality.id });
+      setUnitModalMunicipality(null);
+      setUnitForm({ name: "", address: "" });
+      units.reload();
+      data.reload();
+    } catch (err) {
+      setUnitError(err instanceof Error ? err.message : "Falha ao salvar.");
+    } finally {
+      setUnitBusy(false);
     }
   }
 
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+        <button type="button" className="btn btn-primary" onClick={() => setMunicipalityModalOpen(true)}>
           Novo município
         </button>
       </div>
@@ -129,46 +157,71 @@ function MunicipalitiesTab() {
       {data.loading && <Spinner />}
       {data.error && <ErrorNote message={data.error} />}
 
-      {data.data && (
-        <Table
-          head={
-            <tr>
-              <Th>Município</Th>
-              <Th align="right">Unidades</Th>
-              <Th align="right">Pacientes</Th>
-            </tr>
-          }
-        >
-          {data.data.municipalities.map((municipality) => (
-            <tr key={municipality.id}>
-              <Td>
-                <span className="font-medium">{municipality.name}</span>
-                <span className="ml-1 text-ink-faint">/{municipality.state}</span>
-              </Td>
-              <Td align="right" muted>
-                {municipality._count.units}
-              </Td>
-              <Td align="right" muted>
-                {municipality._count.appointments}
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      )}
+      <div className="grid gap-3">
+        {data.data?.municipalities.map((municipality) => {
+          const municipalityUnits = (units.data?.units ?? []).filter(
+            (unit) => unit.municipalityId === municipality.id
+          );
+          return (
+            <div key={municipality.id} className="card p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-ink">
+                  {municipality.name}
+                  <span className="ml-1 text-ink-faint">/{municipality.state}</span>
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-ink-faint">{municipality._count.appointments} paciente(s)</span>
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => {
+                      setUnitModalMunicipality(municipality);
+                      setUnitForm({ name: "", address: "" });
+                      setUnitError(null);
+                    }}
+                  >
+                    Nova unidade
+                  </button>
+                </div>
+              </div>
+
+              {municipalityUnits.length > 0 ? (
+                <Table
+                  head={
+                    <tr>
+                      <Th>Unidade</Th>
+                      <Th>Endereço</Th>
+                    </tr>
+                  }
+                >
+                  {municipalityUnits.map((unit) => (
+                    <tr key={unit.id}>
+                      <Td>{unit.name}</Td>
+                      <Td muted>{unit.address ?? "—"}</Td>
+                    </tr>
+                  ))}
+                </Table>
+              ) : (
+                <p className="mt-2 text-sm text-ink-faint">Nenhuma unidade cadastrada ainda.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <FormModal
-        open={open}
+        open={municipalityModalOpen}
         title="Novo município"
-        busy={busy}
-        error={error}
-        onSubmit={save}
-        onCancel={() => setOpen(false)}
+        busy={municipalityBusy}
+        error={municipalityError}
+        onSubmit={saveMunicipality}
+        onCancel={() => setMunicipalityModalOpen(false)}
       >
         <Field label="Nome">
           <input
             className="field"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            value={municipalityForm.name}
+            onChange={(e) => setMunicipalityForm({ ...municipalityForm, name: e.target.value })}
             required
           />
         </Field>
@@ -176,106 +229,34 @@ function MunicipalitiesTab() {
           <input
             className="field"
             maxLength={2}
-            value={form.state}
-            onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+            value={municipalityForm.state}
+            onChange={(e) => setMunicipalityForm({ ...municipalityForm, state: e.target.value.toUpperCase() })}
           />
         </Field>
       </FormModal>
-    </>
-  );
-}
-
-/* ---------------- Unidades ---------------- */
-
-function UnitsTab() {
-  const data = useApi<{ units: Unit[] }>("/api/catalog/units");
-  const municipalities = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ municipalityId: "", name: "", address: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function save() {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post("/api/catalog/units", { ...form, municipalityId: Number(form.municipalityId) });
-      setOpen(false);
-      setForm({ municipalityId: "", name: "", address: "" });
-      data.reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao salvar.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <div className="mb-3 flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-          Nova unidade
-        </button>
-      </div>
-
-      {data.loading && <Spinner />}
-      {data.data && (
-        <Table
-          head={
-            <tr>
-              <Th>Unidade</Th>
-              <Th>Município</Th>
-              <Th>Endereço</Th>
-            </tr>
-          }
-        >
-          {data.data.units.map((unit) => (
-            <tr key={unit.id}>
-              <Td>{unit.name}</Td>
-              <Td muted>{unit.municipality.name}</Td>
-              <Td muted>{unit.address ?? "—"}</Td>
-            </tr>
-          ))}
-        </Table>
-      )}
 
       <FormModal
-        open={open}
-        title="Nova unidade"
+        open={unitModalMunicipality !== null}
+        title={`Nova unidade em ${unitModalMunicipality?.name ?? ""}`}
         description="O endereço aparece na mensagem que o paciente recebe."
-        busy={busy}
-        error={error}
-        onSubmit={save}
-        onCancel={() => setOpen(false)}
+        busy={unitBusy}
+        error={unitError}
+        onSubmit={saveUnit}
+        onCancel={() => setUnitModalMunicipality(null)}
       >
-        <Field label="Município">
-          <select
-            className="field"
-            value={form.municipalityId}
-            onChange={(e) => setForm({ ...form, municipalityId: e.target.value })}
-            required
-          >
-            <option value="">Selecione…</option>
-            {municipalities.data?.municipalities.map((municipality) => (
-              <option key={municipality.id} value={municipality.id}>
-                {municipality.name}
-              </option>
-            ))}
-          </select>
-        </Field>
         <Field label="Nome">
           <input
             className="field"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            value={unitForm.name}
+            onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })}
             required
           />
         </Field>
         <Field label="Endereço" hint="Como deve aparecer para o paciente.">
           <input
             className="field"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            value={unitForm.address}
+            onChange={(e) => setUnitForm({ ...unitForm, address: e.target.value })}
           />
         </Field>
       </FormModal>
