@@ -27,6 +27,7 @@ export interface WhatsappAccountSummary {
   wabaId: string;
   phoneNumberId: string;
   businessName: string | null;
+  label: string | null;
   active: boolean;
   connectedAt: Date;
 }
@@ -124,9 +125,26 @@ export async function listAccounts(): Promise<WhatsappAccountSummary[]> {
     wabaId: account.wabaId,
     phoneNumberId: account.phoneNumberId,
     businessName: account.businessName,
+    label: account.label,
     active: account.active,
     connectedAt: account.connectedAt,
   }));
+}
+
+/** Apelido interno da equipe pra essa conta — não mexe em nada na Meta. */
+export async function renameAccount(accountId: number, label: string | null, userId: number): Promise<void> {
+  const account = await prisma.whatsappAccount.update({
+    where: { id: accountId },
+    data: { label: label?.trim() || null },
+  });
+
+  await recordAudit({
+    userId,
+    action: "whatsapp.renamed",
+    entity: "WhatsappAccount",
+    entityId: accountId,
+    metadata: { label: account.label },
+  });
 }
 
 export async function getConnectionStatus(): Promise<ConnectionStatus> {

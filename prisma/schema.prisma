@@ -391,6 +391,10 @@ model WhatsappAccount {
   wabaId         String
   phoneNumberId  String
   businessName   String?
+  // Apelido interno da equipe (ex.: "Principal", "Reserva — colega"),
+  // separado do businessName que vem da Meta — esse a equipe não controla
+  // (é o que aparece pro paciente), o label é só pra organizar a tela.
+  label          String?
   accessToken    String
   tokenExpiresAt DateTime?
   active         Boolean   @default(true)

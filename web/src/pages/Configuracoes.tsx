@@ -1021,6 +1021,7 @@ interface WhatsappAccountSummary {
   id: number;
   wabaId: string;
   phoneNumberId: string;
+  label: string | null;
   businessName: string | null;
   active: boolean;
   connectedAt: string;
@@ -1068,6 +1069,8 @@ function WhatsappTab() {
   const [error, setError] = useState<string | null>(null);
   const [switching, setSwitching] = useState<number | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
   const signupData = useRef<{ wabaId: string; phoneNumberId: string; businessName: string | null } | null>(null);
 
   function reloadAll() {
@@ -1146,6 +1149,18 @@ function WhatsappTab() {
     }
   }
 
+  async function rename(accountId: number) {
+    setError(null);
+    try {
+      await api.patch(`/api/whatsapp/signup/accounts/${accountId}`, { label: editValue });
+      accounts.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao renomear.");
+    } finally {
+      setEditingId(null);
+    }
+  }
+
   async function remove(accountId: number) {
     setError(null);
     try {
@@ -1209,15 +1224,51 @@ function WhatsappTab() {
                 account.active ? "border-accent" : ""
               }`}
             >
-              <div className="text-sm">
-                <p className="font-medium text-ink">
-                  {account.businessName ?? "Sem nome de exibição"}
-                  {account.active && (
-                    <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
-                      Ativo
-                    </span>
-                  )}
-                </p>
+              <div className="min-w-0 text-sm">
+                {editingId === account.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="field"
+                      autoFocus
+                      placeholder={account.businessName ?? "Apelido (ex.: Principal)"}
+                      value={editValue}
+                      onChange={(event) => setEditValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void rename(account.id);
+                        if (event.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <button type="button" className="btn btn-primary" onClick={() => void rename(account.id)}>
+                      Salvar
+                    </button>
+                    <button type="button" className="btn btn-quiet" onClick={() => setEditingId(null)}>
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <p className="font-medium text-ink">
+                    {account.label ?? account.businessName ?? "Sem nome de exibição"}
+                    {account.active && (
+                      <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
+                        Ativo
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      title="Editar apelido"
+                      className="ml-2 text-xs font-normal text-ink-faint underline underline-offset-2 hover:text-ink"
+                      onClick={() => {
+                        setEditValue(account.label ?? "");
+                        setEditingId(account.id);
+                      }}
+                    >
+                      editar
+                    </button>
+                  </p>
+                )}
+                {account.label && account.businessName && (
+                  <p className="text-ink-faint">Nome na Meta: {account.businessName}</p>
+                )}
                 <p className="text-ink-faint">
                   WABA {account.wabaId} · número {account.phoneNumberId}
                 </p>

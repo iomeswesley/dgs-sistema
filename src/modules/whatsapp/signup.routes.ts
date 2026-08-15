@@ -14,6 +14,7 @@ import {
   getConnectionStatus,
   listAccounts,
   removeAccount,
+  renameAccount,
   saveConnection,
   setActiveAccount,
   subscribeAppToWaba,
@@ -92,6 +93,20 @@ whatsappSignupRouter.post(
     if (!Number.isInteger(id)) throw new AppError("ID inválido.", 400);
     await setActiveAccount(id, currentUserId(req));
     res.json({ status: await getConnectionStatus(), accounts: await listAccounts() });
+  })
+);
+
+const renameSchema = z.object({ label: z.string().max(60).nullish() });
+
+/** Renomeia o apelido interno de uma conta (só rótulo, nada muda na Meta). */
+whatsappSignupRouter.patch(
+  "/api/whatsapp/signup/accounts/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new AppError("ID inválido.", 400);
+    const { label } = parseBody(req, renameSchema);
+    await renameAccount(id, label ?? null, currentUserId(req));
+    res.json({ accounts: await listAccounts() });
   })
 );
 
