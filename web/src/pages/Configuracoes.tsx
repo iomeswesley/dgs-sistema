@@ -11,9 +11,6 @@ interface Municipality {
   id: number;
   name: string;
   state: string;
-  contactName: string | null;
-  contactPhone: string | null;
-  contactEmail: string | null;
   active: boolean;
   _count: { units: number; appointments: number };
 }
@@ -102,7 +99,7 @@ export function Configuracoes() {
 function MunicipalitiesTab() {
   const data = useApi<{ municipalities: Municipality[] }>("/api/catalog/municipalities");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", state: "SC", contactName: "", contactPhone: "", contactEmail: "" });
+  const [form, setForm] = useState({ name: "", state: "SC" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,7 +109,7 @@ function MunicipalitiesTab() {
     try {
       await api.post("/api/catalog/municipalities", form);
       setOpen(false);
-      setForm({ name: "", state: "SC", contactName: "", contactPhone: "", contactEmail: "" });
+      setForm({ name: "", state: "SC" });
       data.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
@@ -137,7 +134,6 @@ function MunicipalitiesTab() {
           head={
             <tr>
               <Th>Município</Th>
-              <Th>Contato</Th>
               <Th align="right">Unidades</Th>
               <Th align="right">Pacientes</Th>
             </tr>
@@ -148,15 +144,6 @@ function MunicipalitiesTab() {
               <Td>
                 <span className="font-medium">{municipality.name}</span>
                 <span className="ml-1 text-ink-faint">/{municipality.state}</span>
-              </Td>
-              <Td muted>
-                {municipality.contactName ?? "—"}
-                {municipality.contactPhone && (
-                  <p className="text-xs text-ink-faint">{municipality.contactPhone}</p>
-                )}
-                {municipality.contactEmail && (
-                  <p className="text-xs text-ink-faint">{municipality.contactEmail}</p>
-                )}
               </Td>
               <Td align="right" muted>
                 {municipality._count.units}
@@ -191,31 +178,6 @@ function MunicipalitiesTab() {
             maxLength={2}
             value={form.state}
             onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
-          />
-        </Field>
-        <Field label="Contato na secretaria">
-          <input
-            className="field"
-            value={form.contactName}
-            onChange={(e) => setForm({ ...form, contactName: e.target.value })}
-          />
-        </Field>
-        <Field label="Telefone do contato">
-          <input
-            className="field"
-            value={form.contactPhone}
-            onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
-          />
-        </Field>
-        <Field
-          label="E-mail do contato"
-          hint="O relatório de confirmações é enviado pra cá quando a equipe conclui a lista."
-        >
-          <input
-            type="email"
-            className="field"
-            value={form.contactEmail}
-            onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
           />
         </Field>
       </FormModal>

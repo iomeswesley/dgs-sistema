@@ -7,14 +7,13 @@ import { REFUSAL_REASON_LABEL, STATUS_LABEL } from "@/lib/labels.js";
 /**
  * Relatório de uma lista para devolver à secretaria: nome, telefone (via
  * status) e o que cada paciente respondeu, com o motivo quando recusou.
- *
- * Função única usada tanto pelo export manual quanto pelo e-mail automático
- * ao concluir a lista — sem duplicar a query e o mapeamento de rótulos.
+ * Só download manual (botão "Exportar" na Revisão) — não há mais envio
+ * automático por e-mail.
  */
 export async function buildListReportCsv(listId: number): Promise<{ csv: string; filename: string; municipalityName: string }> {
   const list = await prisma.list.findUnique({
     where: { id: listId },
-    select: { municipality: { select: { name: true, contactEmail: true } }, createdAt: true },
+    select: { municipality: { select: { name: true } }, createdAt: true },
   });
   if (!list) throw new AppError("Lista não encontrada", 404);
 

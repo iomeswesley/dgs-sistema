@@ -215,16 +215,8 @@ export function Revisao() {
             ` Cabem mais ${result.capacity.remaining} envios hoje.`
         );
       } else {
-        const result = await api.post<{ emailSent: boolean; hasContactEmail: boolean }>(
-          `/api/lists/${list.id}/conclude`
-        );
-        setNotice(
-          result.emailSent
-            ? "Lista concluída e o relatório foi enviado por e-mail para a secretaria."
-            : result.hasContactEmail
-              ? "Lista concluída. O e-mail para a secretaria falhou — baixe o relatório e envie manualmente."
-              : "Lista concluída. Cadastre o e-mail de contato do município para o relatório sair automaticamente da próxima vez."
-        );
+        await api.post(`/api/lists/${list.id}/conclude`);
+        setNotice("Lista concluída. Baixe o relatório em \"Exportar\" para enviar à secretaria.");
       }
       setConfirmAction(null);
       detail.reload();
@@ -576,7 +568,7 @@ export function Revisao() {
                 ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
                     pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
                   }`
-                : "O relatório com o resultado de cada paciente é enviado por e-mail para a secretaria, se houver contato cadastrado."
+                : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar\" para enviar à secretaria manualmente."
         }
         confirmLabel={
           confirmAction === "approve"

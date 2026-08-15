@@ -63,18 +63,15 @@ model PasswordReset {
 /* ------------------------------------------------------------------ */
 
 model Municipality {
-  id           Int      @id @default(autoincrement())
-  name         String
-  state        String   @default("SC")
-  contactName  String?
-  contactPhone String?
-  contactEmail String?
+  id        Int      @id @default(autoincrement())
+  name      String
+  state     String   @default("SC")
   // Observações sobre o formato da lista que essa prefeitura manda
   // (ex: "SISREG, cabeçalho com procedimento único").
-  notes        String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   units        HealthUnit[]
   agendas      Agenda[]

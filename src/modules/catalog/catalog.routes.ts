@@ -23,9 +23,6 @@ catalogRouter.use("/api/catalog", requireAuth);
 const municipalitySchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   state: z.string().length(2).default("SC"),
-  contactName: z.string().nullish(),
-  contactPhone: z.string().nullish(),
-  contactEmail: z.string().email().nullish().or(z.literal("")),
   notes: z.string().nullish(),
   active: z.boolean().optional(),
 });
@@ -45,9 +42,7 @@ catalogRouter.post(
   "/api/catalog/municipalities",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, municipalitySchema);
-    const municipality = await prisma.municipality.create({
-      data: { ...data, contactEmail: data.contactEmail || null },
-    });
+    const municipality = await prisma.municipality.create({ data });
     await recordAudit({
       userId: currentUserId(req),
       action: "create",
