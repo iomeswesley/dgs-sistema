@@ -30,7 +30,8 @@ export async function extractAndStage(listId: number): Promise<void> {
   try {
     const { result } = await extractList(Buffer.from(list.fileData), list.mimeType);
     const mapped = mapExtraction(result);
-    result.warnings = [...result.warnings, ...(await unitAddressWarnings(list.agendaId, mapped.executingUnit))];
+    const unitCheck = await checkUnit(list.agendaId, mapped.executingUnit);
+    result.warnings = [...result.warnings, ...unitCheckWarnings(unitCheck)];
 
     await prisma.$transaction(
       async (tx) => {
@@ -68,36 +69,68 @@ export async function extractAndStage(listId: number): Promise<void> {
   }
 }
 
+export interface UnitCheck {
+  /** Unidade da agenda vinculada — é dela que sai o endereço na mensagem. */
+  agendaUnit: { id: number; name: string; address: string | null } | null;
+  /** Unidade que a extração leu no PDF (texto livre, pode não bater com nada cadastrado). */
+  pdfUnit: string | null;
+  /** Unidade da agenda não tem endereço cadastrado — mensagem sai incompleta. */
+  missingAddress: boolean;
+  /** PDF leu uma unidade e ela não bate (nem por conter) com a da agenda vinculada. */
+  mismatch: boolean;
+  /** Lista nem tem agenda vinculada — mensagem sai só com o município. */
+  noAgenda: boolean;
+}
+
 /**
  * A confirmação de WhatsApp monta o "local" a partir da unidade da agenda
  * vinculada (nome + endereço) — nunca do que a extração lê no arquivo, porque
- * o SISREG não imprime endereço. Sem agenda vinculada, ou com a unidade sem
- * endereço cadastrado, a mensagem sai incompleta (só município) sem avisar
- * ninguém — por isso o aviso entra aqui, antes da revisão.
+ * o SISREG não imprime endereço. Compara os dois lados (o que a agenda tem
+ * cadastrado vs o que o PDF leu) pra pegar agenda errada ou endereço faltando
+ * antes do disparo, em vez de a secretaria receber reclamação de paciente que
+ * foi no endereço errado.
  */
-async function unitAddressWarnings(agendaId: number | null, executingUnit: string | null): Promise<string[]> {
+export async function checkUnit(agendaId: number | null, executingUnit: string | null): Promise<UnitCheck> {
   if (!agendaId) {
-    return [
-      "Lista sem agenda vinculada: a confirmação vai sair só com o nome do município, sem unidade nem endereço. Vincule uma agenda em Configurações → Agendas.",
-    ];
+    return { agendaUnit: null, pdfUnit: executingUnit, missingAddress: false, mismatch: false, noAgenda: true };
   }
 
   const agenda = await prisma.agenda.findUnique({ where: { id: agendaId }, include: { unit: true } });
   if (!agenda?.unit) {
-    return [
-      "Agenda vinculada não tem unidade cadastrada: a confirmação vai sair sem unidade nem endereço. Ajuste em Configurações → Agendas.",
-    ];
+    return { agendaUnit: null, pdfUnit: executingUnit, missingAddress: false, mismatch: false, noAgenda: false };
   }
 
+  return {
+    agendaUnit: { id: agenda.unit.id, name: agenda.unit.name, address: agenda.unit.address },
+    pdfUnit: executingUnit,
+    missingAddress: !agenda.unit.address,
+    mismatch: !!executingUnit && !namesMatch(executingUnit, agenda.unit.name),
+    noAgenda: false,
+  };
+}
+
+function unitCheckWarnings(check: UnitCheck): string[] {
   const warnings: string[] = [];
-  if (!agenda.unit.address) {
+  if (check.noAgenda) {
     warnings.push(
-      `Unidade "${agenda.unit.name}" não tem endereço cadastrado: a confirmação vai sair sem endereço. Cadastre em Configurações → Cadastro → Unidades.`
+      "Lista sem agenda vinculada: a confirmação vai sair só com o nome do município, sem unidade nem endereço. Vincule uma agenda em Configurações → Agendas."
+    );
+    return warnings;
+  }
+  if (!check.agendaUnit) {
+    warnings.push(
+      "Agenda vinculada não tem unidade cadastrada: a confirmação vai sair sem unidade nem endereço. Ajuste em Configurações → Agendas."
+    );
+    return warnings;
+  }
+  if (check.missingAddress) {
+    warnings.push(
+      `Unidade "${check.agendaUnit.name}" não tem endereço cadastrado: a confirmação vai sair sem endereço. Cadastre em Configurações → Cadastro → Unidades.`
     );
   }
-  if (executingUnit && !namesMatch(executingUnit, agenda.unit.name)) {
+  if (check.mismatch) {
     warnings.push(
-      `Unidade lida no arquivo ("${executingUnit}") não bate com a unidade da agenda vinculada ("${agenda.unit.name}") — confira se a agenda certa foi escolhida.`
+      `Unidade lida no arquivo ("${check.pdfUnit}") não bate com a unidade da agenda vinculada ("${check.agendaUnit.name}") — confira se a agenda certa foi escolhida.`
     );
   }
   return warnings;
@@ -303,8 +336,20 @@ export async function removeAppointment(appointmentId: number, userId: number): 
   });
 }
 
-/** Aprova a lista. Depois disso a revisão fecha e o disparo é liberado. */
-export async function approveList(listId: number, userId: number): Promise<void> {
+/**
+ * Aprova a lista. Depois disso a revisão fecha e o disparo é liberado.
+ *
+ * Quando a unidade/endereço da agenda vinculada não bate com o que o PDF
+ * leu (ou está faltando), aprovar exige `confirmUnitMismatch: true` — a
+ * equipe precisa ter visto e confirmado o aviso na tela, não só clicado
+ * "aprovar" sem reparar. Isso é o que garante que a mensagem de WhatsApp
+ * não sai com o endereço de outra unidade do mesmo município.
+ */
+export async function approveList(
+  listId: number,
+  userId: number,
+  confirmUnitMismatch = false
+): Promise<void> {
   const list = await prisma.list.findUnique({
     where: { id: listId },
     include: { _count: { select: { appointments: true } } },
@@ -313,6 +358,19 @@ export async function approveList(listId: number, userId: number): Promise<void>
   if (list.status !== "EM_REVISAO") throw new AppError("Esta lista não está em revisão.", 409);
   if (list._count.appointments === 0) {
     throw new AppError("A lista está vazia — nada para aprovar.", 400);
+  }
+
+  const executingUnit =
+    list.extractionRaw && typeof list.extractionRaw === "object" && "executingUnit" in list.extractionRaw
+      ? ((list.extractionRaw as { executingUnit?: string | null }).executingUnit ?? null)
+      : null;
+  const unitCheck = await checkUnit(list.agendaId, executingUnit);
+  const hasUnitIssue = unitCheck.noAgenda || !unitCheck.agendaUnit || unitCheck.missingAddress || unitCheck.mismatch;
+  if (hasUnitIssue && !confirmUnitMismatch) {
+    throw new AppError(
+      "A unidade/endereço desta lista têm um aviso pendente — confira o comparativo na tela e confirme antes de aprovar.",
+      409
+    );
   }
 
   await prisma.list.update({

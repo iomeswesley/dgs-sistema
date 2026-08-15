@@ -40,6 +40,14 @@ interface ListSuggestion {
   expectedPerDay: number;
 }
 
+interface UnitCheck {
+  agendaUnit: { id: number; name: string; address: string | null } | null;
+  pdfUnit: string | null;
+  missingAddress: boolean;
+  mismatch: boolean;
+  noAgenda: boolean;
+}
+
 interface ListDetail {
   list: {
     id: number;
@@ -49,9 +57,11 @@ interface ListDetail {
     status: string;
     extractionError: string | null;
     municipality: { id: number; name: string };
+    agenda: { id: number; date: string; unit: { id: number; name: string; address: string | null } | null } | null;
   };
   appointments: Appointment[];
   warnings: string[];
+  unitCheck: UnitCheck;
 }
 
 const ISSUE_LABEL: Record<string, string> = {
@@ -87,6 +97,10 @@ export function Revisao() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Precisa ser marcado antes de aprovar sempre que o comparativo de
+  // unidade/endereço acusa algum problema — força a equipe a olhar em vez
+  // de só clicar "aprovar" sem reparar no aviso.
+  const [unitConfirmed, setUnitConfirmed] = useState(false);
 
   // Enquanto a extração roda em segundo plano (EXTRAINDO), o status só muda
   // sozinho no banco — sem isso a tela ficava presa até a equipe apertar F5.
@@ -101,11 +115,17 @@ export function Revisao() {
   if (detail.error) return <ErrorNote message={detail.error} />;
   if (!detail.data) return null;
 
-  const { list, appointments, warnings } = detail.data;
+  const { list, appointments, warnings, unitCheck } = detail.data;
   const counts: Record<string, number> = {};
   for (const appointment of appointments) {
     counts[appointment.status] = (counts[appointment.status] ?? 0) + 1;
   }
+  const hasUnitIssue = unitCheck.noAgenda || !unitCheck.agendaUnit || unitCheck.missingAddress || unitCheck.mismatch;
+  // O comparativo de unidade abaixo já cobre esses avisos de forma mais
+  // clara (lado a lado) — não repetir na lista genérica de avisos da leitura.
+  const otherWarnings = warnings.filter(
+    (warning) => !warning.includes("nidade") && !warning.includes("endereço") && !warning.includes("agenda vinculada")
+  );
 
   // Busca por nome (parcial, sem acento/caixa) ou telefone (só os dígitos,
   // compara contra qualquer telefone conhecido do paciente, não só o
@@ -171,7 +191,7 @@ export function Revisao() {
     setError(null);
     try {
       if (confirmAction === "approve") {
-        await api.post(`/api/lists/${list.id}/approve`);
+        await api.post(`/api/lists/${list.id}/approve`, { confirmUnitMismatch: unitConfirmed });
         setNotice("Lista aprovada. Agora dá para disparar as confirmações.");
       } else if (confirmAction === "reprocess") {
         await api.post(`/api/lists/${list.id}/reprocess`);
@@ -236,12 +256,24 @@ export function Revisao() {
               </button>
             )}
             {isReviewing && (
-              <button type="button" className="btn btn-primary" onClick={() => setConfirmAction("approve")}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={hasUnitIssue && !unitConfirmed}
+                title={hasUnitIssue && !unitConfirmed ? "Confirme o comparativo de unidade/endereço abaixo antes de aprovar." : undefined}
+                onClick={() => setConfirmAction("approve")}
+              >
                 Aprovar lista
               </button>
             )}
             {list.status === "APROVADA" && (
-              <button type="button" className="btn btn-primary" onClick={() => setConfirmAction("dispatch")}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={hasUnitIssue && !unitConfirmed}
+                title={hasUnitIssue && !unitConfirmed ? "Confirme o comparativo de unidade/endereço abaixo antes de disparar." : undefined}
+                onClick={() => setConfirmAction("dispatch")}
+              >
                 Disparar confirmações
               </button>
             )}
@@ -264,12 +296,53 @@ export function Revisao() {
           <ErrorNote message={error} />
         </div>
       )}
-      {warnings.length > 0 && (
+
+      {hasUnitIssue && (isReviewing || list.status === "APROVADA") && (
+        <div className="mb-4">
+          <Callout tone="warn">
+            <p className="font-semibold">
+              {unitCheck.noAgenda
+                ? "Lista sem agenda vinculada."
+                : !unitCheck.agendaUnit
+                  ? "A agenda vinculada não tem unidade cadastrada."
+                  : unitCheck.mismatch
+                    ? "A unidade lida no PDF não bate com a unidade da agenda vinculada."
+                    : "A unidade da agenda vinculada não tem endereço cadastrado."}
+            </p>
+            {unitCheck.agendaUnit || unitCheck.pdfUnit ? (
+              <dl className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                <dt className="text-ink-muted">PDF diz:</dt>
+                <dd>{unitCheck.pdfUnit ?? "(não leu unidade nenhuma)"}</dd>
+                <dt className="text-ink-muted">Cadastro diz:</dt>
+                <dd>
+                  {unitCheck.agendaUnit
+                    ? `${unitCheck.agendaUnit.name} — ${unitCheck.agendaUnit.address ?? "sem endereço cadastrado"}`
+                    : "(agenda sem unidade)"}
+                </dd>
+              </dl>
+            ) : null}
+            <p className="mt-2 text-sm">
+              É esse endereço cadastrado que vai para a mensagem de WhatsApp. Se estiver errado, corrija a unidade
+              da agenda em Configurações → Agendas antes de aprovar.
+            </p>
+            <label className="mt-3 flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={unitConfirmed}
+                onChange={(event) => setUnitConfirmed(event.target.checked)}
+              />
+              Conferi e confirmo que a unidade/endereço estão corretos (ou sei que vão sair incompletos).
+            </label>
+          </Callout>
+        </div>
+      )}
+
+      {otherWarnings.length > 0 && (
         <div className="mb-4">
           <Callout tone="warn">
             <p className="font-semibold">A leitura deixou avisos:</p>
             <ul className="mt-1 list-inside list-disc">
-              {warnings.map((warning) => (
+              {otherWarnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
             </ul>

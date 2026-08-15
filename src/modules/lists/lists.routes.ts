@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
-import { approveList, editAppointment, extractAndStage, removeAppointment } from "./lists.service.js";
+import { approveList, checkUnit, editAppointment, extractAndStage, removeAppointment } from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
@@ -185,6 +185,7 @@ listsRouter.get(
       where: { id },
       select: {
         id: true,
+        agendaId: true,
         originalName: true,
         mimeType: true,
         sourceFormat: true,
@@ -193,7 +194,7 @@ listsRouter.get(
         extractionRaw: true,
         createdAt: true,
         municipality: { select: { id: true, name: true } },
-        agenda: { select: { id: true, date: true } },
+        agenda: { select: { id: true, date: true, unit: { select: { id: true, name: true, address: true } } } },
       },
     });
     if (!list) throw new AppError("Lista não encontrada", 404);
@@ -213,8 +214,16 @@ listsRouter.get(
       list.extractionRaw && typeof list.extractionRaw === "object" && "warnings" in list.extractionRaw
         ? ((list.extractionRaw as { warnings?: string[] }).warnings ?? [])
         : [];
+    const executingUnit =
+      list.extractionRaw && typeof list.extractionRaw === "object" && "executingUnit" in list.extractionRaw
+        ? ((list.extractionRaw as { executingUnit?: string | null }).executingUnit ?? null)
+        : null;
+    // Recalcula contra o cadastro atual (não o que ficou congelado na
+    // extração) — se alguém corrigiu o endereço da unidade depois, a
+    // revisão já reflete isso sem precisar reprocessar a lista.
+    const unitCheck = await checkUnit(list.agendaId, executingUnit);
 
-    res.json({ list: { ...list, extractionRaw: undefined }, appointments, warnings });
+    res.json({ list: { ...list, extractionRaw: undefined }, appointments, warnings, unitCheck });
   })
 );
 
@@ -262,10 +271,13 @@ listsRouter.post(
   })
 );
 
+const approveSchema = z.object({ confirmUnitMismatch: z.boolean().optional() });
+
 listsRouter.post(
   "/api/lists/:id/approve",
   asyncHandler(async (req, res) => {
-    await approveList(routeId(req), currentUserId(req));
+    const data = parseBody(req, approveSchema);
+    await approveList(routeId(req), currentUserId(req), data.confirmUnitMismatch ?? false);
     res.json({ ok: true });
   })
 );

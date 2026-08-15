@@ -32,6 +32,7 @@ interface Agenda {
   date: string;
   municipalityId: number;
   doctor: { name: string };
+  unit: { id: number; name: string; address: string | null } | null;
 }
 
 interface Doctor {
@@ -83,6 +84,19 @@ function toTitleCase(value: string): string {
     .split(" ")
     .map((word, index) => (index > 0 && LOWERCASE_WORDS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
     .join(" ");
+}
+
+// Mesma lógica de "igual ou um contém o outro" do lib/text-match.ts do
+// servidor (não dá pra importar direto — é código de backend) — só pra
+// avisar na tela antes de enviar, o cadastro é a fonte da verdade mesmo.
+const DIACRITICS = new RegExp(`[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`, "g");
+function normalizeForMatch(value: string): string {
+  return value.normalize("NFD").replace(DIACRITICS, "").toUpperCase().trim();
+}
+function unitNamesLikelyMatch(a: string, b: string): boolean {
+  const na = normalizeForMatch(a);
+  const nb = normalizeForMatch(b);
+  return na === nb || na.includes(nb) || nb.includes(na);
 }
 
 export function Listas() {
@@ -144,6 +158,15 @@ export function Listas() {
   const agendaModalUnitOptions = (units.data?.units ?? []).filter(
     (unit) => String(unit.municipalityId) === municipalityId
   );
+
+  // Endereço que vai de fato pra mensagem de WhatsApp é o da unidade
+  // cadastrada na agenda — não o texto livre que o PDF trouxe. Mostrar os
+  // dois lado a lado aqui evita descobrir só depois do disparo que a
+  // agenda reaproveitada apontava pra unidade errada do município.
+  const selectedAgenda = agendaOptions.find((agenda) => String(agenda.id) === agendaId) ?? null;
+  const pdfExecutingUnit = preview?.parsed.executingUnit ?? null;
+  const unitMismatch =
+    !!selectedAgenda?.unit && !!pdfExecutingUnit && !unitNamesLikelyMatch(pdfExecutingUnit, selectedAgenda.unit.name);
 
   // btoa não aceita a string inteira de uma vez em arquivos grandes;
   // converter em blocos evita estourar a pilha de argumentos.
@@ -417,6 +440,27 @@ export function Listas() {
             </select>
           </Field>
         </div>
+
+        {agendaId && (
+          <div className="mt-3 rounded-lg border-l-4 px-4 py-3 text-sm" style={
+            unitMismatch
+              ? { background: "var(--mark-yellow-soft)", borderColor: "var(--mark-yellow)" }
+              : { background: "var(--sheet-2, var(--sheet))", borderColor: "var(--ink-faint)" }
+          }>
+            <p>
+              <span className="text-ink-muted">Endereço que vai na mensagem: </span>
+              {selectedAgenda?.unit
+                ? `${selectedAgenda.unit.name} — ${selectedAgenda.unit.address ?? "sem endereço cadastrado"}`
+                : "agenda sem unidade cadastrada — mensagem sai só com o município"}
+            </p>
+            {unitMismatch && (
+              <p className="mt-1 font-medium">
+                O PDF leu unidade "{pdfExecutingUnit}", diferente da unidade dessa agenda. Confira se é a agenda
+                certa antes de enviar — dá pra corrigir a unidade em Configurações → Agendas.
+              </p>
+            )}
+          </div>
+        )}
 
         <label className="mt-3 flex items-center gap-2 text-sm text-ink-muted">
           <input

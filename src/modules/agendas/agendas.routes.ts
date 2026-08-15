@@ -54,7 +54,7 @@ agendasRouter.get(
       include: {
         doctor: { select: { id: true, name: true } },
         municipality: { select: { id: true, name: true } },
-        unit: { select: { id: true, name: true } },
+        unit: { select: { id: true, name: true, address: true } },
         procedure: { select: { id: true, name: true } },
         _count: { select: { lists: true, appointments: true } },
       },
