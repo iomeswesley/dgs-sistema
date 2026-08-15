@@ -84,15 +84,9 @@ Usar o mesmo valor de `WHATSAPP_VERIFY_TOKEN` no campo de verificação, e assin
 
 1. Criar o projeto apontando para este repositório.
 2. Copiar todas as variáveis do `.env` para as Environment Variables do projeto.
-3. Definir `CRON_SECRET` (qualquer valor aleatório) — o Vercel usa para autenticar o cron que processa a fila de hora em hora.
+3. Definir `CRON_SECRET` (qualquer valor aleatório) — o Vercel usa para autenticar o cron.
 4. Após o push, se o site continuar servindo a versão antiga: Deployments → **Promote to Production**.
-5. O projeto usa **dois crons** (fila a cada hora + resumo diário às 18h de Brasília). No plano **Hobby** da Vercel, cron só roda no máximo uma vez por dia — o cron horário da fila não vai disparar como configurado. Para o disparo em massa funcionar de verdade (não só o botão manual "processar agora" no painel), o projeto precisa estar no plano **Pro**.
-
-## 5. E-mail (Resend) — opcional, mas necessário para relatório automático
-
-Colar a chave em `RESEND_API_KEY` e configurar `EMAIL_FROM` com um domínio verificado no Resend. Sem isso:
-- O relatório da lista ao "Concluir" não sai por e-mail (mas continua disponível para baixar manualmente).
-- O resumo diário para o gestor não é enviado.
+5. O projeto usa **um cron por dia** (`/api/cron/queue`, ver `vercel.json`) — cabe no plano **Hobby** da Vercel (que só roda cron até 1x/dia, então não precisa de Pro). Ele cria e processa o lembrete de véspera (D-1), o reenvio pra quem não respondeu, fecha agendamentos vencidos como "sem resposta", expurga dado antigo (LGPD) e faz um ping no banco só pra evitar o Supabase pausar por inatividade. Decisão do usuário em 2026-08-15: só isso é automático — não existe mais resumo diário por e-mail pro gestor (removido de vez), e o disparo inicial de cada lista continua sendo manual ("Disparar confirmações" na Revisão).
 
 ## 6. Primeira operação
 
@@ -113,11 +107,9 @@ Na ordem, pelo painel:
 - [ ] `npx prisma migrate deploy` rodado
 - [ ] `SESSION_SECRET` gerado
 - [ ] Primeiro usuário criado com `npm run seed`
-- [ ] `ANTHROPIC_API_KEY` configurada (extração **e** classificação de respostas ambíguas)
+- [ ] `ANTHROPIC_API_KEY` configurada (só classificação de respostas ambíguas — a extração de PDF é local, sem IA, desde 2026-08-06)
 - [ ] Conta do WhatsApp Business criada e as 5 variáveis preenchidas
 - [ ] Templates submetidos e **aprovados** pela Meta (3 da Fase 1 + `lembrete_vespera` e `convite_vaga_aberta`)
 - [ ] Webhook cadastrado com `messages` e `message_status` assinados
 - [ ] `WHATSAPP_DAILY_LIMIT` conferido com o tier do número
-- [ ] `RESEND_API_KEY` e `EMAIL_FROM` configurados (relatório automático e resumo diário)
-- [ ] Projeto no Vercel com as variáveis e o `CRON_SECRET`
-- [ ] Plano **Pro** na Vercel (Hobby não roda cron mais de uma vez por dia — a fila precisa do cron horário)
+- [ ] Projeto no Vercel com as variáveis e o `CRON_SECRET`, e `crons` configurado no `vercel.json` (1x/dia — cabe no Hobby)

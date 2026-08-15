@@ -24,8 +24,8 @@ import { suggestionsRouter } from "@/modules/suggestions/suggestions.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData } from "@/modules/queue/cadence.service.js";
-import { sendDailySummary } from "@/modules/reports/daily-summary.service.js";
 import { PRIVACY_POLICY_HTML } from "@/legal/privacy.js";
+import { prisma } from "@/lib/prisma.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -112,17 +112,28 @@ export function createApp() {
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
   /*
-    Cron do Vercel (ver vercel.json). O Vercel manda
-    "Authorization: Bearer <CRON_SECRET>" automaticamente quando a variável
-    está configurada no projeto.
+    Cron do Vercel (ver vercel.json), uma vez por dia — cabe no plano Hobby
+    (que só roda cron até 1x/dia, por isso nunca dava pra ter o cron
+    horário que a fila pedia). Decisão do usuário em 2026-08-15: só
+    automatizar o lembrete de véspera (D-1) pro paciente — o resumo diário
+    pro gestor foi removido de vez (era um cron separado às 18h).
+    O Vercel manda "Authorization: Bearer <CRON_SECRET>" automaticamente
+    quando a variável está configurada no projeto, e sempre por GET — não
+    POST (é assim que o Vercel Cron invoca, sem exceção).
   */
-  app.post(
+  app.get(
     "/api/cron/queue",
     async (req, res, next) => {
       try {
         if (env.CRON_SECRET && req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
           return res.status(401).json({ error: "unauthorized" });
         }
+        // Keep-alive do Supabase: o projeto é free tier e pausa sozinho
+        // depois de um tempo sem uso (já aconteceu, precisou reativar na
+        // mão — ver CLAUDE.md). Rodando isto uma vez por dia o banco nunca
+        // fica tempo demais sem receber requisição nenhuma.
+        await prisma.$queryRaw`SELECT 1`;
+
         // Ordem importa: primeiro cria os jobs do dia (lembrete e reenvio),
         // depois processa a fila — assim o que foi enfileirado agora já sai
         // nesta mesma rodada, se couber no limite.
@@ -138,24 +149,6 @@ export function createApp() {
           closedAsNoAnswer: closed,
           purged,
         });
-      } catch (err) {
-        next(err);
-      }
-    }
-  );
-
-  /*
-    Resumo do dia pro gestor — cron próprio, uma vez por dia (18h de
-    Brasília), separado do cron horário da fila. Ver vercel.json.
-  */
-  app.post(
-    "/api/cron/daily-summary",
-    async (req, res, next) => {
-      try {
-        if (env.CRON_SECRET && req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
-          return res.status(401).json({ error: "unauthorized" });
-        }
-        res.json(await sendDailySummary());
       } catch (err) {
         next(err);
       }

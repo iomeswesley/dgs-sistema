@@ -51,10 +51,11 @@ queueRouter.post(
 
 /**
  * Roda a cadência do dia inteira na mão — os mesmos passos do cron
- * (/api/cron/queue), pra usar enquanto o cron horário não está ativo (plano
- * Hobby só roda 1x/dia): lembrete de véspera, reenvio por telefone
- * alternativo, envio da fila, fechamento de quem passou do horário sem
- * responder, e expurgo LGPD do que passou do prazo de retenção.
+ * (/api/cron/queue, que já roda sozinho 1x/dia): lembrete de véspera,
+ * reenvio por telefone alternativo, envio da fila, fechamento de quem
+ * passou do horário sem responder, e expurgo LGPD do que passou do prazo
+ * de retenção. Útil pra forçar uma rodada extra no mesmo dia sem esperar
+ * o cron, ou pra testar sem depender dele.
  */
 queueRouter.post(
   "/api/queue/run-cadence",
