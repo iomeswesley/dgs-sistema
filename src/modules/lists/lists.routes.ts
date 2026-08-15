@@ -5,7 +5,14 @@ import { prisma } from "@/lib/prisma.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
-import { approveList, checkUnit, editAppointment, extractAndStage, removeAppointment } from "./lists.service.js";
+import {
+  approveList,
+  checkUnit,
+  deleteList,
+  editAppointment,
+  extractAndStage,
+  removeAppointment,
+} from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
@@ -155,6 +162,14 @@ listsRouter.post(
         console.error(`[LISTA ${list.id}] Falha na extração:`, (err as Error).message)
       );
     }
+  })
+);
+
+listsRouter.delete(
+  "/api/lists/:id",
+  asyncHandler(async (req, res) => {
+    await deleteList(routeId(req), currentUserId(req));
+    res.status(204).end();
   })
 );
 

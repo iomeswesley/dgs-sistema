@@ -379,3 +379,32 @@ export async function approveList(
   });
   await recordAudit({ userId, action: "approve", entity: "List", entityId: listId });
 }
+
+/**
+ * Exclui a lista inteira (arquivo, agendamentos e a fila de mensagens
+ * ligada a eles — cascade no banco, ver `onDelete: Cascade` em
+ * Appointment/MessageJob). Só antes do disparo: depois de DISPARADA a
+ * lista carrega WhatsApp de verdade enviado a pacientes reais — apagar
+ * derrubaria histórico e indicadores sem trazer nada de volta. Pra esses
+ * casos, "Remover" linha por linha na revisão continua existindo, mas a
+ * lista em si fica pra registro.
+ */
+export async function deleteList(listId: number, userId: number): Promise<void> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+  if (list.status === "DISPARADA" || list.status === "CONCLUIDA") {
+    throw new AppError(
+      "Lista já disparada não pode ser excluída — tem WhatsApp de verdade enviado a pacientes. Remova os agendamentos indevidos um a um, se for o caso.",
+      409
+    );
+  }
+
+  await recordAudit({
+    userId,
+    action: "delete",
+    entity: "List",
+    entityId: listId,
+    oldValue: `${list.originalName} (${list.status})`,
+  });
+  await prisma.list.delete({ where: { id: listId } });
+}

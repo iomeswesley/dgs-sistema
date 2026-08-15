@@ -91,9 +91,9 @@ export function Revisao() {
     scheduledAt: "",
   });
   const [removing, setRemoving] = useState<Appointment | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"approve" | "dispatch" | "conclude" | "reprocess" | null>(
-    null
-  );
+  const [confirmAction, setConfirmAction] = useState<
+    "approve" | "dispatch" | "conclude" | "reprocess" | "delete" | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -190,7 +190,11 @@ export function Revisao() {
     setBusy(true);
     setError(null);
     try {
-      if (confirmAction === "approve") {
+      if (confirmAction === "delete") {
+        await api.delete(`/api/lists/${list.id}`);
+        navigate("/listas");
+        return;
+      } else if (confirmAction === "approve") {
         await api.post(`/api/lists/${list.id}/approve`, { confirmUnitMismatch: unitConfirmed });
         setNotice("Lista aprovada. Agora dá para disparar as confirmações.");
       } else if (confirmAction === "reprocess") {
@@ -242,6 +246,16 @@ export function Revisao() {
             <a className="btn btn-quiet" href={`/api/indicators/list-report?listId=${list.id}`}>
               Exportar
             </a>
+            {list.status !== "DISPARADA" && list.status !== "CONCLUIDA" && (
+              <button
+                type="button"
+                className="btn btn-quiet"
+                style={{ color: "var(--mark-red)" }}
+                onClick={() => setConfirmAction("delete")}
+              >
+                Excluir lista
+              </button>
+            )}
             {list.status === "ERRO" && (
               <button type="button" className="btn btn-primary" onClick={() => setConfirmAction("reprocess")}>
                 Tentar novamente
@@ -551,34 +565,41 @@ export function Revisao() {
       <ConfirmModal
         open={confirmAction !== null}
         title={
-          confirmAction === "approve"
-            ? "Aprovar a lista?"
-            : confirmAction === "reprocess"
-              ? "Tentar a leitura de novo?"
-              : confirmAction === "dispatch"
-                ? "Disparar as confirmações?"
-                : "Concluir esta lista?"
+          confirmAction === "delete"
+            ? "Excluir esta lista?"
+            : confirmAction === "approve"
+              ? "Aprovar a lista?"
+              : confirmAction === "reprocess"
+                ? "Tentar a leitura de novo?"
+                : confirmAction === "dispatch"
+                  ? "Disparar as confirmações?"
+                  : "Concluir esta lista?"
         }
         description={
-          confirmAction === "approve"
-            ? "Depois de aprovada a revisão fecha e os dados não podem mais ser corrigidos aqui."
-            : confirmAction === "reprocess"
-              ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
-              : confirmAction === "dispatch"
-                ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
-                    pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
-                  }`
-                : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar\" para enviar à secretaria manualmente."
+          confirmAction === "delete"
+            ? `"${list.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
+            : confirmAction === "approve"
+              ? "Depois de aprovada a revisão fecha e os dados não podem mais ser corrigidos aqui."
+              : confirmAction === "reprocess"
+                ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
+                : confirmAction === "dispatch"
+                  ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
+                      pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
+                    }`
+                  : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar\" para enviar à secretaria manualmente."
         }
         confirmLabel={
-          confirmAction === "approve"
-            ? "Aprovar"
-            : confirmAction === "reprocess"
-              ? "Tentar novamente"
-              : confirmAction === "dispatch"
-                ? "Disparar"
-                : "Concluir"
+          confirmAction === "delete"
+            ? "Excluir"
+            : confirmAction === "approve"
+              ? "Aprovar"
+              : confirmAction === "reprocess"
+                ? "Tentar novamente"
+                : confirmAction === "dispatch"
+                  ? "Disparar"
+                  : "Concluir"
         }
+        danger={confirmAction === "delete"}
         busy={busy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}

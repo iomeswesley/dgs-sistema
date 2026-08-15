@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, PageHeader } from "../components/AppShell";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
 import { StatusBand } from "../components/StatusBand";
 import { ErrorNote, Field, Spinner } from "../components/ui";
@@ -112,6 +113,11 @@ export function Listas() {
   const [agendaId, setAgendaId] = useState<string>("");
   const [isComplementary, setIsComplementary] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Excluir lista: só antes do disparo (o backend recusa depois — mensagem
+  // real já foi pro paciente, e apagar derrubaria histórico/indicadores).
+  const [removing, setRemoving] = useState<ListSummary | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
   // Preview: lê o arquivo na hora (rápido, local, sem IA) assim que
   // escolhido, pra sugerir município/agenda antes do envio de verdade.
@@ -340,6 +346,22 @@ export function Listas() {
       setAgendaError(err instanceof Error ? err.message : "Falha ao criar a agenda.");
     } finally {
       setAgendaBusy(false);
+    }
+  }
+
+  async function handleRemove() {
+    if (!removing) return;
+    setRemoveBusy(true);
+    setError(null);
+    try {
+      await api.delete(`/api/lists/${removing.id}`);
+      setRemoving(null);
+      lists.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao excluir a lista.");
+      setRemoving(null);
+    } finally {
+      setRemoveBusy(false);
     }
   }
 
@@ -627,6 +649,7 @@ export function Listas() {
       <div className="grid gap-3">
         {lists.data?.lists.map((list) => {
           const total = Object.values(list.counts).reduce((sum, value) => sum + value, 0);
+          const canDelete = list.status !== "DISPARADA" && list.status !== "CONCLUIDA";
           return (
             <Link key={list.id} to={`/listas/${list.id}`} className="card block p-5 hover:border-accent">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -643,7 +666,23 @@ export function Listas() {
                     {list.uploadedBy.name} em {formatDate(list.createdAt)}
                   </p>
                 </div>
-                <span className="eyebrow shrink-0">{LIST_STATUS_LABEL[list.status] ?? list.status}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="eyebrow">{LIST_STATUS_LABEL[list.status] ?? list.status}</span>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setError(null);
+                        setRemoving(list);
+                      }}
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </div>
               </div>
 
               {list.extractionError && (
@@ -661,6 +700,21 @@ export function Listas() {
           );
         })}
       </div>
+
+      <ConfirmModal
+        open={removing !== null}
+        title="Excluir esta lista?"
+        description={
+          removing
+            ? `"${removing.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
+            : ""
+        }
+        confirmLabel="Excluir"
+        danger
+        busy={removeBusy}
+        onConfirm={handleRemove}
+        onCancel={() => setRemoving(null)}
+      />
     </>
   );
 }
