@@ -1031,6 +1031,7 @@ function WhatsappTab() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [switching, setSwitching] = useState<number | null>(null);
+  const [adopting, setAdopting] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -1112,6 +1113,20 @@ function WhatsappTab() {
     }
   }
 
+  /** Vira uma conta de verdade na tabela — mesmo token, só passa a ter apelido/remover pela tela. */
+  async function adoptEnv() {
+    setError(null);
+    setAdopting(true);
+    try {
+      await api.post("/api/whatsapp/signup/accounts/adopt-env", {});
+      reloadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao adotar o número do .env.");
+    } finally {
+      setAdopting(false);
+    }
+  }
+
   async function rename(accountId: number) {
     setError(null);
     try {
@@ -1175,6 +1190,9 @@ function WhatsappTab() {
             Isso é só o fallback do <code>.env</code> — conecte um número abaixo pra passar a gerenciar pela tela,
             com failover entre dois números.
           </p>
+          <button type="button" className="btn btn-quiet mt-2" disabled={adopting} onClick={() => void adoptEnv()}>
+            {adopting ? "Adotando…" : "Gerenciar pela tela (apelido/remover)"}
+          </button>
         </div>
       )}
 

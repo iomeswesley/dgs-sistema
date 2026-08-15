@@ -25,6 +25,11 @@ const envSchema = z.object({
   // só pro fluxo de desenvolvimento/sandbox sem passar pela tela de conectar.
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  // WABA (WhatsApp Business Account) dona do número do fallback — só usado
+  // pra "adotar" o fallback como conta gerenciável pela tela (ver
+  // adoptEnvAccount em whatsapp-account.service.ts). Existia no .env desde
+  // sempre mas nunca tinha sido lido pelo código até 2026-08-15.
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
   // App ID (público, não é segredo — vai pro frontend) e o Configuration ID

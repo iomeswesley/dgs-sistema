@@ -10,6 +10,7 @@ import { normalizePhoneList } from "@/lib/phone.js";
 import { sendTemplate } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import {
+  adoptEnvAccount,
   exchangeSignupCode,
   getConnectionStatus,
   listAccounts,
@@ -82,6 +83,18 @@ whatsappSignupRouter.get(
   "/api/whatsapp/signup/accounts",
   asyncHandler(async (_req, res) => {
     res.json({ accounts: await listAccounts() });
+  })
+);
+
+/**
+ * Adota o fallback do .env como conta gerenciável (edita apelido, remove) —
+ * botão "Gerenciar pela tela" no card do número via .env.
+ */
+whatsappSignupRouter.post(
+  "/api/whatsapp/signup/accounts/adopt-env",
+  asyncHandler(async (req, res) => {
+    await adoptEnvAccount(currentUserId(req));
+    res.json({ status: await getConnectionStatus(), accounts: await listAccounts() });
   })
 );
 

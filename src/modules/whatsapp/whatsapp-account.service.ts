@@ -266,6 +266,50 @@ export async function saveConnection(input: SaveConnectionInput): Promise<void> 
   });
 }
 
+/**
+ * "Adota" o fallback do .env como uma conta de verdade na tabela — a
+ * equipe pediu pra poder editar apelido e remover o número que hoje só
+ * aparece como texto fixo (source: "env"), porque a credencial vive na
+ * variável de ambiente, sem linha nenhuma pra editar/remover. Depois de
+ * adotado, funciona igual a qualquer conta conectada via Embedded Signup
+ * (mesmo token, então o envio nem percebe a troca) — inclusive dá pra
+ * remover de novo depois, e aí volta a cair no fallback do .env como
+ * antes (as variáveis continuam lá).
+ */
+export async function adoptEnvAccount(userId: number): Promise<void> {
+  if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
+    throw new Error("Não há credencial no .env pra adotar (falta WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID).");
+  }
+  if (!env.WHATSAPP_BUSINESS_ACCOUNT_ID) {
+    throw new Error("Falta WHATSAPP_BUSINESS_ACCOUNT_ID no .env — é o WABA ID, necessário pra virar conta gerenciável.");
+  }
+
+  const existing = await prisma.whatsappAccount.findFirst({
+    where: { phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID },
+  });
+  if (existing) return; // já foi adotado antes — idempotente, não duplica
+
+  const isFirst = (await prisma.whatsappAccount.count()) === 0;
+
+  const account = await prisma.whatsappAccount.create({
+    data: {
+      wabaId: env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+      phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+      accessToken: env.WHATSAPP_ACCESS_TOKEN,
+      connectedById: userId,
+      active: isFirst,
+    },
+  });
+
+  await recordAudit({
+    userId,
+    action: "whatsapp.adopted_env",
+    entity: "WhatsappAccount",
+    entityId: account.id,
+    metadata: { wabaId: account.wabaId, phoneNumberId: account.phoneNumberId },
+  });
+}
+
 /** Troca qual conta está ativa — é o botão de failover manual na tela. */
 export async function setActiveAccount(accountId: number, userId: number): Promise<void> {
   const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
