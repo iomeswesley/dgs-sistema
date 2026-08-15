@@ -27,12 +27,14 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 **Cadastro de produção está vazio de propósito** (checado e limpo em 2026-08-15 — havia um resquício de teste de 2026-07-27 esquecido lá, removido). Precisa popular com município/unidade/médico/procedimento reais antes do cliente operar pra valer.
 
-### Pendências abertas nesta sessão (2026-08-15), ainda não resolvidas
-- Botão de **excluir lista** não existe na tela de Listas (só existe excluir linha/agendamento dentro de uma lista). Pedido do usuário: adicionar, com `ConfirmModal` no padrão do resto do sistema.
-- **Sem checagem de unidade/endereço antes do disparo**: hoje não existe nem campo pra escolher Unidade na tela de envio de lista (só Município e Agenda) — e quando há mais de uma unidade no município, nada impede a agenda vinculada apontar pro endereço errado na mensagem. Usuário pediu um comparativo "o que o PDF diz vs o que está cadastrado" antes de disparar. Não construído ainda.
-- Município não está mais pré-preenchendo sozinho no preview do upload, segundo o usuário — **não investigado ainda**, checar `lists.preview.ts`/matching antes de mexer em qualquer outra coisa relacionada.
-- Remover relatório automático por e-mail + campos de contato da secretaria (`contactName`/`contactPhone`/`contactEmail` em `Municipality`) — pedido explícito de remoção de escopo, não é só desativar.
-- Juntar cadastro de Unidade com o de Município num fluxo só (hoje são duas telas/abas separadas em Configurações).
+### Pendências abertas (2026-08-15)
+- Botão de **excluir lista** não existe na tela de Listas (só existe excluir linha/agendamento dentro de uma lista). Pedido do usuário: adicionar, com `ConfirmModal` no padrão do resto do sistema. **Ainda não construído.**
+
+### Resolvido nesta sessão (2026-08-15)
+- **Município não pré-preenchia no preview do upload**: não era bug de lógica — o `/api/lists/preview` estava caindo por causa do crash de extração em produção (`DOMMatrix`/worker, já corrigidos em `2ff37fa`/`1bb0bc1`), e o frontend engolia o erro em silêncio. Testado com PDF real de produção (Camboriú): município/unidade/agenda batem certinho. `Listas.tsx` agora mostra erro visível quando o preview falha, em vez de falhar calado.
+- **Checagem de unidade/endereço antes de aprovar e disparar**: `checkUnit()` (`lists.service.ts`) compara a unidade da agenda vinculada (cadastro) com o texto que a extração leu no PDF, exposta como `unitCheck` em `GET /api/lists/:id`. `approveList()` **bloqueia no backend** (409) se houver problema (sem agenda, agenda sem unidade, unidade sem endereço, ou PDF×cadastro não batendo) e a equipe não tiver marcado `confirmUnitMismatch`. Revisão mostra o comparativo "PDF diz / Cadastro diz" com checkbox obrigatório antes de Aprovar/Disparar. Tela de envio de lista agora mostra o endereço que vai pra mensagem assim que uma agenda é selecionada, com aviso se não bate com o que o PDF trouxe.
+- **Relatório automático por e-mail + contato de secretaria removidos de vez**: `contactName`/`contactPhone`/`contactEmail` tirados do schema `Municipality` (migration `20260815020000`, aplicada em produção — campos estavam vazios, sem dado real perdido). `POST /api/lists/:id/conclude` só marca `CONCLUIDA` agora; relatório continua disponível só por download manual ("Exportar"). `lib/email.ts` continua existindo — ainda usado pelo resumo diário ao gestor (`daily-summary.service.ts`), que é feature separada e não foi tocada.
+- **Cadastro de Unidade juntado ao de Município**: aba "Unidades" removida de Configurações; cada card de município na aba Municípios já mostra as unidades dele com "Nova unidade" ali dentro (sem select de município, sem trocar de aba). `GET /api/catalog/units` continua existindo, só perdeu a tela própria.
 
 ## Ambiente local (já configurado nesta máquina)
 
