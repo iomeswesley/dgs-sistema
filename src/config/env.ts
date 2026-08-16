@@ -38,6 +38,15 @@ const envSchema = z.object({
   // WhatsApp" não aparece nas Configurações.
   WHATSAPP_APP_ID: z.string().optional(),
   WHATSAPP_SIGNUP_CONFIG_ID: z.string().optional(),
+  // Configuração do Embedded Signup a usar pro botão de coexistência
+  // (número que já tem WhatsApp Business App instalado) — só precisa ser
+  // diferente da de cima se a equipe criar uma configuração dedicada no
+  // WhatsApp Manager da Meta. Enquanto não existir uma separada,
+  // signup.routes.ts cai pra WHATSAPP_SIGNUP_CONFIG_ID mesmo — é o que já
+  // está configurado hoje (o config_id documentado no CLAUDE.md pro link
+  // de coexistência é literalmente o mesmo valor do WHATSAPP_SIGNUP_CONFIG_ID
+  // atual, então não tem uma config separada de verdade ainda).
+  WHATSAPP_SIGNUP_CONFIG_ID_COEXISTENCE: z.string().optional(),
   // Teto de mensagens por dia — fallback quando a consulta à Graph API falha
   // ou não há conta conectada (sandbox/dev). Em produção, o limite real vem
   // do messaging_limit_tier do número (ver whatsapp-account.service.ts),

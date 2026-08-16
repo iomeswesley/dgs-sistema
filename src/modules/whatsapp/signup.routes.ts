@@ -31,6 +31,9 @@ whatsappSignupRouter.get(
     res.json({
       appId: env.WHATSAPP_APP_ID ?? null,
       configId: env.WHATSAPP_SIGNUP_CONFIG_ID ?? null,
+      // Cai pra mesma config quando não existe uma dedicada pra
+      // coexistência (é o caso hoje — ver comentário em config/env.ts).
+      configIdCoexistence: env.WHATSAPP_SIGNUP_CONFIG_ID_COEXISTENCE ?? env.WHATSAPP_SIGNUP_CONFIG_ID ?? null,
       status: await getConnectionStatus(),
     });
   })

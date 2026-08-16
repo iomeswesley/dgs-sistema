@@ -967,6 +967,8 @@ function AgendasTab() {
 interface WhatsappSignupConfig {
   appId: string | null;
   configId: string | null;
+  /** Configuração separada do Embedded Signup com coexistência habilitada — pra número que já tem WhatsApp Business App. */
+  configIdCoexistence: string | null;
   status: {
     connected: boolean;
     source: "signup" | "env" | null;
@@ -1009,6 +1011,14 @@ declare global {
 
 const FB_SDK_ID = "facebook-jssdk";
 
+// A Meta manda dois eventos de conclusão diferentes: "FINISH" pra número
+// novo/limpo, e "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" quando é
+// coexistência (número que já usa o WhatsApp Business App) — ignorar o
+// segundo fazia a conexão terminar de verdade do lado da Meta, mas o nosso
+// callback nunca rodava, e a tela mostrava "login cancelado" sem ter
+// cancelado nada.
+const SIGNUP_FINISH_EVENTS = new Set(["FINISH", "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"]);
+
 function loadFacebookSdk(appId: string): Promise<void> {
   return new Promise((resolve) => {
     if (window.FB) return resolve();
@@ -1047,7 +1057,7 @@ function WhatsappTab() {
       if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === "WA_EMBEDDED_SIGNUP" && payload.event === "FINISH") {
+        if (payload.type === "WA_EMBEDDED_SIGNUP" && SIGNUP_FINISH_EVENTS.has(payload.event)) {
           signupData.current = {
             wabaId: payload.data?.waba_id,
             phoneNumberId: payload.data?.phone_number_id,
@@ -1062,8 +1072,15 @@ function WhatsappTab() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  async function connect() {
-    if (!data.data?.appId || !data.data?.configId) return;
+  /**
+   * @param configId Qual configuração de Embedded Signup usar — a padrão
+   *   (número novo/limpo) ou a de coexistência (número que já tem WhatsApp
+   *   Business App instalado, ver `configIdCoexistence`). É a configuração
+   *   que decide se a Meta oferece a opção de manter o app; não tem nada
+   *   pra diferenciar isso nos `extras` do FB.login.
+   */
+  async function connect(configId: string) {
+    if (!data.data?.appId) return;
     setError(null);
     setConnecting(true);
     try {
@@ -1088,7 +1105,7 @@ function WhatsappTab() {
           })();
         },
         {
-          config_id: data.data.configId,
+          config_id: configId,
           response_type: "code",
           override_default_response_type: true,
           extras: { setup: {} },
@@ -1152,7 +1169,9 @@ function WhatsappTab() {
   }
 
   const status = data.data?.status;
-  const missingAppConfig = data.data && (!data.data.appId || !data.data.configId);
+  // Sem appId o SDK da Meta nem carrega — os dois botões de conectar ficam
+  // desabilitados individualmente se faltar o config_id específico de cada um.
+  const missingAppConfig = data.data && !data.data.appId;
   const accountList = accounts.data?.accounts ?? [];
   const removingAccount = accountList.find((account) => account.id === removingId);
 
@@ -1175,8 +1194,8 @@ function WhatsappTab() {
 
       {missingAppConfig && (
         <p className="card mt-3 p-4 text-sm text-ink-muted">
-          Faltam <code>WHATSAPP_APP_ID</code> e/ou <code>WHATSAPP_SIGNUP_CONFIG_ID</code> no ambiente do
-          servidor — sem eles o botão de conectar não pode aparecer.
+          Falta <code>WHATSAPP_APP_ID</code> no ambiente do servidor — sem ele nenhum botão de conectar
+          funciona.
         </p>
       )}
 
@@ -1297,13 +1316,32 @@ function WhatsappTab() {
           ))}
 
           {!missingAppConfig && (
-            <div className="mt-3">
-              <button type="button" className="btn btn-quiet" disabled={connecting} onClick={connect}>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={connecting || !data.data?.configId}
+                onClick={() => data.data?.configId && void connect(data.data.configId)}
+                title={!data.data?.configId ? "Falta WHATSAPP_SIGNUP_CONFIG_ID no ambiente." : undefined}
+              >
                 {connecting
                   ? "Conectando…"
                   : accountList.length > 0
                     ? "Conectar outro número (reserva)"
-                    : "Conectar WhatsApp"}
+                    : "Conectar WhatsApp (número novo/limpo)"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={connecting || !data.data?.configIdCoexistence}
+                onClick={() => data.data?.configIdCoexistence && void connect(data.data.configIdCoexistence)}
+                title={
+                  !data.data?.configIdCoexistence
+                    ? "Falta WHATSAPP_SIGNUP_CONFIG_ID_COEXISTENCE no ambiente."
+                    : "Pro número que já tem WhatsApp Business App instalado — a Meta manda um código pro app do celular pra confirmar."
+                }
+              >
+                {connecting ? "Conectando…" : "Conectar número que já usa WhatsApp Business App"}
               </button>
             </div>
           )}
