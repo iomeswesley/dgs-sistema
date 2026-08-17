@@ -1058,13 +1058,17 @@ function WhatsappTab() {
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
+      // TEMPORÁRIO (2026-08-16): loga TUDO que chega por postMessage, antes
+      // até do filtro de origem — "nada apareceu" no teste anterior pode ter
+      // sido o filtro de origem descartando cedo demais, ou o DevTools
+      // escondendo console.debug (cai como "Verbose", oculto por padrão).
+      // console.warn não tem esse problema de nível.
+      console.warn("[WHATSAPP SIGNUP] postMessage bruto — origin:", event.origin, "data:", event.data);
+
       if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
       try {
         const payload = JSON.parse(event.data);
-        // TEMPORÁRIO (2026-08-16): diagnosticar "Login cancelado" mesmo
-        // completando o fluxo até o Finish — logando tudo que chega por
-        // postMessage, casando ou não com o que o código já reconhece.
-        console.debug("[WHATSAPP SIGNUP] postMessage recebido:", payload);
+        console.warn("[WHATSAPP SIGNUP] postMessage reconhecido (origem ok):", payload);
         if (payload.type === "WA_EMBEDDED_SIGNUP" && SIGNUP_FINISH_EVENTS.has(payload.event)) {
           signupData.current = {
             wabaId: payload.data?.waba_id,
@@ -1093,6 +1097,11 @@ function WhatsappTab() {
     setConnecting(true);
     try {
       await loadFacebookSdk(data.data.appId);
+      // TEMPORÁRIO (2026-08-16): se window.FB estiver undefined aqui, o
+      // `?.` abaixo faz `login()` nunca ser chamado — nenhum popup, nenhum
+      // callback, nenhum log depois. É a explicação mais simples pra "nada
+      // apareceu" no Console.
+      console.warn("[WHATSAPP SIGNUP] SDK carregado? window.FB =", window.FB, "configId:", configId);
       window.FB?.login(
         (response) => {
           void (async () => {
@@ -1100,7 +1109,7 @@ function WhatsappTab() {
             // FB.login() — response.authResponse costuma vir vazio quando
             // a Meta considera "cancelado", e precisamos ver o que
             // realmente chega pra saber por quê.
-            console.debug("[WHATSAPP SIGNUP] FB.login respondeu:", response, "signupData:", signupData.current);
+            console.warn("[WHATSAPP SIGNUP] FB.login respondeu:", response, "signupData:", signupData.current);
             const code = response.authResponse?.code;
             if (!code || !signupData.current?.wabaId || !signupData.current?.phoneNumberId) {
               setConnecting(false);
