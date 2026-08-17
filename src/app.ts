@@ -45,6 +45,15 @@ export function createApp() {
 
   app.use(
     helmet({
+      // Padrão do helmet é "same-origin", que isola a página do popup que o
+      // FB.login() abre (connect.facebook.net) — o navegador corta a relação
+      // entre as duas janelas, e o SDK da Meta perde a capacidade de saber
+      // quando o popup termina. Resultado: o callback dispara na hora com
+      // "cancelado", mesmo com o popup ainda aberto e a pessoa no meio do
+      // fluxo. "same-origin-allow-popups" resolve — mantém o isolamento de
+      // outras janelas cross-origin em geral, só libera especificamente pra
+      // popup que a própria página abriu de propósito.
+      crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
