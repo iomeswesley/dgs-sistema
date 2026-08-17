@@ -1061,6 +1061,10 @@ function WhatsappTab() {
       if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
       try {
         const payload = JSON.parse(event.data);
+        // TEMPORÁRIO (2026-08-16): diagnosticar "Login cancelado" mesmo
+        // completando o fluxo até o Finish — logando tudo que chega por
+        // postMessage, casando ou não com o que o código já reconhece.
+        console.debug("[WHATSAPP SIGNUP] postMessage recebido:", payload);
         if (payload.type === "WA_EMBEDDED_SIGNUP" && SIGNUP_FINISH_EVENTS.has(payload.event)) {
           signupData.current = {
             wabaId: payload.data?.waba_id,
@@ -1092,6 +1096,11 @@ function WhatsappTab() {
       window.FB?.login(
         (response) => {
           void (async () => {
+            // TEMPORÁRIO (2026-08-16): mesmo diagnóstico do lado do
+            // FB.login() — response.authResponse costuma vir vazio quando
+            // a Meta considera "cancelado", e precisamos ver o que
+            // realmente chega pra saber por quê.
+            console.debug("[WHATSAPP SIGNUP] FB.login respondeu:", response, "signupData:", signupData.current);
             const code = response.authResponse?.code;
             if (!code || !signupData.current?.wabaId || !signupData.current?.phoneNumberId) {
               setConnecting(false);
