@@ -1040,6 +1040,7 @@ function WhatsappTab() {
   const accounts = useApi<{ accounts: WhatsappAccountSummary[] }>("/api/whatsapp/signup/accounts");
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [switching, setSwitching] = useState<number | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
@@ -1133,9 +1134,14 @@ function WhatsappTab() {
   /** Vira uma conta de verdade na tabela — mesmo token, só passa a ter apelido/remover pela tela. */
   async function adoptEnv() {
     setError(null);
+    setNotice(null);
     setAdopting(true);
     try {
       await api.post("/api/whatsapp/signup/accounts/adopt-env", {});
+      // O número continua o mesmo — o card "Em uso agora" some e o mesmo
+      // número reaparece na lista abaixo, com editar/remover. Sem aviso,
+      // parece que nada mudou.
+      setNotice('Número adotado. Ele saiu do card "via variável de ambiente" e passou pra lista abaixo, com apelido e Remover.');
       reloadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao adotar o número do .env.");
@@ -1158,8 +1164,23 @@ function WhatsappTab() {
 
   async function remove(accountId: number) {
     setError(null);
+    setNotice(null);
     try {
-      await api.delete(`/api/whatsapp/signup/accounts/${accountId}`);
+      const result = await api.delete<{ status: WhatsappSignupConfig["status"] }>(
+        `/api/whatsapp/signup/accounts/${accountId}`
+      );
+      // Sem isso o resultado fica ambíguo: se sobrar o fallback do .env com o
+      // MESMO número que acabou de ser removido, a tela mostra o número
+      // idêntico de novo e parece que o "Remover" não fez nada.
+      if (result.status.connected && result.status.source === "env") {
+        setNotice(
+          `Número removido da tela. Como ainda há credencial no .env (número ${result.status.phoneNumberId}), o envio caiu de volta pra esse fallback — pra desativar de vez, mude as variáveis no ambiente do servidor.`
+        );
+      } else if (result.status.connected) {
+        setNotice(`Número removido. O envio agora está usando outra conta conectada pela tela.`);
+      } else {
+        setNotice("Número removido. Nenhuma credencial disponível agora — o envio de WhatsApp para até conectar outra.");
+      }
       reloadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao remover o número.");
@@ -1189,6 +1210,11 @@ function WhatsappTab() {
       {error && (
         <div className="my-3">
           <ErrorNote message={error} />
+        </div>
+      )}
+      {notice && (
+        <div className="my-3">
+          <Callout>{notice}</Callout>
         </div>
       )}
 
