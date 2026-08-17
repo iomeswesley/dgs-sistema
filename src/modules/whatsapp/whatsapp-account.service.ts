@@ -15,6 +15,8 @@ export interface ConnectionStatus {
   source: "signup" | "env" | null;
   wabaId: string | null;
   phoneNumberId: string | null;
+  /** Número de verdade formatado pela Meta (ex.: "+55 47 8865-6379") — o phoneNumberId é só um ID interno, não diz nada pro time/cliente. */
+  displayPhoneNumber: string | null;
   businessName: string | null;
   connectedAt: Date | null;
   qualityRating: string | null;
@@ -26,6 +28,7 @@ export interface WhatsappAccountSummary {
   id: number;
   wabaId: string;
   phoneNumberId: string;
+  displayPhoneNumber: string | null;
   businessName: string | null;
   label: string | null;
   active: boolean;
@@ -51,46 +54,68 @@ export interface PhoneNumberStatus {
   qualityRating: string | null;
   messagingLimitTier: string | null;
   dailyLimit: number;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
 }
 
-let statusCache: { value: PhoneNumberStatus; fetchedAt: number } | null = null;
 const STATUS_CACHE_MS = 5 * 60 * 1000;
+// Cacheado por phoneNumberId (não só um valor único) — a tela de contas
+// conectadas pode ter mais de um número (failover), cada um com seu
+// próprio display_phone_number, sem depender de qual está "ativo" agora.
+const phoneStatusCache = new Map<string, { value: PhoneNumberStatus; fetchedAt: number }>();
 
 /**
- * Consulta quality_rating e messaging_limit_tier na Graph API. Cacheado por
- * 5 minutos: é chamado a cada carregamento da fila, não vale bater na Meta
- * toda hora. Falha na consulta nunca trava o envio — cai pro limite do .env.
+ * Consulta display_phone_number, verified_name, quality_rating e
+ * messaging_limit_tier na Graph API pra um número específico. Cacheado por
+ * 5 minutos por phoneNumberId: é chamado a cada carregamento da fila/tela,
+ * não vale bater na Meta toda hora. Falha na consulta nunca trava o envio
+ * — cai pro limite do .env e mostra o phoneNumberId cru como último recurso.
  */
-export async function getPhoneNumberStatus(): Promise<PhoneNumberStatus | null> {
-  const credentials = await getActiveCredentials();
-  if (!credentials) return null;
-
-  if (statusCache && Date.now() - statusCache.fetchedAt < STATUS_CACHE_MS) {
-    return statusCache.value;
+export async function getPhoneNumberInfo(phoneNumberId: string, accessToken: string): Promise<PhoneNumberStatus> {
+  const cached = phoneStatusCache.get(phoneNumberId);
+  if (cached && Date.now() - cached.fetchedAt < STATUS_CACHE_MS) {
+    return cached.value;
   }
 
   try {
-    const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${credentials.phoneNumberId}`);
-    url.searchParams.set("fields", "quality_rating,messaging_limit_tier");
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${credentials.accessToken}` } });
+    const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}`);
+    url.searchParams.set("fields", "display_phone_number,verified_name,quality_rating,messaging_limit_tier");
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const payload = (await res.json().catch(() => ({}))) as {
+      display_phone_number?: string;
+      verified_name?: string;
       quality_rating?: string;
       messaging_limit_tier?: string;
     };
-    if (!res.ok) throw new Error("Falha ao consultar status do número na Meta");
+    if (!res.ok) throw new Error("Falha ao consultar o número na Meta");
 
     const tier = payload.messaging_limit_tier ?? null;
     const value: PhoneNumberStatus = {
       qualityRating: payload.quality_rating ?? null,
       messagingLimitTier: tier,
       dailyLimit: (tier && TIER_LIMITS[tier]) || env.WHATSAPP_DAILY_LIMIT,
+      displayPhoneNumber: payload.display_phone_number ?? null,
+      verifiedName: payload.verified_name ?? null,
     };
-    statusCache = { value, fetchedAt: Date.now() };
+    phoneStatusCache.set(phoneNumberId, { value, fetchedAt: Date.now() });
     return value;
   } catch (err) {
-    console.error("[WHATSAPP] Falha ao consultar quality_rating/tier:", (err as Error).message);
-    return { qualityRating: null, messagingLimitTier: null, dailyLimit: env.WHATSAPP_DAILY_LIMIT };
+    console.error(`[WHATSAPP] Falha ao consultar número ${phoneNumberId} na Meta:`, (err as Error).message);
+    return {
+      qualityRating: null,
+      messagingLimitTier: null,
+      dailyLimit: env.WHATSAPP_DAILY_LIMIT,
+      displayPhoneNumber: null,
+      verifiedName: null,
+    };
   }
+}
+
+/** Igual `getPhoneNumberInfo`, mas já resolve a credencial ativa — é o que a fila e o status geral usam. */
+export async function getPhoneNumberStatus(): Promise<PhoneNumberStatus | null> {
+  const credentials = await getActiveCredentials();
+  if (!credentials) return null;
+  return getPhoneNumberInfo(credentials.phoneNumberId, credentials.accessToken);
 }
 
 /**
@@ -120,15 +145,21 @@ export async function isWhatsappConfigured(): Promise<boolean> {
 
 export async function listAccounts(): Promise<WhatsappAccountSummary[]> {
   const accounts = await prisma.whatsappAccount.findMany({ orderBy: { connectedAt: "desc" } });
-  return accounts.map((account) => ({
-    id: account.id,
-    wabaId: account.wabaId,
-    phoneNumberId: account.phoneNumberId,
-    businessName: account.businessName,
-    label: account.label,
-    active: account.active,
-    connectedAt: account.connectedAt,
-  }));
+  return Promise.all(
+    accounts.map(async (account) => {
+      const info = await getPhoneNumberInfo(account.phoneNumberId, account.accessToken);
+      return {
+        id: account.id,
+        wabaId: account.wabaId,
+        phoneNumberId: account.phoneNumberId,
+        displayPhoneNumber: info.displayPhoneNumber,
+        businessName: account.businessName,
+        label: account.label,
+        active: account.active,
+        connectedAt: account.connectedAt,
+      };
+    })
+  );
 }
 
 /** Apelido interno da equipe pra essa conta — não mexe em nada na Meta. */
@@ -160,7 +191,8 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
       source: "signup",
       wabaId: account.wabaId,
       phoneNumberId: account.phoneNumberId,
-      businessName: account.businessName,
+      displayPhoneNumber: phoneStatus?.displayPhoneNumber ?? null,
+      businessName: account.businessName ?? phoneStatus?.verifiedName ?? null,
       connectedAt: account.connectedAt,
       qualityRating: phoneStatus?.qualityRating ?? null,
       messagingLimitTier: phoneStatus?.messagingLimitTier ?? null,
@@ -173,7 +205,8 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
       source: "env",
       wabaId: null,
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
-      businessName: null,
+      displayPhoneNumber: phoneStatus?.displayPhoneNumber ?? null,
+      businessName: phoneStatus?.verifiedName ?? null,
       connectedAt: null,
       qualityRating: phoneStatus?.qualityRating ?? null,
       messagingLimitTier: phoneStatus?.messagingLimitTier ?? null,
@@ -185,6 +218,7 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
     source: null,
     wabaId: null,
     phoneNumberId: null,
+    displayPhoneNumber: null,
     businessName: null,
     connectedAt: null,
     qualityRating: null,

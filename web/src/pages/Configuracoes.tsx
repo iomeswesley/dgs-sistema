@@ -974,6 +974,8 @@ interface WhatsappSignupConfig {
     source: "signup" | "env" | null;
     wabaId: string | null;
     phoneNumberId: string | null;
+    /** Número de verdade formatado pela Meta — o phoneNumberId é só um ID interno, não diz nada pro time/cliente. */
+    displayPhoneNumber: string | null;
     businessName: string | null;
     connectedAt: string | null;
     qualityRating: string | null;
@@ -986,6 +988,7 @@ interface WhatsappAccountSummary {
   id: number;
   wabaId: string;
   phoneNumberId: string;
+  displayPhoneNumber: string | null;
   label: string | null;
   businessName: string | null;
   active: boolean;
@@ -1174,7 +1177,7 @@ function WhatsappTab() {
       // idêntico de novo e parece que o "Remover" não fez nada.
       if (result.status.connected && result.status.source === "env") {
         setNotice(
-          `Número removido da tela. Como ainda há credencial no .env (número ${result.status.phoneNumberId}), o envio caiu de volta pra esse fallback — pra desativar de vez, mude as variáveis no ambiente do servidor.`
+          `Número removido da tela. Como ainda há credencial no .env (número ${result.status.displayPhoneNumber ?? result.status.phoneNumberId}), o envio caiu de volta pra esse fallback — pra desativar de vez, mude as variáveis no ambiente do servidor.`
         );
       } else if (result.status.connected) {
         setNotice(`Número removido. O envio agora está usando outra conta conectada pela tela.`);
@@ -1229,7 +1232,8 @@ function WhatsappTab() {
         <div className="card mt-3 p-4 text-sm">
           <p className="font-medium text-ink">Em uso agora — via variável de ambiente (sandbox/dev)</p>
           <p className="text-ink-faint">
-            Número {status.phoneNumberId} · qualidade {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
+            Número {status.displayPhoneNumber ?? status.phoneNumberId} · qualidade{" "}
+            {QUALITY_LABEL[status.qualityRating ?? "UNKNOWN"] ?? "Desconhecida"}
           </p>
           <p className="mt-1 text-ink-faint">
             Isso é só o fallback do <code>.env</code> — conecte um número abaixo pra passar a gerenciar pela tela,
@@ -1303,7 +1307,7 @@ function WhatsappTab() {
                   <p className="text-ink-faint">Nome na Meta: {account.businessName}</p>
                 )}
                 <p className="text-ink-faint">
-                  WABA {account.wabaId} · número {account.phoneNumberId}
+                  Número {account.displayPhoneNumber ?? account.phoneNumberId} · WABA {account.wabaId}
                 </p>
                 <p className="mt-1 text-ink-faint">
                   Conectado em {formatDate(account.connectedAt)}
