@@ -65,7 +65,17 @@ export function createApp() {
           styleSrc: ["'self'", "'unsafe-inline'"],
           imgSrc: ["'self'", "data:", "blob:"],
           fontSrc: ["'self'", "data:"],
-          connectSrc: ["'self'", "https://graph.facebook.com", "https://*.facebook.com"],
+          // connect.facebook.net não é subdomínio de facebook.com — depois de
+          // carregado (via scriptSrc acima), o SDK do Embedded Signup faz um
+          // fetch de config nesse mesmo domínio (app_config/json/{app_id}),
+          // que sem essa entrada era bloqueado pelo CSP e derrubava a
+          // inicialização do FB.login() com erro silencioso no console.
+          connectSrc: [
+            "'self'",
+            "https://graph.facebook.com",
+            "https://*.facebook.com",
+            "https://connect.facebook.net",
+          ],
           // O PDF da lista é exibido em <iframe> na revisão, servido pela
           // própria origem. https://www.facebook.com é o popup/iframe do
           // Embedded Signup do WhatsApp.
