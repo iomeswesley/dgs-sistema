@@ -1085,13 +1085,20 @@ function WhatsappTab() {
   }, []);
 
   /**
-   * @param configId Qual configuração de Embedded Signup usar — a padrão
-   *   (número novo/limpo) ou a de coexistência (número que já tem WhatsApp
-   *   Business App instalado, ver `configIdCoexistence`). É a configuração
-   *   que decide se a Meta oferece a opção de manter o app; não tem nada
-   *   pra diferenciar isso nos `extras` do FB.login.
+   * @param configId Qual configuração de Embedded Signup usar — hoje é a
+   *   mesma (`configId`/`configIdCoexistence` caem no mesmo valor quando não
+   *   existe uma dedicada). Não é a config que diferencia número novo de
+   *   coexistência, é o `featureType` abaixo.
+   * @param coexistence Quando `true`, manda `featureType:
+   *   "whatsapp_business_app_onboarding"` nos `extras` do FB.login — sem
+   *   isso a Meta trata qualquer número que já tem WhatsApp Business App
+   *   instalado como conflito ("This phone number is already registered"),
+   *   em vez de oferecer a tela de conectar o número existente. Valor
+   *   confirmado em 2026-08-18 direto no dropdown "Feature Type" da
+   *   ferramenta de teste do Embedded Signup no painel da Meta (só tem duas
+   *   opções ali: "None" e "WhatsApp Business App Onboarding").
    */
-  async function connect(configId: string) {
+  async function connect(configId: string, coexistence = false) {
     if (!data.data?.appId) return;
     setError(null);
     setConnecting(true);
@@ -1101,7 +1108,14 @@ function WhatsappTab() {
       // `?.` abaixo faz `login()` nunca ser chamado — nenhum popup, nenhum
       // callback, nenhum log depois. É a explicação mais simples pra "nada
       // apareceu" no Console.
-      console.warn("[WHATSAPP SIGNUP] SDK carregado? window.FB =", window.FB, "configId:", configId);
+      console.warn(
+        "[WHATSAPP SIGNUP] SDK carregado? window.FB =",
+        window.FB,
+        "configId:",
+        configId,
+        "coexistence:",
+        coexistence
+      );
       window.FB?.login(
         (response) => {
           void (async () => {
@@ -1130,7 +1144,7 @@ function WhatsappTab() {
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: { setup: {} },
+          extras: coexistence ? { setup: {}, featureType: "whatsapp_business_app_onboarding" } : { setup: {} },
         }
       );
     } catch {
@@ -1382,7 +1396,7 @@ function WhatsappTab() {
                 type="button"
                 className="btn btn-quiet"
                 disabled={connecting || !data.data?.configIdCoexistence}
-                onClick={() => data.data?.configIdCoexistence && void connect(data.data.configIdCoexistence)}
+                onClick={() => data.data?.configIdCoexistence && void connect(data.data.configIdCoexistence, true)}
                 title={
                   !data.data?.configIdCoexistence
                     ? "Falta WHATSAPP_SIGNUP_CONFIG_ID_COEXISTENCE no ambiente."
