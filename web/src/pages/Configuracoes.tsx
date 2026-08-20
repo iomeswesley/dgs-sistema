@@ -18,6 +18,8 @@ interface Unit {
   id: number;
   name: string;
   address: string | null;
+  phone: string | null;
+  active: boolean;
   municipality: { name: string };
   municipalityId: number;
 }
@@ -25,6 +27,7 @@ interface Procedure {
   id: number;
   name: string;
   preparationInstructions: string | null;
+  active: boolean;
 }
 interface DoctorProcedure {
   id: number;
@@ -33,6 +36,7 @@ interface DoctorProcedure {
   expectedPerDay: number | null;
   doctorFee: string | null;
   cityRate: string | null;
+  active: boolean;
   procedure: { id: number; name: string };
 }
 interface Doctor {
@@ -40,6 +44,7 @@ interface Doctor {
   name: string;
   specialty: string | null;
   registration: string | null;
+  active: boolean;
   procedures: DoctorProcedure[];
 }
 
@@ -110,9 +115,14 @@ function MunicipalitiesTab() {
   // Unidade nova sempre nasce vinculada a um município já visível na tela —
   // por isso o modal guarda qual município abriu ele, em vez de ter select.
   const [unitModalMunicipality, setUnitModalMunicipality] = useState<Municipality | null>(null);
+  // Quando é edição, guarda a unidade original — diferencia POST (nova) de
+  // PATCH (editar) no mesmo modal, sem duplicar formulário.
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [unitForm, setUnitForm] = useState({ name: "", address: "" });
   const [unitBusy, setUnitBusy] = useState(false);
   const [unitError, setUnitError] = useState<string | null>(null);
+  const [togglingUnit, setTogglingUnit] = useState<Unit | null>(null);
+  const [toggleBusy, setToggleBusy] = useState(false);
 
   async function saveMunicipality() {
     setMunicipalityBusy(true);
@@ -134,8 +144,13 @@ function MunicipalitiesTab() {
     setUnitBusy(true);
     setUnitError(null);
     try {
-      await api.post("/api/catalog/units", { ...unitForm, municipalityId: unitModalMunicipality.id });
+      if (editingUnit) {
+        await api.patch(`/api/catalog/units/${editingUnit.id}`, unitForm);
+      } else {
+        await api.post("/api/catalog/units", { ...unitForm, municipalityId: unitModalMunicipality.id });
+      }
       setUnitModalMunicipality(null);
+      setEditingUnit(null);
       setUnitForm({ name: "", address: "" });
       units.reload();
       data.reload();
@@ -143,6 +158,21 @@ function MunicipalitiesTab() {
       setUnitError(err instanceof Error ? err.message : "Falha ao salvar.");
     } finally {
       setUnitBusy(false);
+    }
+  }
+
+  // Nunca exclui de verdade (comentário no schema/rotas explica por quê:
+  // quebraria histórico de indicadores) — sempre alterna `active`, mesmo
+  // padrão de Médico/Procedimento/Procedimento×Médico abaixo.
+  async function toggleUnitActive() {
+    if (!togglingUnit) return;
+    setToggleBusy(true);
+    try {
+      await api.patch(`/api/catalog/units/${togglingUnit.id}`, { active: !togglingUnit.active });
+      setTogglingUnit(null);
+      units.reload();
+    } finally {
+      setToggleBusy(false);
     }
   }
 
@@ -176,6 +206,7 @@ function MunicipalitiesTab() {
                     className="btn btn-quiet px-2 py-1 text-xs"
                     onClick={() => {
                       setUnitModalMunicipality(municipality);
+                      setEditingUnit(null);
                       setUnitForm({ name: "", address: "" });
                       setUnitError(null);
                     }}
@@ -191,13 +222,40 @@ function MunicipalitiesTab() {
                     <tr>
                       <Th>Unidade</Th>
                       <Th>Endereço</Th>
+                      <Th align="right">Ações</Th>
                     </tr>
                   }
                 >
                   {municipalityUnits.map((unit) => (
-                    <tr key={unit.id}>
-                      <Td>{unit.name}</Td>
+                    <tr key={unit.id} className={unit.active ? undefined : "opacity-50"}>
+                      <Td>
+                        {unit.name}
+                        {!unit.active && <span className="ml-1.5 text-xs text-ink-faint">(inativa)</span>}
+                      </Td>
                       <Td muted>{unit.address ?? "—"}</Td>
+                      <Td align="right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            className="btn btn-quiet px-2 py-1 text-xs"
+                            onClick={() => {
+                              setUnitModalMunicipality(municipality);
+                              setEditingUnit(unit);
+                              setUnitForm({ name: unit.name, address: unit.address ?? "" });
+                              setUnitError(null);
+                            }}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-quiet px-2 py-1 text-xs"
+                            onClick={() => setTogglingUnit(unit)}
+                          >
+                            {unit.active ? "Desativar" : "Ativar"}
+                          </button>
+                        </div>
+                      </Td>
                     </tr>
                   ))}
                 </Table>
@@ -237,12 +295,15 @@ function MunicipalitiesTab() {
 
       <FormModal
         open={unitModalMunicipality !== null}
-        title={`Nova unidade em ${unitModalMunicipality?.name ?? ""}`}
+        title={editingUnit ? `Editar ${editingUnit.name}` : `Nova unidade em ${unitModalMunicipality?.name ?? ""}`}
         description="O endereço aparece na mensagem que o paciente recebe."
         busy={unitBusy}
         error={unitError}
         onSubmit={saveUnit}
-        onCancel={() => setUnitModalMunicipality(null)}
+        onCancel={() => {
+          setUnitModalMunicipality(null);
+          setEditingUnit(null);
+        }}
       >
         <Field label="Nome">
           <input
@@ -260,6 +321,21 @@ function MunicipalitiesTab() {
           />
         </Field>
       </FormModal>
+
+      <ConfirmModal
+        open={togglingUnit !== null}
+        title={togglingUnit ? `${togglingUnit.active ? "Desativar" : "Ativar"} ${togglingUnit.name}?` : ""}
+        description={
+          togglingUnit?.active
+            ? "A unidade some das opções pra nova agenda, mas o histórico existente não é afetado. Dá pra reativar a qualquer momento."
+            : "A unidade volta a aparecer nas opções pra nova agenda."
+        }
+        confirmLabel={togglingUnit?.active ? "Desativar" : "Ativar"}
+        danger={togglingUnit?.active}
+        busy={toggleBusy}
+        onConfirm={toggleUnitActive}
+        onCancel={() => setTogglingUnit(null)}
+      />
     </>
   );
 }
@@ -269,16 +345,24 @@ function MunicipalitiesTab() {
 function DoctorsTab() {
   const data = useApi<{ doctors: Doctor[] }>("/api/catalog/doctors");
   const [open, setOpen] = useState(false);
+  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   const [form, setForm] = useState({ name: "", specialty: "", registration: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [togglingDoctor, setTogglingDoctor] = useState<Doctor | null>(null);
+  const [toggleBusy, setToggleBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/api/catalog/doctors", form);
+      if (editingDoctor) {
+        await api.patch(`/api/catalog/doctors/${editingDoctor.id}`, form);
+      } else {
+        await api.post("/api/catalog/doctors", form);
+      }
       setOpen(false);
+      setEditingDoctor(null);
       setForm({ name: "", specialty: "", registration: "" });
       data.reload();
     } catch (err) {
@@ -288,10 +372,30 @@ function DoctorsTab() {
     }
   }
 
+  async function toggleActive() {
+    if (!togglingDoctor) return;
+    setToggleBusy(true);
+    try {
+      await api.patch(`/api/catalog/doctors/${togglingDoctor.id}`, { active: !togglingDoctor.active });
+      setTogglingDoctor(null);
+      data.reload();
+    } finally {
+      setToggleBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setEditingDoctor(null);
+            setForm({ name: "", specialty: "", registration: "" });
+            setOpen(true);
+          }}
+        >
           Novo médico
         </button>
       </div>
@@ -305,16 +409,47 @@ function DoctorsTab() {
               <Th>Especialidade</Th>
               <Th>Registro</Th>
               <Th align="right">Procedimentos</Th>
+              <Th align="right">Ações</Th>
             </tr>
           }
         >
           {data.data.doctors.map((doctor) => (
-            <tr key={doctor.id}>
-              <Td>{doctor.name}</Td>
+            <tr key={doctor.id} className={doctor.active ? undefined : "opacity-50"}>
+              <Td>
+                {doctor.name}
+                {!doctor.active && <span className="ml-1.5 text-xs text-ink-faint">(inativo)</span>}
+              </Td>
               <Td muted>{doctor.specialty ?? "—"}</Td>
               <Td muted>{doctor.registration ?? "—"}</Td>
               <Td align="right" muted>
                 {doctor.procedures.length}
+              </Td>
+              <Td align="right">
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => {
+                      setEditingDoctor(doctor);
+                      setForm({
+                        name: doctor.name,
+                        specialty: doctor.specialty ?? "",
+                        registration: doctor.registration ?? "",
+                      });
+                      setError(null);
+                      setOpen(true);
+                    }}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => setTogglingDoctor(doctor)}
+                  >
+                    {doctor.active ? "Desativar" : "Ativar"}
+                  </button>
+                </div>
               </Td>
             </tr>
           ))}
@@ -323,11 +458,14 @@ function DoctorsTab() {
 
       <FormModal
         open={open}
-        title="Novo médico"
+        title={editingDoctor ? `Editar ${editingDoctor.name}` : "Novo médico"}
         busy={busy}
         error={error}
         onSubmit={save}
-        onCancel={() => setOpen(false)}
+        onCancel={() => {
+          setOpen(false);
+          setEditingDoctor(null);
+        }}
       >
         <Field label="Nome">
           <input
@@ -352,6 +490,21 @@ function DoctorsTab() {
           />
         </Field>
       </FormModal>
+
+      <ConfirmModal
+        open={togglingDoctor !== null}
+        title={togglingDoctor ? `${togglingDoctor.active ? "Desativar" : "Ativar"} ${togglingDoctor.name}?` : ""}
+        description={
+          togglingDoctor?.active
+            ? "O médico some das opções pra nova agenda, mas o histórico existente não é afetado. Dá pra reativar a qualquer momento."
+            : "O médico volta a aparecer nas opções pra nova agenda."
+        }
+        confirmLabel={togglingDoctor?.active ? "Desativar" : "Ativar"}
+        danger={togglingDoctor?.active}
+        busy={toggleBusy}
+        onConfirm={toggleActive}
+        onCancel={() => setTogglingDoctor(null)}
+      />
     </>
   );
 }
@@ -361,16 +514,24 @@ function DoctorsTab() {
 function ProceduresTab() {
   const data = useApi<{ procedures: Procedure[] }>("/api/catalog/procedures");
   const [open, setOpen] = useState(false);
+  const [editingProcedure, setEditingProcedure] = useState<Procedure | null>(null);
   const [form, setForm] = useState({ name: "", preparationInstructions: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [togglingProcedure, setTogglingProcedure] = useState<Procedure | null>(null);
+  const [toggleBusy, setToggleBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/api/catalog/procedures", form);
+      if (editingProcedure) {
+        await api.patch(`/api/catalog/procedures/${editingProcedure.id}`, form);
+      } else {
+        await api.post("/api/catalog/procedures", form);
+      }
       setOpen(false);
+      setEditingProcedure(null);
       setForm({ name: "", preparationInstructions: "" });
       data.reload();
     } catch (err) {
@@ -380,10 +541,30 @@ function ProceduresTab() {
     }
   }
 
+  async function toggleActive() {
+    if (!togglingProcedure) return;
+    setToggleBusy(true);
+    try {
+      await api.patch(`/api/catalog/procedures/${togglingProcedure.id}`, { active: !togglingProcedure.active });
+      setTogglingProcedure(null);
+      data.reload();
+    } finally {
+      setToggleBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setEditingProcedure(null);
+            setForm({ name: "", preparationInstructions: "" });
+            setOpen(true);
+          }}
+        >
           Novo procedimento
         </button>
       </div>
@@ -395,13 +576,43 @@ function ProceduresTab() {
             <tr>
               <Th>Procedimento</Th>
               <Th>Preparo enviado ao paciente</Th>
+              <Th align="right">Ações</Th>
             </tr>
           }
         >
           {data.data.procedures.map((procedure) => (
-            <tr key={procedure.id}>
-              <Td>{procedure.name}</Td>
+            <tr key={procedure.id} className={procedure.active ? undefined : "opacity-50"}>
+              <Td>
+                {procedure.name}
+                {!procedure.active && <span className="ml-1.5 text-xs text-ink-faint">(inativo)</span>}
+              </Td>
               <Td muted>{procedure.preparationInstructions ?? "—"}</Td>
+              <Td align="right">
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => {
+                      setEditingProcedure(procedure);
+                      setForm({
+                        name: procedure.name,
+                        preparationInstructions: procedure.preparationInstructions ?? "",
+                      });
+                      setError(null);
+                      setOpen(true);
+                    }}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => setTogglingProcedure(procedure)}
+                  >
+                    {procedure.active ? "Desativar" : "Ativar"}
+                  </button>
+                </div>
+              </Td>
             </tr>
           ))}
         </Table>
@@ -409,11 +620,14 @@ function ProceduresTab() {
 
       <FormModal
         open={open}
-        title="Novo procedimento"
+        title={editingProcedure ? `Editar ${editingProcedure.name}` : "Novo procedimento"}
         busy={busy}
         error={error}
         onSubmit={save}
-        onCancel={() => setOpen(false)}
+        onCancel={() => {
+          setOpen(false);
+          setEditingProcedure(null);
+        }}
       >
         <Field label="Nome">
           <input
@@ -435,6 +649,23 @@ function ProceduresTab() {
           />
         </Field>
       </FormModal>
+
+      <ConfirmModal
+        open={togglingProcedure !== null}
+        title={
+          togglingProcedure ? `${togglingProcedure.active ? "Desativar" : "Ativar"} ${togglingProcedure.name}?` : ""
+        }
+        description={
+          togglingProcedure?.active
+            ? "O procedimento some das opções pra nova agenda, mas o histórico existente não é afetado. Dá pra reativar a qualquer momento."
+            : "O procedimento volta a aparecer nas opções pra nova agenda."
+        }
+        confirmLabel={togglingProcedure?.active ? "Desativar" : "Ativar"}
+        danger={togglingProcedure?.active}
+        busy={toggleBusy}
+        onConfirm={toggleActive}
+        onCancel={() => setTogglingProcedure(null)}
+      />
     </>
   );
 }
@@ -445,6 +676,10 @@ function DoctorProceduresTab() {
   const doctors = useApi<{ doctors: Doctor[] }>("/api/catalog/doctors");
   const procedures = useApi<{ procedures: Procedure[] }>("/api/catalog/procedures");
   const [open, setOpen] = useState(false);
+  // Editar reabre o mesmo modal preenchido — doctorId/procedureId travados,
+  // porque são a chave única do upsert (trocar um dos dois criaria outro
+  // registro em vez de editar este).
+  const [editingItem, setEditingItem] = useState<DoctorProcedure | null>(null);
   const [form, setForm] = useState({
     doctorId: "",
     procedureId: "",
@@ -455,6 +690,8 @@ function DoctorProceduresTab() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [togglingItem, setTogglingItem] = useState<DoctorProcedure | null>(null);
+  const [toggleBusy, setToggleBusy] = useState(false);
 
   async function save() {
     setBusy(true);
@@ -469,6 +706,7 @@ function DoctorProceduresTab() {
         cityRate: form.cityRate ? Number(form.cityRate.replace(",", ".")) : null,
       });
       setOpen(false);
+      setEditingItem(null);
       doctors.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
@@ -477,14 +715,54 @@ function DoctorProceduresTab() {
     }
   }
 
+  async function toggleActive() {
+    if (!togglingItem || !togglingDoctorId) return;
+    setToggleBusy(true);
+    try {
+      await api.put("/api/catalog/doctor-procedures", {
+        doctorId: togglingDoctorId,
+        procedureId: togglingItem.procedureId,
+        minutesPerVisit: togglingItem.minutesPerVisit,
+        expectedPerDay: togglingItem.expectedPerDay,
+        doctorFee: togglingItem.doctorFee ? Number(togglingItem.doctorFee) : null,
+        cityRate: togglingItem.cityRate ? Number(togglingItem.cityRate) : null,
+        active: !togglingItem.active,
+      });
+      setTogglingItem(null);
+      doctors.reload();
+    } finally {
+      setToggleBusy(false);
+    }
+  }
+
   const rows = (doctors.data?.doctors ?? []).flatMap((doctor) =>
     doctor.procedures.map((item) => ({ doctor, item }))
   );
+  // ConfirmModal só guarda o item (DoctorProcedure não sabe seu próprio
+  // doctorId) — o médico dono fica à parte pra não precisar achar de novo.
+  const togglingDoctorId = togglingItem
+    ? rows.find(({ item }) => item.id === togglingItem.id)?.doctor.id
+    : undefined;
 
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setEditingItem(null);
+            setForm({
+              doctorId: "",
+              procedureId: "",
+              minutesPerVisit: "",
+              expectedPerDay: "",
+              doctorFee: "",
+              cityRate: "",
+            });
+            setOpen(true);
+          }}
+        >
           Configurar
         </button>
       </div>
@@ -509,14 +787,18 @@ function DoctorProceduresTab() {
               <Th align="right">Paga ao médico 🚧</Th>
               <Th align="right">Cobra da prefeitura 🚧</Th>
               <Th align="right">Margem 🚧</Th>
+              <Th align="right">Ações</Th>
             </tr>
           }
         >
           {rows.map(({ doctor, item }) => {
             return (
-              <tr key={item.id}>
+              <tr key={item.id} className={item.active ? undefined : "opacity-50"}>
                 <Td>{doctor.name}</Td>
-                <Td muted>{item.procedure.name}</Td>
+                <Td muted>
+                  {item.procedure.name}
+                  {!item.active && <span className="ml-1.5 text-xs text-ink-faint">(inativo)</span>}
+                </Td>
                 <Td align="right" muted>
                   {item.minutesPerVisit ?? "—"}
                 </Td>
@@ -535,6 +817,36 @@ function DoctorProceduresTab() {
                 <Td align="right" muted>
                   —
                 </Td>
+                <Td align="right">
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => {
+                        setEditingItem(item);
+                        setForm({
+                          doctorId: String(doctor.id),
+                          procedureId: String(item.procedureId),
+                          minutesPerVisit: item.minutesPerVisit ? String(item.minutesPerVisit) : "",
+                          expectedPerDay: item.expectedPerDay ? String(item.expectedPerDay) : "",
+                          doctorFee: item.doctorFee ?? "",
+                          cityRate: item.cityRate ?? "",
+                        });
+                        setError(null);
+                        setOpen(true);
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => setTogglingItem(item)}
+                    >
+                      {item.active ? "Desativar" : "Ativar"}
+                    </button>
+                  </div>
+                </Td>
               </tr>
             );
           })}
@@ -550,18 +862,22 @@ function DoctorProceduresTab() {
 
       <FormModal
         open={open}
-        title="Procedimento por médico"
+        title={editingItem ? "Editar procedimento por médico" : "Procedimento por médico"}
         description="Define tempo por consulta e esperado/dia (alimenta a sugestão de confirmações). Os valores financeiros estão em desenvolvimento."
         busy={busy}
         error={error}
         onSubmit={save}
-        onCancel={() => setOpen(false)}
+        onCancel={() => {
+          setOpen(false);
+          setEditingItem(null);
+        }}
       >
         <Field label="Médico">
           <select
             className="field"
             value={form.doctorId}
             onChange={(e) => setForm({ ...form, doctorId: e.target.value })}
+            disabled={editingItem !== null}
             required
           >
             <option value="">Selecione…</option>
@@ -577,6 +893,7 @@ function DoctorProceduresTab() {
             className="field"
             value={form.procedureId}
             onChange={(e) => setForm({ ...form, procedureId: e.target.value })}
+            disabled={editingItem !== null}
             required
           >
             <option value="">Selecione…</option>
@@ -630,6 +947,21 @@ function DoctorProceduresTab() {
           </Field>
         </div>
       </FormModal>
+
+      <ConfirmModal
+        open={togglingItem !== null}
+        title={togglingItem ? `${togglingItem.active ? "Desativar" : "Ativar"} ${togglingItem.procedure.name}?` : ""}
+        description={
+          togglingItem?.active
+            ? "Some das opções pra nova agenda e da sugestão de confirmações, mas o histórico existente não é afetado. Dá pra reativar a qualquer momento."
+            : "Volta a aparecer nas opções pra nova agenda e na sugestão de confirmações."
+        }
+        confirmLabel={togglingItem?.active ? "Desativar" : "Ativar"}
+        danger={togglingItem?.active}
+        busy={toggleBusy}
+        onConfirm={toggleActive}
+        onCancel={() => setTogglingItem(null)}
+      />
     </>
   );
 }
@@ -666,6 +998,7 @@ function AgendasTab() {
   const units = useApi<{ units: Unit[] }>("/api/catalog/units");
 
   const [open, setOpen] = useState(false);
+  const [editingAgenda, setEditingAgenda] = useState<Agenda | null>(null);
   const [form, setForm] = useState({
     doctorId: "",
     municipalityId: "",
@@ -695,7 +1028,7 @@ function AgendasTab() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/api/agendas", {
+      const payload = {
         doctorId: Number(form.doctorId),
         municipalityId: Number(form.municipalityId),
         unitId: form.unitId ? Number(form.unitId) : null,
@@ -703,8 +1036,14 @@ function AgendasTab() {
         date: form.date,
         shift: form.shift,
         capacity: form.capacity ? Number(form.capacity) : null,
-      });
+      };
+      if (editingAgenda) {
+        await api.patch(`/api/agendas/${editingAgenda.id}`, payload);
+      } else {
+        await api.post("/api/agendas", payload);
+      }
       setOpen(false);
+      setEditingAgenda(null);
       setForm({
         doctorId: "",
         municipalityId: "",
@@ -747,7 +1086,23 @@ function AgendasTab() {
       </Callout>
 
       <div className="my-3 flex justify-end">
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setEditingAgenda(null);
+            setForm({
+              doctorId: "",
+              municipalityId: "",
+              unitId: "",
+              procedureId: "",
+              date: "",
+              shift: "INTEGRAL",
+              capacity: "",
+            });
+            setOpen(true);
+          }}
+        >
           Nova agenda
         </button>
       </div>
@@ -800,6 +1155,26 @@ function AgendasTab() {
                   >
                     Vagas abertas
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-quiet px-2 py-1 text-xs"
+                    onClick={() => {
+                      setEditingAgenda(agenda);
+                      setForm({
+                        doctorId: String(agenda.doctor.id),
+                        municipalityId: String(agenda.municipality.id),
+                        unitId: agenda.unit ? String(agenda.unit.id) : "",
+                        procedureId: agenda.procedure ? String(agenda.procedure.id) : "",
+                        date: agenda.date.slice(0, 10),
+                        shift: agenda.shift,
+                        capacity: agenda.capacity ? String(agenda.capacity) : "",
+                      });
+                      setError(null);
+                      setOpen(true);
+                    }}
+                  >
+                    Editar
+                  </button>
                   {agenda._count.lists === 0 && (
                     <button
                       type="button"
@@ -818,12 +1193,15 @@ function AgendasTab() {
 
       <FormModal
         open={open}
-        title="Nova agenda"
+        title={editingAgenda ? "Editar agenda" : "Nova agenda"}
         description="A capacidade do dia alimenta a sugestão de confirmações na revisão da lista."
         busy={busy}
         error={error}
         onSubmit={save}
-        onCancel={() => setOpen(false)}
+        onCancel={() => {
+          setOpen(false);
+          setEditingAgenda(null);
+        }}
       >
         <Field label="Médico">
           <select
