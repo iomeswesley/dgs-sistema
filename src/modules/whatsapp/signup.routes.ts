@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { TemplateKind } from "@prisma/client";
 import { env } from "@/config/env.js";
+import { prisma } from "@/lib/prisma.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { requireAuth, currentUserId } from "@/middleware/auth.js";
@@ -20,6 +21,7 @@ import {
   setActiveAccount,
   subscribeAppToWaba,
 } from "./whatsapp-account.service.js";
+import { getTemplateStatuses, registerPhoneNumber, submitDefaultTemplates } from "@/lib/whatsapp-templates.js";
 
 export const whatsappSignupRouter = Router();
 whatsappSignupRouter.use("/api/whatsapp/signup", requireAuth);
@@ -77,7 +79,63 @@ whatsappSignupRouter.post(
       connectedById: currentUserId(req),
     });
 
+    // Best-effort: sem isso o número conecta mas não consegue enviar nada
+    // (número precisa estar registrado na Cloud API; templates novos
+    // precisam ser submetidos pra WABA nova não ter nenhum aprovado ainda).
+    // Falha aqui não desfaz a conexão — a equipe vê o status pendente na
+    // tela e, se o registro do número falhar, o próximo envio real mostra
+    // o erro (#133010) de novo, mas a conta já está visível/gerenciável.
+    try {
+      await registerPhoneNumber(body.phoneNumberId, accessToken);
+    } catch (err) {
+      console.error("[WHATSAPP SIGNUP] Falha ao registrar o número na Cloud API:", (err as Error).message);
+    }
+    try {
+      await submitDefaultTemplates(body.wabaId, accessToken);
+    } catch (err) {
+      console.error("[WHATSAPP SIGNUP] Falha ao submeter templates padrão:", (err as Error).message);
+    }
+
     res.json({ status: await getConnectionStatus() });
+  })
+);
+
+/**
+ * Status de aprovação dos templates padrão na WABA ativa — a tela usa isso
+ * pra mostrar o aviso de "pendente aprovação da Meta" até os 3 templates
+ * saírem de PENDING.
+ */
+whatsappSignupRouter.get(
+  "/api/whatsapp/signup/templates",
+  asyncHandler(async (_req, res) => {
+    const status = await getConnectionStatus();
+    if (!status.connected || !status.wabaId) {
+      return res.json({ templates: [], billingIssue: false, billingUrl: null });
+    }
+    const account = await prisma.whatsappAccount.findFirst({
+      where: { wabaId: status.wabaId },
+      orderBy: { connectedAt: "desc" },
+    });
+    if (!account) return res.json({ templates: [], billingIssue: false, billingUrl: null });
+
+    // Não existe campo confiável na Graph API pra saber se a WABA já tem
+    // forma de pagamento cadastrada — a Meta só revela isso no momento do
+    // envio, com o erro 131042 ("Business eligibility payment issue"). Por
+    // isso o aviso é reativo: olha se o envio mais recente falhou por esse
+    // motivo específico, não um "check" ativo.
+    const lastSent = await prisma.whatsappMessage.findFirst({
+      where: { direction: "ENVIADA" },
+      orderBy: { createdAt: "desc" },
+    });
+    const billingIssue = lastSent?.status === "FALHOU" && lastSent.errorCode === "131042";
+    const billingUrl = `https://business.facebook.com/billing_hub/accounts/details/?asset_id=${account.wabaId}&wizard_name=CHANGE_COUNTRY_CURRENCY&account_type=whatsapp-business-account`;
+
+    try {
+      const templates = await getTemplateStatuses(account.wabaId, account.accessToken);
+      res.json({ templates, billingIssue, billingUrl });
+    } catch (err) {
+      throw new AppError((err as Error).message, 502);
+    }
   })
 );
 

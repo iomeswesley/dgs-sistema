@@ -111,6 +111,26 @@ export function pickDispatchPhone(raws: (string | null | undefined)[]): string |
   return first?.e164 ?? null;
 }
 
+/**
+ * A Meta às vezes manda o campo "from" do webhook sem o 9º dígito do
+ * celular brasileiro (ex: 554797760610 em vez de 5547997760610) — bug
+ * conhecido, documentado só em fóruns de desenvolvedor, não na doc oficial.
+ * Como resposta de WhatsApp só vem de celular (nunca fixo), é seguro
+ * reconstruir o candidato com o 9 de volta e tentar os dois formatos.
+ *
+ * Usado tanto pra achar o agendamento aguardando resposta (whatsapp.service)
+ * quanto pra agrupar mensagens de um mesmo número na tela de conversas.
+ */
+export function phoneCandidates(from: string): string[] {
+  const digits = from.replace(/\D/g, "");
+  const candidates = [digits];
+  // 55 + DDD (2) + assinante sem o 9 (8) = 12 dígitos.
+  if (digits.length === 12 && digits.startsWith(BR_COUNTRY_CODE)) {
+    candidates.push(`${BR_COUNTRY_CODE}${digits.slice(2, 4)}9${digits.slice(4)}`);
+  }
+  return candidates;
+}
+
 /** Formata pra exibição no painel: (47) 99894-3232 */
 export function formatPhone(e164: string): string {
   const digits = e164.replace(/\D/g, "");

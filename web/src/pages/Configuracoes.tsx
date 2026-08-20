@@ -1372,6 +1372,21 @@ interface WhatsappAccountSummary {
   active: boolean;
   connectedAt: string;
 }
+interface TemplateStatus {
+  name: string;
+  status: "APPROVED" | "PENDING" | "REJECTED" | "NAO_ENCONTRADO";
+}
+const TEMPLATE_LABEL: Record<string, string> = {
+  confirmacao_consulta: "Confirmação de consulta",
+  lembrete_vespera: "Lembrete de véspera",
+  convite_vaga_aberta: "Convite pra vaga aberta",
+};
+const TEMPLATE_STATUS_LABEL: Record<TemplateStatus["status"], string> = {
+  APPROVED: "Aprovado",
+  PENDING: "Pendente de aprovação",
+  REJECTED: "Rejeitado — precisa ajustar",
+  NAO_ENCONTRADO: "Ainda não chegou na Meta",
+};
 
 const QUALITY_LABEL: Record<string, string> = {
   GREEN: "Boa",
@@ -1419,6 +1434,9 @@ function loadFacebookSdk(appId: string): Promise<void> {
 function WhatsappTab() {
   const data = useApi<WhatsappSignupConfig>("/api/whatsapp/signup/config");
   const accounts = useApi<{ accounts: WhatsappAccountSummary[] }>("/api/whatsapp/signup/accounts");
+  const templates = useApi<{ templates: TemplateStatus[]; billingIssue: boolean; billingUrl: string | null }>(
+    "/api/whatsapp/signup/templates"
+  );
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1432,21 +1450,14 @@ function WhatsappTab() {
   function reloadAll() {
     data.reload();
     accounts.reload();
+    templates.reload();
   }
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      // TEMPORÁRIO (2026-08-16): loga TUDO que chega por postMessage, antes
-      // até do filtro de origem — "nada apareceu" no teste anterior pode ter
-      // sido o filtro de origem descartando cedo demais, ou o DevTools
-      // escondendo console.debug (cai como "Verbose", oculto por padrão).
-      // console.warn não tem esse problema de nível.
-      console.warn("[WHATSAPP SIGNUP] postMessage bruto — origin:", event.origin, "data:", event.data);
-
       if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
       try {
         const payload = JSON.parse(event.data);
-        console.warn("[WHATSAPP SIGNUP] postMessage reconhecido (origem ok):", payload);
         if (payload.type === "WA_EMBEDDED_SIGNUP" && SIGNUP_FINISH_EVENTS.has(payload.event)) {
           signupData.current = {
             wabaId: payload.data?.waba_id,
@@ -1482,26 +1493,9 @@ function WhatsappTab() {
     setConnecting(true);
     try {
       await loadFacebookSdk(data.data.appId);
-      // TEMPORÁRIO (2026-08-16): se window.FB estiver undefined aqui, o
-      // `?.` abaixo faz `login()` nunca ser chamado — nenhum popup, nenhum
-      // callback, nenhum log depois. É a explicação mais simples pra "nada
-      // apareceu" no Console.
-      console.warn(
-        "[WHATSAPP SIGNUP] SDK carregado? window.FB =",
-        window.FB,
-        "configId:",
-        configId,
-        "coexistence:",
-        coexistence
-      );
       window.FB?.login(
         (response) => {
           void (async () => {
-            // TEMPORÁRIO (2026-08-16): mesmo diagnóstico do lado do
-            // FB.login() — response.authResponse costuma vir vazio quando
-            // a Meta considera "cancelado", e precisamos ver o que
-            // realmente chega pra saber por quê.
-            console.warn("[WHATSAPP SIGNUP] FB.login respondeu:", response, "signupData:", signupData.current);
             const code = response.authResponse?.code;
             if (!code || !signupData.current?.wabaId || !signupData.current?.phoneNumberId) {
               setConnecting(false);
@@ -1652,6 +1646,53 @@ function WhatsappTab() {
           <button type="button" className="btn btn-quiet mt-2" disabled={adopting} onClick={() => void adoptEnv()}>
             {adopting ? "Adotando…" : "Gerenciar pela tela (apelido/remover)"}
           </button>
+        </div>
+      )}
+
+      {templates.data?.billingIssue && (
+        <div className="mt-3">
+          <Callout tone="warn">
+            <p className="font-semibold">⚠️ Sem forma de pagamento cadastrada na Meta</p>
+            <p className="mt-1">
+              O último envio falhou com o erro de elegibilidade de pagamento (131042) — a Meta aceita a chamada
+              (devolve confirmação), mas o envio nunca chega ao paciente. Precisa cadastrar moeda/forma de
+              pagamento pra essa WABA; isso só se faz direto no painel deles, não dá pra automatizar por API.
+            </p>
+            {templates.data.billingUrl && (
+              <a
+                className="btn btn-primary mt-2 inline-block"
+                href={templates.data.billingUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Configurar forma de pagamento
+              </a>
+            )}
+          </Callout>
+        </div>
+      )}
+
+      {templates.data && templates.data.templates.some((t) => t.status !== "APPROVED") && (
+        <div className="mt-3">
+          <Callout tone="warn">
+            <p className="font-semibold">⏳ Templates aguardando aprovação da Meta</p>
+            <p className="mt-1">
+              Ao conectar um número, o sistema já submete os 3 templates padrão sozinho — não precisa entrar na
+              Meta pra fazer isso na mão. A aprovação em si, porém, é revisão humana do lado deles: costuma
+              levar de algumas horas a poucos dias, e pode voltar pedindo ajuste de texto. Nenhuma confirmação
+              sai enquanto o template &quot;Confirmação de consulta&quot; não estiver aprovado.
+            </p>
+            <ul className="mt-2 grid gap-1">
+              {templates.data.templates.map((t) => (
+                <li key={t.name} className="flex items-center justify-between gap-3">
+                  <span>{TEMPLATE_LABEL[t.name] ?? t.name}</span>
+                  <span className={t.status === "REJECTED" ? "font-semibold text-mark-red" : "text-ink-faint"}>
+                    {TEMPLATE_STATUS_LABEL[t.status]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Callout>
         </div>
       )}
 

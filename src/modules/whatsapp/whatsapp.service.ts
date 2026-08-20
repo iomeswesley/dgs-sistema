@@ -1,6 +1,7 @@
 import type { AppointmentStatus, DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
 import { classifyReply } from "@/lib/templates.js";
+import { phoneCandidates } from "@/lib/phone.js";
 import type { InboundReply, StatusUpdate } from "@/lib/whatsapp.js";
 import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
 
@@ -17,23 +18,6 @@ import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
 
   Tudo é idempotente por `wamid` — a Meta reentrega o mesmo evento sem aviso.
 */
-
-/**
- * A Meta às vezes manda o campo "from" do webhook sem o 9º dígito do
- * celular brasileiro (ex: 554797760610 em vez de 5547997760610) — bug
- * conhecido, documentado só em fóruns de desenvolvedor, não na doc oficial.
- * Como resposta de WhatsApp só vem de celular (nunca fixo), é seguro
- * reconstruir o candidato com o 9 de volta e tentar os dois formatos.
- */
-function phoneCandidates(from: string): string[] {
-  const digits = from.replace(/\D/g, "");
-  const candidates = [digits];
-  // 55 + DDD (2) + assinante sem o 9 (8) = 12 dígitos.
-  if (digits.length === 12 && digits.startsWith("55")) {
-    candidates.push(`55${digits.slice(2, 4)}9${digits.slice(4)}`);
-  }
-  return candidates;
-}
 
 /** Encontra o agendamento mais recente que espera resposta desse telefone. */
 async function findAppointmentForPhone(phone: string) {
