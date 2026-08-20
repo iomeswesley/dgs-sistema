@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../components/AppShell";
-import { Callout, ErrorNote, Spinner } from "../components/ui";
+import { FormModal } from "../components/FormModal";
+import { Callout, ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 
@@ -33,7 +34,31 @@ interface ThreadMessage {
   createdAt: string;
 }
 
+type TemplateKind = "CONFIRMACAO" | "LEMBRETE" | "VAGA_ABERTA";
+interface TemplateFieldsConfig {
+  header?: string[];
+  body: string[];
+}
+const TEMPLATE_LABEL: Record<TemplateKind, string> = {
+  CONFIRMACAO: "Confirmação de consulta",
+  LEMBRETE: "Lembrete de véspera",
+  VAGA_ABERTA: "Convite pra vaga aberta",
+};
+
 const REFRESH_MS = 15_000;
+// Marca "vista" por navegador/pessoa (perfil único, sem conta por usuário
+// separada pra isso) — não sincroniza entre quem está na equipe, mas
+// resolve o caso comum de "voltei nessa tela, o que é novo desde a
+// última vez que eu olhei".
+const SEEN_STORAGE_KEY = "dgs-conversas-seen";
+
+function loadSeenMap(): Record<string, string> {
+  try {
+    return JSON.parse(window.localStorage.getItem(SEEN_STORAGE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
 
 export function Conversas() {
   const conversations = useApi<{ conversations: ConversationSummary[] }>("/api/conversations");
@@ -42,9 +67,20 @@ export function Conversas() {
     selectedPhone ? `/api/conversations/${selectedPhone}/messages` : null,
     [selectedPhone]
   );
+  const templateFields = useApi<{ fields: Record<TemplateKind, TemplateFieldsConfig> }>(
+    "/api/conversations/template-fields"
+  );
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seen, setSeen] = useState<Record<string, string>>(() => loadSeenMap());
+
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [templateKind, setTemplateKind] = useState<TemplateKind>("CONFIRMACAO");
+  const [headerValues, setHeaderValues] = useState<string[]>([]);
+  const [bodyValues, setBodyValues] = useState<string[]>([]);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -58,6 +94,19 @@ export function Conversas() {
   }, [selectedPhone]);
 
   const selected = conversations.data?.conversations.find((c) => c.phone === selectedPhone);
+
+  function selectConversation(c: ConversationSummary) {
+    setSelectedPhone(c.phone);
+    const next = { ...seen, [c.phone]: c.lastAt };
+    setSeen(next);
+    window.localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(next));
+  }
+
+  function isUnread(c: ConversationSummary): boolean {
+    if (c.lastDirection !== "RECEBIDA") return false;
+    const lastSeen = seen[c.phone];
+    return !lastSeen || new Date(c.lastAt).getTime() > new Date(lastSeen).getTime();
+  }
 
   async function send() {
     if (!selectedPhone || !text.trim()) return;
@@ -74,6 +123,43 @@ export function Conversas() {
       setSending(false);
     }
   }
+
+  function openTemplateModal() {
+    const fields = templateFields.data?.fields[templateKind];
+    setHeaderValues(new Array(fields?.header?.length ?? 0).fill(""));
+    setBodyValues(new Array(fields?.body.length ?? 0).fill(""));
+    setTemplateError(null);
+    setTemplateModalOpen(true);
+  }
+
+  function changeTemplateKind(kind: TemplateKind) {
+    setTemplateKind(kind);
+    const fields = templateFields.data?.fields[kind];
+    setHeaderValues(new Array(fields?.header?.length ?? 0).fill(""));
+    setBodyValues(new Array(fields?.body.length ?? 0).fill(""));
+  }
+
+  async function sendTemplateMessage() {
+    if (!selectedPhone) return;
+    setTemplateBusy(true);
+    setTemplateError(null);
+    try {
+      await api.post(`/api/conversations/${selectedPhone}/template`, {
+        template: templateKind,
+        header: headerValues.length ? headerValues : undefined,
+        body: bodyValues,
+      });
+      setTemplateModalOpen(false);
+      thread.reload();
+      conversations.reload();
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : "Falha ao enviar template.");
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+
+  const activeFields = templateFields.data?.fields[templateKind];
 
   return (
     <>
@@ -98,12 +184,19 @@ export function Conversas() {
             <button
               key={c.phone}
               type="button"
-              onClick={() => setSelectedPhone(c.phone)}
+              onClick={() => selectConversation(c)}
               className={`block w-full border-b border-rule p-3 text-left text-sm transition-colors hover:bg-sheet-alt ${
                 selectedPhone === c.phone ? "bg-sheet-alt" : ""
               }`}
             >
-              <p className="font-medium text-ink">{c.patientName ?? c.phoneFormatted}</p>
+              <div className="flex items-center gap-1.5">
+                {isUnread(c) && (
+                  <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Não lida" />
+                )}
+                <p className={`truncate ${isUnread(c) ? "font-semibold text-ink" : "font-medium text-ink"}`}>
+                  {c.patientName ?? c.phoneFormatted}
+                </p>
+              </div>
               {c.patientName && <p className="text-xs text-ink-faint">{c.phoneFormatted}</p>}
               <p className="mt-1 truncate text-ink-muted">
                 {c.lastDirection === "ENVIADA" ? "Você: " : ""}
@@ -159,7 +252,11 @@ export function Conversas() {
                   <div className="mb-2">
                     <Callout tone="warn">
                       Fora da janela de 24h desde a última mensagem do paciente — a Meta só aceita template pra
-                      reabrir a conversa. Use Listas/Revisão pra reenviar uma confirmação ou lembrete.
+                      reabrir a conversa.{" "}
+                      <button type="button" className="font-semibold underline" onClick={openTemplateModal}>
+                        Enviar template
+                      </button>
+                      .
                     </Callout>
                   </div>
                 )}
@@ -191,6 +288,50 @@ export function Conversas() {
           )}
         </div>
       </div>
+
+      <FormModal
+        open={templateModalOpen}
+        title="Enviar template"
+        description="Reabre a conversa fora da janela de 24h. Preencha as variáveis igual apareceriam pro paciente."
+        busy={templateBusy}
+        error={templateError}
+        onSubmit={sendTemplateMessage}
+        onCancel={() => setTemplateModalOpen(false)}
+      >
+        <Field label="Template">
+          <select
+            className="field"
+            value={templateKind}
+            onChange={(e) => changeTemplateKind(e.target.value as TemplateKind)}
+          >
+            {(Object.keys(TEMPLATE_LABEL) as TemplateKind[]).map((kind) => (
+              <option key={kind} value={kind}>
+                {TEMPLATE_LABEL[kind]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {activeFields?.header?.map((label, i) => (
+          <Field key={`header-${i}`} label={label}>
+            <input
+              className="field"
+              value={headerValues[i] ?? ""}
+              onChange={(e) => setHeaderValues((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))}
+              required
+            />
+          </Field>
+        ))}
+        {activeFields?.body.map((label, i) => (
+          <Field key={`body-${i}`} label={label}>
+            <input
+              className="field"
+              value={bodyValues[i] ?? ""}
+              onChange={(e) => setBodyValues((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))}
+              required
+            />
+          </Field>
+        ))}
+      </FormModal>
     </>
   );
 }

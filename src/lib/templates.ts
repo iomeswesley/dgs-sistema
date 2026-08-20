@@ -9,6 +9,29 @@ export const TEMPLATE_NAMES: Record<TemplateKind, string> = {
   VAGA_ABERTA: "convite_vaga_aberta",
 };
 
+/**
+ * Rótulo de cada variável, na mesma ordem que o template espera — usado
+ * tanto pelo "Enviar teste" quanto pelo envio de template direto da tela
+ * de Conversas (fora da janela de 24h, texto livre não passa, só template
+ * reabre a conversa).
+ */
+export interface TemplateFields {
+  header?: string[];
+  body: string[];
+}
+export const TEMPLATE_FIELDS: Record<TemplateKind, TemplateFields> = {
+  CONFIRMACAO: {
+    header: ["Município"],
+    body: ["Nome do paciente", "Município", "Data", "Horário", "Procedimento", "Local"],
+  },
+  LEMBRETE: {
+    body: ["Nome do paciente", "Data", "Horário", "Procedimento", "Local", "Preparo"],
+  },
+  VAGA_ABERTA: {
+    body: ["Nome do paciente", "Município", "Procedimento", "Data", "Horário", "Local"],
+  },
+};
+
 // Respostas dos botões de resposta rápida. A Meta devolve o título do botão
 // no webhook, então o casamento é pelo texto — normalizado sem acento e em
 // minúsculas pra comparar de forma tolerante.

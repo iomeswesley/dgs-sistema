@@ -1,6 +1,8 @@
+import type { TemplateKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
 import { normalizePhone, phoneCandidates, formatPhone } from "@/lib/phone.js";
-import { sendText } from "@/lib/whatsapp.js";
+import { sendTemplate, sendText, type TemplateComponentParams } from "@/lib/whatsapp.js";
+import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { AppError } from "@/middleware/errorHandler.js";
 
 /*
@@ -149,5 +151,32 @@ export async function sendReply(rawPhone: string, text: string): Promise<void> {
   const result = await sendText(key, text);
   await prisma.whatsappMessage.create({
     data: { wamid: result.wamid, direction: "ENVIADA", phone: key, body: text, status: "ENVIADO" },
+  });
+}
+
+/**
+ * Manda um template pra reabrir a conversa — funciona a qualquer momento,
+ * inclusive fora da janela de 24h (é justamente pra isso que o template
+ * existe: é a única forma de mensagem iniciada por nós que a Meta aceita
+ * fora da janela). Usado pelo botão "Enviar template" em Conversas, que
+ * aparece quando o campo de texto livre está desabilitado.
+ */
+export async function sendTemplateReply(
+  rawPhone: string,
+  template: TemplateKind,
+  params: TemplateComponentParams
+): Promise<void> {
+  const key = normalizePhone(rawPhone)?.e164 ?? rawPhone;
+
+  const result = await sendTemplate(key, TEMPLATE_NAMES[template], params);
+  await prisma.whatsappMessage.create({
+    data: {
+      wamid: result.wamid,
+      direction: "ENVIADA",
+      template,
+      phone: key,
+      body: null,
+      status: "ENVIADO",
+    },
   });
 }
