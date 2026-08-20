@@ -5,6 +5,7 @@ import { Login } from "./pages/Login";
 import { Listas } from "./pages/Listas";
 import { Revisao } from "./pages/Revisao";
 import { Hoje } from "./pages/Hoje";
+import { Conversas } from "./pages/Conversas";
 import { Fechamento } from "./pages/Fechamento";
 import { Indicadores } from "./pages/Indicadores";
 import { Configuracoes } from "./pages/Configuracoes";
@@ -37,6 +38,7 @@ export function App() {
         <Route path="/listas" element={<Listas />} />
         <Route path="/listas/:id" element={<Revisao />} />
         <Route path="/hoje" element={<Hoje />} />
+        <Route path="/conversas" element={<Conversas />} />
         <Route path="/fechamento" element={<Fechamento />} />
         <Route path="/indicadores" element={<Indicadores />} />
         <Route path="/configuracoes" element={<Configuracoes />} />

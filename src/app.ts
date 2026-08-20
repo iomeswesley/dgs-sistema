@@ -21,6 +21,7 @@ import { closingsRouter } from "@/modules/closings/closings.routes.js";
 import { indicatorsRouter } from "@/modules/indicators/indicators.routes.js";
 import { teamRouter } from "@/modules/team/team.routes.js";
 import { suggestionsRouter } from "@/modules/suggestions/suggestions.routes.js";
+import { conversationsRouter } from "@/modules/conversations/conversations.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData } from "@/modules/queue/cadence.service.js";
@@ -186,6 +187,7 @@ export function createApp() {
   app.use(indicatorsRouter);
   app.use(teamRouter);
   app.use(suggestionsRouter);
+  app.use(conversationsRouter);
 
   app.use("/api", notFoundHandler);
 

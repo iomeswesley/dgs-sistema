@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   ClipboardCheck,
   ClipboardList,
+  MessageCircle,
   Moon,
   Settings,
   Sun,
@@ -23,6 +24,7 @@ import { ConfirmModal } from "./ConfirmModal";
 const NAV: { to: string; label: string; hint: string; icon: LucideIcon }[] = [
   { to: "/listas", label: "Listas", hint: "Receber e revisar", icon: ClipboardList },
   { to: "/hoje", label: "Acompanhamento", hint: "Respostas do dia", icon: CalendarCheck },
+  { to: "/conversas", label: "Conversas", hint: "Mensagens do WhatsApp", icon: MessageCircle },
   { to: "/fechamento", label: "Fechamento", hint: "Atendidos e pagos", icon: ClipboardCheck },
   { to: "/indicadores", label: "Indicadores", hint: "Histórico e taxas", icon: BarChart3 },
   { to: "/configuracoes", label: "Configurações", hint: "Cadastros e valores", icon: Settings },
