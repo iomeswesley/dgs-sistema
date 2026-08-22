@@ -1380,6 +1380,7 @@ const TEMPLATE_LABEL: Record<string, string> = {
   confirmacao_consulta: "Confirmação de consulta",
   lembrete_vespera: "Lembrete de véspera",
   convite_vaga_aberta: "Convite pra vaga aberta",
+  cancelamento_consulta: "Cancelamento",
 };
 const TEMPLATE_STATUS_LABEL: Record<TemplateStatus["status"], string> = {
   APPROVED: "Aprovado",
@@ -1851,6 +1852,7 @@ const TEMPLATE_OPTIONS = [
   { value: "CONFIRMACAO", label: "Confirmação de consulta" },
   { value: "LEMBRETE", label: "Lembrete de véspera" },
   { value: "VAGA_ABERTA", label: "Vaga aberta" },
+  { value: "CANCELAMENTO", label: "Cancelamento" },
 ] as const;
 
 /**

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   CalendarCheck,
+  CalendarX,
   ClipboardCheck,
   ClipboardList,
   MessageCircle,
@@ -25,6 +26,7 @@ const NAV: { to: string; label: string; hint: string; icon: LucideIcon }[] = [
   { to: "/listas", label: "Listas", hint: "Receber e revisar", icon: ClipboardList },
   { to: "/hoje", label: "Acompanhamento", hint: "Respostas do dia", icon: CalendarCheck },
   { to: "/conversas", label: "Conversas", hint: "Mensagens do WhatsApp", icon: MessageCircle },
+  { to: "/cancelamentos", label: "Cancelamento", hint: "Agenda indisponível", icon: CalendarX },
   { to: "/fechamento", label: "Fechamento", hint: "Atendidos e pagos", icon: ClipboardCheck },
   { to: "/indicadores", label: "Indicadores", hint: "Histórico e taxas", icon: BarChart3 },
   { to: "/configuracoes", label: "Configurações", hint: "Cadastros e valores", icon: Settings },

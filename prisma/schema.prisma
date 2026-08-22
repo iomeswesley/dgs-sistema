@@ -15,9 +15,9 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-/* ------------------------------------------------------------------ */
-/* Equipe                                                              */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------- */
+/* Equipe                                                                 */
+/* ---------------------------------------------------------------------- */
 
 // Perfil único: todo mundo da equipe tem os mesmos poderes. O controle vem
 // do AuditLog (quem lançou o quê), não de permissões — decisão explícita do
@@ -32,13 +32,15 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  passwordResets    PasswordReset[]
-  auditLogs         AuditLog[]
-  uploadedLists     List[]          @relation("ListUploadedBy")
-  approvedLists     List[]          @relation("ListApprovedBy")
-  manualContacts    Appointment[]   @relation("AppointmentContactedBy")
-  attendedClosings  DailyClosing[]  @relation("ClosingAttendedBy")
-  paidClosings      DailyClosing[]  @relation("ClosingPaidBy")
+  passwordResets            PasswordReset[]
+  auditLogs                 AuditLog[]
+  uploadedLists             List[]              @relation("ListUploadedBy")
+  approvedLists             List[]              @relation("ListApprovedBy")
+  manualContacts            Appointment[]       @relation("AppointmentContactedBy")
+  canceledAppointments      Appointment[]       @relation("AppointmentCanceledBy")
+  cancellationBatches       CancellationBatch[]
+  attendedClosings          DailyClosing[]      @relation("ClosingAttendedBy")
+  paidClosings              DailyClosing[]      @relation("ClosingPaidBy")
   connectedWhatsappAccounts WhatsappAccount[]
 
   @@map("users")
@@ -58,9 +60,9 @@ model PasswordReset {
   @@map("password_resets")
 }
 
-/* ------------------------------------------------------------------ */
-/* Cadastros                                                           */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------- */
+/* Cadastros                                                              */
+/* ---------------------------------------------------------------------- */
 
 model Municipality {
   id        Int      @id @default(autoincrement())
@@ -96,8 +98,8 @@ model HealthUnit {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  municipality        Municipality  @relation(fields: [municipalityId], references: [id])
-  agendas             Agenda[]
+  municipality          Municipality  @relation(fields: [municipalityId], references: [id])
+  agendas               Agenda[]
   requestedAppointments Appointment[] @relation("AppointmentRequestingUnit")
 
   @@unique([municipalityId, name])
@@ -123,15 +125,15 @@ model Doctor {
 }
 
 model Procedure {
-  id     Int     @id @default(autoincrement())
-  name   String  @unique
+  id                      Int      @id @default(autoincrement())
+  name                    String   @unique
   // Preparo enviado no lembrete de véspera (jejum, bexiga cheia, etc.).
   // Quando vazio, o template usa um texto neutro — a Meta não aceita
   // variável em branco.
   preparationInstructions String?
-  active Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   doctors      DoctorProcedure[]
   agendas      Agenda[]
@@ -145,18 +147,18 @@ model Procedure {
 // saem o "esperado por dia" da sugestão de confirmações e o financeiro
 // (repasse ao médico e faturamento da prefeitura).
 model DoctorProcedure {
-  id             Int      @id @default(autoincrement())
-  doctorId       Int
-  procedureId    Int
+  id              Int      @id @default(autoincrement())
+  doctorId        Int
+  procedureId     Int
   minutesPerVisit Int?
-  expectedPerDay Int?
+  expectedPerDay  Int?
   // Valor pago ao médico por procedimento realizado.
-  doctorFee      Decimal? @db.Decimal(10, 2)
+  doctorFee       Decimal? @db.Decimal(10, 2)
   // Valor cobrado da prefeitura por procedimento realizado.
-  cityRate       Decimal? @db.Decimal(10, 2)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  cityRate        Decimal? @db.Decimal(10, 2)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   procedure Procedure @relation(fields: [procedureId], references: [id], onDelete: Cascade)
@@ -166,9 +168,9 @@ model DoctorProcedure {
   @@map("doctor_procedures")
 }
 
-/* ------------------------------------------------------------------ */
-/* Agenda e listas                                                     */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------- */
+/* Agenda e listas                                                        */
+/* ---------------------------------------------------------------------- */
 
 // Escala do médico: o sistema sabe o esperado ANTES da lista chegar. Uma
 // agenda pode receber a lista original e listas complementares (reposição
@@ -186,12 +188,13 @@ model Agenda {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  doctor       Doctor        @relation(fields: [doctorId], references: [id])
-  municipality Municipality  @relation(fields: [municipalityId], references: [id])
-  unit         HealthUnit?   @relation(fields: [unitId], references: [id])
-  procedure    Procedure?    @relation(fields: [procedureId], references: [id])
-  lists        List[]
-  appointments Appointment[]
+  doctor              Doctor              @relation(fields: [doctorId], references: [id])
+  municipality        Municipality        @relation(fields: [municipalityId], references: [id])
+  unit                HealthUnit?         @relation(fields: [unitId], references: [id])
+  procedure           Procedure?          @relation(fields: [procedureId], references: [id])
+  lists               List[]
+  appointments        Appointment[]
+  cancellationBatches CancellationBatch[]
 
   @@index([date])
   @@index([doctorId, date])
@@ -200,29 +203,29 @@ model Agenda {
 
 // Cada arquivo (PDF ou foto) recebido de uma prefeitura.
 model List {
-  id             Int        @id @default(autoincrement())
-  municipalityId Int
-  agendaId       Int?
-  originalName   String
-  fileData       Bytes
-  mimeType       String
-  sizeBytes      Int?
-  sourceFormat   SourceFormat @default(OUTRO)
-  status         ListStatus   @default(EXTRAINDO)
+  id              Int          @id @default(autoincrement())
+  municipalityId  Int
+  agendaId        Int?
+  originalName    String
+  fileData        Bytes
+  mimeType        String
+  sizeBytes       Int?
+  sourceFormat    SourceFormat @default(OUTRO)
+  status          ListStatus   @default(EXTRAINDO)
   // Lista complementar enviada pra preencher vagas abertas de uma agenda que
   // já teve disparo (fase 2).
-  isComplementary Boolean   @default(false)
+  isComplementary Boolean      @default(false)
   // Resposta bruta da extração da IA, guardada pra auditoria e pra
   // reprocessar sem precisar reler o arquivo.
-  extractionRaw  Json?
+  extractionRaw   Json?
   extractionError String?
-  extractedAt    DateTime?
-  uploadedById   Int
-  approvedById   Int?
-  approvedAt     DateTime?
-  dispatchedAt   DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  extractedAt     DateTime?
+  uploadedById    Int
+  approvedById    Int?
+  approvedAt      DateTime?
+  dispatchedAt    DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   municipality Municipality  @relation(fields: [municipalityId], references: [id])
   agenda       Agenda?       @relation(fields: [agendaId], references: [id])
@@ -235,22 +238,22 @@ model List {
   @@map("lists")
 }
 
-/* ------------------------------------------------------------------ */
-/* Pacientes e agendamentos                                            */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------- */
+/* Pacientes e agendamentos                                               */
+/* ---------------------------------------------------------------------- */
 
 // Entidade própria (não só linha de lista) pra ter histórico entre listas,
 // score de no-show e opt-out de LGPD. Dedupe por CNS quando existir, senão
 // por telefone normalizado.
 model Patient {
-  id        Int       @id @default(autoincrement())
-  name      String
-  cns       String?   @unique
-  birthDate DateTime? @db.Date
+  id         Int       @id @default(autoincrement())
+  name       String
+  cns        String?   @unique
+  birthDate  DateTime? @db.Date
   // Todos os telefones conhecidos, em E.164. As listas trazem até 5 colunas
   // de telefone por paciente — guardar todos permite fallback quando o
   // primeiro número falha.
-  phones    String[]  @default([])
+  phones     String[]  @default([])
   // Paciente pediu pra não receber mensagens. Obrigatório respeitar (LGPD),
   // e é a defesa mais barata contra denúncia de spam no WhatsApp.
   optedOut   Boolean   @default(false)
@@ -266,76 +269,104 @@ model Patient {
 }
 
 model Appointment {
-  id               Int      @id @default(autoincrement())
-  listId           Int
-  agendaId         Int?
-  patientId        Int
-  municipalityId   Int
-  doctorId         Int
-  procedureId      Int
-  requestingUnitId Int?
-  scheduledAt      DateTime
-  isFirstVisit     Boolean?
+  id                   Int               @id @default(autoincrement())
+  listId               Int
+  agendaId             Int?
+  patientId            Int
+  municipalityId       Int
+  doctorId             Int
+  procedureId          Int
+  requestingUnitId     Int?
+  scheduledAt          DateTime
+  isFirstVisit         Boolean?
   // Snapshot dos telefones como vieram na lista (E.164), independente do
   // cadastro do paciente — a lista da prefeitura pode trazer um número novo.
-  phones           String[] @default([])
+  phones               String[]          @default([])
   // Número escolhido para o disparo (o melhor candidato a WhatsApp).
-  selectedPhone    String?
-  status           AppointmentStatus @default(PENDENTE)
-  refusalReason    RefusalReason?
-  refusalNote      String?
-  respondedAt      DateTime?
+  selectedPhone        String?
+  status               AppointmentStatus @default(PENDENTE)
+  refusalReason        RefusalReason?
+  refusalNote          String?
+  respondedAt          DateTime?
   // Contato manual (equipe ligou) — sem isso esses casos voltariam pro papel.
-  contactedById    Int?
-  contactedAt      DateTime?
-  contactNote      String?
+  contactedById        Int?
+  contactedAt          DateTime?
+  contactNote          String?
+  // Cancelamento pela DGS (médico indisponível) — motivo é texto livre
+  // (não um enum como RefusalReason: quem cancela é a equipe, escrevendo o
+  // motivo na hora, não escolhendo de uma lista fixa).
+  cancellationBatchId  Int?
+  canceledById         Int?
+  canceledAt           DateTime?
   // 0..1 — abaixo do limiar a linha aparece destacada na revisão.
   extractionConfidence Float?
-  manuallyEdited   Boolean  @default(false)
+  manuallyEdited       Boolean           @default(false)
   // Linha bruta como a IA extraiu, pra conferir contra o arquivo original.
-  rawLine          Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  rawLine              Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
-  list           List         @relation(fields: [listId], references: [id], onDelete: Cascade)
-  agenda         Agenda?      @relation(fields: [agendaId], references: [id])
-  patient        Patient      @relation(fields: [patientId], references: [id])
-  municipality   Municipality @relation(fields: [municipalityId], references: [id])
-  doctor         Doctor       @relation(fields: [doctorId], references: [id])
-  procedure      Procedure    @relation(fields: [procedureId], references: [id])
-  requestingUnit HealthUnit?  @relation("AppointmentRequestingUnit", fields: [requestingUnitId], references: [id])
-  contactedBy    User?        @relation("AppointmentContactedBy", fields: [contactedById], references: [id])
+  list              List               @relation(fields: [listId], references: [id], onDelete: Cascade)
+  agenda            Agenda?            @relation(fields: [agendaId], references: [id])
+  patient           Patient            @relation(fields: [patientId], references: [id])
+  municipality      Municipality       @relation(fields: [municipalityId], references: [id])
+  doctor            Doctor             @relation(fields: [doctorId], references: [id])
+  procedure         Procedure          @relation(fields: [procedureId], references: [id])
+  requestingUnit    HealthUnit?        @relation("AppointmentRequestingUnit", fields: [requestingUnitId], references: [id])
+  contactedBy       User?              @relation("AppointmentContactedBy", fields: [contactedById], references: [id])
+  canceledBy        User?              @relation("AppointmentCanceledBy", fields: [canceledById], references: [id])
+  cancellationBatch CancellationBatch? @relation(fields: [cancellationBatchId], references: [id])
 
-  messages     WhatsappMessage[]
-  messageJobs  MessageJob[]
+  messages    WhatsappMessage[]
+  messageJobs MessageJob[]
 
   @@index([listId])
   @@index([patientId])
   @@index([status])
   @@index([scheduledAt])
   @@index([doctorId, scheduledAt])
+  @@index([cancellationBatchId])
   @@map("appointments")
 }
 
-/* ------------------------------------------------------------------ */
-/* WhatsApp                                                            */
-/* ------------------------------------------------------------------ */
+// Um "disparo" de cancelamento — agrupa os agendamentos cancelados juntos
+// (mesma agenda, mesmo motivo, mesma hora), pra dar a tela de histórico
+// ("mostrar todas as mensagens de cancelamento enviadas") sem precisar
+// recalcular agrupamento por data/hora toda vez.
+model CancellationBatch {
+  id          Int      @id @default(autoincrement())
+  agendaId    Int
+  reason      String
+  createdById Int
+  createdAt   DateTime @default(now())
+
+  agenda       Agenda        @relation(fields: [agendaId], references: [id])
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  appointments Appointment[]
+
+  @@index([agendaId])
+  @@map("cancellation_batches")
+}
+
+/* ---------------------------------------------------------------------- */
+/* WhatsApp                                                               */
+/* ---------------------------------------------------------------------- */
 
 // Fila de envio. Disparo em massa é assíncrono por causa do limite diário da
 // Meta: o processador respeita o teto do dia e reporta o que não coube, em
 // vez de falhar em silêncio.
 model MessageJob {
-  id            Int       @id @default(autoincrement())
+  id            Int          @id @default(autoincrement())
   appointmentId Int
   template      TemplateKind
   phone         String
-  scheduledFor  DateTime  @default(now())
-  status        JobStatus @default(PENDENTE)
-  attempts      Int       @default(0)
+  scheduledFor  DateTime     @default(now())
+  status        JobStatus    @default(PENDENTE)
+  attempts      Int          @default(0)
   lastError     String?
   processedAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
@@ -345,11 +376,11 @@ model MessageJob {
 }
 
 model WhatsappMessage {
-  id            Int       @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
   appointmentId Int?
   // Id da mensagem na Meta. Único: garante idempotência quando o webhook
   // reentrega o mesmo evento.
-  wamid         String?   @unique
+  wamid         String?        @unique
   direction     Direction
   template      TemplateKind?
   phone         String
@@ -364,7 +395,7 @@ model WhatsappMessage {
   readAt        DateTime?
   failedAt      DateTime?
   raw           Json?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime       @default(now())
 
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
@@ -404,9 +435,9 @@ model WhatsappAccount {
   @@map("whatsapp_accounts")
 }
 
-/* ------------------------------------------------------------------ */
-/* Conciliação e auditoria                                             */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------- */
+/* Conciliação e auditoria                                                */
+/* ---------------------------------------------------------------------- */
 
 // Checks 2 e 3 da conciliação. Os confirmados (check 1) não estão aqui de
 // propósito — são derivados de Appointment.status.
@@ -434,11 +465,11 @@ model DailyClosing {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  doctor             Doctor       @relation(fields: [doctorId], references: [id])
-  municipality       Municipality @relation(fields: [municipalityId], references: [id])
-  procedure          Procedure?   @relation(fields: [procedureId], references: [id])
-  attendedReportedBy User?        @relation("ClosingAttendedBy", fields: [attendedReportedById], references: [id])
-  paidCountBy        User?        @relation("ClosingPaidBy", fields: [paidCountById], references: [id])
+  doctor             Doctor              @relation(fields: [doctorId], references: [id])
+  municipality       Municipality        @relation(fields: [municipalityId], references: [id])
+  procedure          Procedure?          @relation(fields: [procedureId], references: [id])
+  attendedReportedBy User?               @relation("ClosingAttendedBy", fields: [attendedReportedById], references: [id])
+  paidCountBy        User?               @relation("ClosingPaidBy", fields: [paidCountById], references: [id])
   attachments        ClosingAttachment[]
 
   // Sem @@unique aqui de propósito: procedureId é nulável e o Postgres trata
@@ -499,9 +530,9 @@ model RateLimitHit {
   @@map("rate_limit_hits")
 }
 
-/* ------------------------------------------------------------------ */
-/* Enums                                                               */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------- */
+/* Enums                                                                  */
+/* ---------------------------------------------------------------------- */
 
 enum Shift {
   MANHA
@@ -533,6 +564,9 @@ enum AppointmentStatus {
   SEM_RESPOSTA
   SEM_TELEFONE
   FALHA
+  // Cancelado pela DGS (médico indisponível) — diferente de RECUSADO, que é
+  // o paciente dizendo que não vai. Terminal: não volta pra fila de novo.
+  CANCELADO
 }
 
 enum RefusalReason {
@@ -549,6 +583,7 @@ enum TemplateKind {
   CONFIRMACAO
   LEMBRETE
   VAGA_ABERTA
+  CANCELAMENTO
 }
 
 enum JobStatus {

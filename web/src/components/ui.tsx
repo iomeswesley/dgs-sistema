@@ -12,6 +12,7 @@ export function StatusPill({ status }: { status: string }) {
     ENTREGUE: { bg: "var(--mark-yellow-soft)", fg: "var(--mark-yellow)" },
     SEM_TELEFONE: { bg: "var(--mark-gray-soft)", fg: "var(--mark-gray)" },
     SEM_RESPOSTA: { bg: "var(--mark-gray-soft)", fg: "var(--mark-gray)" },
+    CANCELADO: { bg: "var(--mark-gray-soft)", fg: "var(--mark-gray)" },
   };
   const colors = tone[status] ?? tone.SEM_RESPOSTA!;
 

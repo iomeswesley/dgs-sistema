@@ -157,6 +157,7 @@ export async function processQueue(): Promise<ProcessResult> {
           procedure: true,
           doctor: true,
           agenda: { include: { unit: true } },
+          cancellationBatch: true,
         },
       },
     },
@@ -170,6 +171,13 @@ export async function processQueue(): Promise<ProcessResult> {
       where: { id: job.id },
       data: { status: "ENVIANDO", attempts: { increment: 1 } },
     });
+
+    // Cancelamento já é um fato decidido pela equipe no momento do disparo
+    // (ver dispatchCancellation em modules/cancellations) — o
+    // appointment.status já virou CANCELADO ali, independente do envio da
+    // mensagem funcionar. Aqui só registra a mensagem em si, sem mexer no
+    // status: sucesso ou falha de entrega não desfaz o cancelamento.
+    const isCancellation = job.template === "CANCELAMENTO";
 
     try {
       const params = buildTemplateParams(job.template, job.appointment);
@@ -191,10 +199,9 @@ export async function processQueue(): Promise<ProcessResult> {
             sentAt: new Date(),
           },
         }),
-        prisma.appointment.update({
-          where: { id: job.appointmentId },
-          data: { status: "ENVIADO" },
-        }),
+        ...(isCancellation
+          ? []
+          : [prisma.appointment.update({ where: { id: job.appointmentId }, data: { status: "ENVIADO" } })]),
       ]);
       sent++;
     } catch (err) {
@@ -218,7 +225,9 @@ export async function processQueue(): Promise<ProcessResult> {
             failedAt: new Date(),
           },
         }),
-        prisma.appointment.update({ where: { id: job.appointmentId }, data: { status: "FALHA" } }),
+        ...(isCancellation
+          ? []
+          : [prisma.appointment.update({ where: { id: job.appointmentId }, data: { status: "FALHA" } })]),
       ]);
       failed++;
     }
@@ -235,6 +244,7 @@ type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrTh
   municipality: { name: string };
   procedure: { name: string; preparationInstructions: string | null };
   agenda: { unit: { name: string; address: string | null } | null } | null;
+  cancellationBatch: { reason: string } | null;
 };
 
 function formatDate(date: Date): string {
@@ -278,6 +288,14 @@ function buildTemplateParams(template: TemplateKind, appointment: JobAppointment
   if (template === "VAGA_ABERTA") {
     return {
       body: [firstName, appointment.municipality.name, appointment.procedure.name, date, time, local],
+    };
+  }
+
+  if (template === "CANCELAMENTO") {
+    // Texto do template não usa o primeiro nome (decisão do usuário,
+    // 2026-08-22) — só procedimento, data e motivo, na ordem cadastrada.
+    return {
+      body: [appointment.procedure.name.toUpperCase(), date, appointment.cancellationBatch?.reason ?? ""],
     };
   }
 

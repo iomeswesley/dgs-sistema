@@ -56,6 +56,7 @@ export const STATUS_LABEL: Record<string, string> = {
   SEM_RESPOSTA: "Sem resposta",
   SEM_TELEFONE: "Sem telefone",
   FALHA: "Falha no envio",
+  CANCELADO: "Cancelado pela DGS",
 };
 
 export const REFUSAL_LABEL: Record<string, string> = {

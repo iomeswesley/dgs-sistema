@@ -197,7 +197,7 @@ whatsappSignupRouter.delete(
 
 const testSendSchema = z.object({
   phone: z.string().min(8),
-  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA"]),
+  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA", "CANCELAMENTO"]),
 });
 
 /**
@@ -235,6 +235,9 @@ function buildTestParams(template: TemplateKind) {
   }
   if (template === "VAGA_ABERTA") {
     return { body: [firstName, municipality, procedure, date, time, local] };
+  }
+  if (template === "CANCELAMENTO") {
+    return { body: [procedure.toUpperCase(), date, "Motivo de teste"] };
   }
   return { header: [municipality], body: [firstName, municipality, date, time, procedure, local] };
 }

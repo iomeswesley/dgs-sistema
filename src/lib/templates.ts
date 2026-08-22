@@ -7,6 +7,7 @@ export const TEMPLATE_NAMES: Record<TemplateKind, string> = {
   CONFIRMACAO: "confirmacao_consulta",
   LEMBRETE: "lembrete_vespera",
   VAGA_ABERTA: "convite_vaga_aberta",
+  CANCELAMENTO: "cancelamento_consulta",
 };
 
 /**
@@ -29,6 +30,9 @@ export const TEMPLATE_FIELDS: Record<TemplateKind, TemplateFields> = {
   },
   VAGA_ABERTA: {
     body: ["Nome do paciente", "Município", "Procedimento", "Data", "Horário", "Local"],
+  },
+  CANCELAMENTO: {
+    body: ["Procedimento (maiúsculas)", "Data", "Motivo"],
   },
 };
 

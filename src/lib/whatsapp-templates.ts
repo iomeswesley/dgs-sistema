@@ -113,6 +113,25 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  {
+    name: "cancelamento_consulta",
+    category: "UTILITY",
+    language: "pt_BR",
+    components: [
+      {
+        type: "BODY",
+        text:
+          "*CONSULTA {{1}} CANCELADA*\n\nSua consulta do dia *{{2}}* foi cancelada.\n\n*Motivo:* {{3}}\n\n" +
+          "_Em breve informaremos seu novo agendamento._\n\nPedimos desculpas pelo transtorno e agradecemos a " +
+          "sua compreensão. 🙏",
+        example: { body_text: [["ULTRASSOM", "25/08/2026", "Profissional irá realizar uma cirurgia e ficará ausente por uma semana."]] },
+      },
+      {
+        type: "BUTTONS",
+        buttons: [{ type: "QUICK_REPLY", text: "Ciente, obrigado(a)" }],
+      },
+    ],
+  },
 ];
 
 export interface TemplateStatus {
@@ -158,10 +177,21 @@ export async function submitDefaultTemplates(wabaId: string, accessToken: string
         body: JSON.stringify(template),
       });
       if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        const message = (payload as { error?: { message?: string } }).error?.message ?? "";
-        if (!/already exists|duplicate/i.test(message)) {
-          console.error(`[WHATSAPP TEMPLATES] Falha ao submeter "${template.name}":`, message || JSON.stringify(payload));
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string; error_subcode?: number };
+        };
+        // 2388024 = "Já existe conteúdo nesse idioma" — a Meta rejeita
+        // resubmeter o mesmo nome+idioma de um template já cadastrado.
+        // Não é falha de verdade: é exatamente o esperado quando essa
+        // função roda de novo numa WABA que já tinha os templates (ex.:
+        // reconexão do mesmo número). Confirmado testando manualmente —
+        // o texto de `message` sozinho ("Invalid parameter") não diferencia
+        // isso de qualquer outro erro, só o `error_subcode` diferencia.
+        if (payload.error?.error_subcode !== 2388024) {
+          console.error(
+            `[WHATSAPP TEMPLATES] Falha ao submeter "${template.name}":`,
+            payload.error?.message ?? JSON.stringify(payload)
+          );
         }
       }
     } catch (err) {
