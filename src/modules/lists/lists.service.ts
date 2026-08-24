@@ -380,6 +380,68 @@ export async function removeAppointment(appointmentId: number, userId: number): 
   });
 }
 
+export interface RetryFailedUpdate {
+  appointmentId: number;
+  phone: string;
+}
+
+/**
+ * Reenvia a confirmação (ou convite de vaga aberta, se a lista for
+ * complementar) pra quem falhou, com telefone novo — mesma dinâmica do
+ * "Reenviar pra quem falhou" do Cancelamento (2026-08-26). Diferente da
+ * edição na revisão (`editAppointment`), não exige a lista estar em
+ * `EM_REVISAO`: o objetivo aqui é corrigir DEPOIS do disparo, quando já não
+ * dá mais pra editar a linha normalmente.
+ */
+export async function retryFailedAppointments(
+  listId: number,
+  updates: RetryFailedUpdate[],
+  userId: number
+): Promise<{ queued: number }> {
+  if (updates.length === 0) throw new AppError("Nenhum telefone informado pra reenviar.", 400);
+
+  const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true } });
+  if (!list) throw new AppError("Lista não encontrada.", 404);
+  const template = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+
+  const appointments = await prisma.appointment.findMany({
+    where: { id: { in: updates.map((u) => u.appointmentId) }, listId },
+  });
+  const byId = new Map(appointments.map((a) => [a.id, a]));
+
+  let queued = 0;
+  for (const update of updates) {
+    const appointment = byId.get(update.appointmentId);
+    if (!appointment) continue; // não pertence a essa lista — ignora em silêncio
+
+    const [normalized] = normalizePhoneList([update.phone]);
+    if (!normalized || normalized.kind !== "mobile") {
+      throw new AppError(`Telefone inválido pro paciente do agendamento ${update.appointmentId}.`, 400);
+    }
+
+    await prisma.$transaction([
+      prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { selectedPhone: normalized.e164, status: "PENDENTE" },
+      }),
+      prisma.messageJob.create({
+        data: { appointmentId: appointment.id, template, phone: normalized.e164 },
+      }),
+    ]);
+    queued++;
+  }
+
+  await recordAudit({
+    userId,
+    action: "retry_failed",
+    entity: "List",
+    entityId: listId,
+    metadata: { queued, appointmentIds: updates.map((u) => u.appointmentId) },
+  });
+
+  return { queued };
+}
+
 /**
  * Aprova a lista. Depois disso a revisão fecha e o disparo é liberado.
  *

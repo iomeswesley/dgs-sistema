@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
+import { pickAlternatePhone } from "@/lib/phone.js";
 import {
   approveList,
   checkUnit,
@@ -12,6 +13,7 @@ import {
   editAppointment,
   extractAndStage,
   removeAppointment,
+  retryFailedAppointments,
 } from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
@@ -236,7 +238,19 @@ listsRouter.get(
     // revisão já reflete isso sem precisar reprocessar a lista.
     const unitCheck = await checkUnit(list.agendaId, executingUnit);
 
-    res.json({ list: { ...list, extractionRaw: undefined }, appointments, warnings, unitCheck });
+    // Outro celular do cadastro, diferente do que já foi tentado — sugestão
+    // pronta pro "Reenviar pra quem falhou" (mesma dinâmica do Cancelamento).
+    const appointmentsWithAlternate = appointments.map((a) => ({
+      ...a,
+      alternatePhone: pickAlternatePhone(a.patient.phones, a.selectedPhone),
+    }));
+
+    res.json({
+      list: { ...list, extractionRaw: undefined },
+      appointments: appointmentsWithAlternate,
+      warnings,
+      unitCheck,
+    });
   })
 );
 
@@ -305,6 +319,30 @@ listsRouter.post(
     const processed = await processQueue();
     const capacity = await queueCapacity();
     res.json({ ...result, ...processed, capacity });
+  })
+);
+
+const retryFailedSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        appointmentId: z.number().int().positive(),
+        phone: z.string().trim().min(1, "Telefone vazio"),
+      })
+    )
+    .min(1, "Nenhum telefone informado"),
+});
+
+/** Reenvia a confirmação (ou convite de vaga aberta) pra quem falhou, com telefone novo. */
+listsRouter.post(
+  "/api/lists/:id/retry-failed",
+  asyncHandler(async (req, res) => {
+    const { updates } = parseBody(req, retryFailedSchema);
+    const result = await retryFailedAppointments(routeId(req), updates, currentUserId(req));
+    // Mesma convenção do dispatch: enfileira e já processa na hora — o
+    // resto, se não couber, o frontend completa sozinho (runQueueUntilDone).
+    await processQueue();
+    res.status(201).json(result);
   })
 );
 

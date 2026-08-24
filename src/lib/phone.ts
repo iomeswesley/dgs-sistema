@@ -120,6 +120,18 @@ export function pickDispatchPhone(raws: (string | null | undefined)[]): string |
 }
 
 /**
+ * Outro celular do cadastro do paciente, diferente do que já foi tentado —
+ * sugestão pronta pra reenviar quando o primeiro falhou (Cancelamento e
+ * Revisão/Acompanhamento reaproveitam, ver "Reenviar pra quem falhou").
+ */
+export function pickAlternatePhone(patientPhones: string[], triedPhone: string | null): string | null {
+  const alternative = normalizePhoneList(patientPhones).find(
+    (p) => p.kind === "mobile" && p.e164 !== triedPhone
+  );
+  return alternative?.e164 ?? null;
+}
+
+/**
  * A Meta às vezes manda o campo "from" do webhook sem o 9º dígito do
  * celular brasileiro (ex: 554797760610 em vez de 5547997760610) — bug
  * conhecido, documentado só em fóruns de desenvolvedor, não na doc oficial.

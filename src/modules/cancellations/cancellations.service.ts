@@ -4,7 +4,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
-import { phoneCandidates, normalizePhoneList } from "@/lib/phone.js";
+import { phoneCandidates, normalizePhoneList, pickAlternatePhone } from "@/lib/phone.js";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender (cirurgia,
@@ -270,13 +270,6 @@ export interface CancellationBatchDetail extends CancellationBatchSummary {
   }[];
 }
 
-/** Outro celular do cadastro do paciente, diferente do que já falhou — ou null se não tem nenhum. */
-function pickAlternatePhone(patientPhones: string[], triedPhone: string | null): string | null {
-  const alternative = normalizePhoneList(patientPhones).find(
-    (p) => p.kind === "mobile" && p.e164 !== triedPhone
-  );
-  return alternative?.e164 ?? null;
-}
 
 export async function getCancellationBatch(id: number): Promise<CancellationBatchDetail> {
   const batch = await prisma.cancellationBatch.findUnique({

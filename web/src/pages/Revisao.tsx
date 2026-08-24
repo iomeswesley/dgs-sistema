@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { FormModal } from "../components/FormModal";
 import { StatusBand } from "../components/StatusBand";
-import { Callout, ErrorNote, Spinner, StatusPill, Table, Td, Th } from "../components/ui";
+import { Callout, ErrorNote, Field, Spinner, StatusPill, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatDateTime, formatPhone, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
+import { formatDateTime, formatPhone, LIST_STATUS_LABEL, STATUS_LABEL, toBandCounts } from "../lib/format";
 import { runQueueUntilDone } from "../lib/queue";
 
 /*
@@ -22,6 +23,8 @@ interface Appointment {
   scheduledAt: string;
   status: string;
   selectedPhone: string | null;
+  /** Outro celular do cadastro, diferente do selecionado — sugestão pronta pro reenvio. */
+  alternatePhone: string | null;
   phones: string[];
   extractionConfidence: number | null;
   manuallyEdited: boolean;
@@ -32,6 +35,20 @@ interface Appointment {
   requestingUnit: { id: number; name: string } | null;
   rawLine: { issues?: string[]; invalidPhones?: string[]; notes?: string | null } | null;
 }
+
+// Filtro por situação do envio — mesma dinâmica de botões do Cancelamento
+// (2026-08-26). Ordem pensada pro fluxo: primeiro quem ainda não recebeu
+// nada, depois quem recebeu, depois os dois desfechos finais.
+const STATUS_FILTER_OPTIONS = [
+  "PENDENTE",
+  "ENVIADO",
+  "ENTREGUE",
+  "CONFIRMADO",
+  "RECUSADO",
+  "SEM_RESPOSTA",
+  "SEM_TELEFONE",
+  "FALHA",
+] as const;
 
 interface ListSuggestion {
   stillNeeded: number;
@@ -86,6 +103,12 @@ export function Revisao() {
 
   const [search, setSearch] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [retryOpen, setRetryOpen] = useState(false);
+  const [retryPhones, setRetryPhones] = useState<Record<number, string>>({});
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -137,6 +160,7 @@ export function Revisao() {
   const searchName = search.trim().toLocaleLowerCase("pt-BR");
   const filteredAppointments = appointments.filter((appointment) => {
     if (onlyIssues && (appointment.rawLine?.issues?.length ?? 0) === 0) return false;
+    if (statusFilter && appointment.status !== statusFilter) return false;
     if (!searchName) return true;
     const nameMatch = appointment.patient.name.toLocaleLowerCase("pt-BR").includes(searchName);
     const phoneMatch = searchDigits.length > 0 && appointment.phones.some((phone) => phone.includes(searchDigits));
@@ -147,6 +171,43 @@ export function Revisao() {
     (appointment) => (appointment.rawLine?.issues?.length ?? 0) > 0
   ).length;
   const isReviewing = list.status === "EM_REVISAO";
+  const failedAppointments = appointments.filter((appointment) => appointment.status === "FALHA");
+
+  function openRetry() {
+    const initial: Record<number, string> = {};
+    for (const a of failedAppointments) initial[a.id] = a.alternatePhone ?? "";
+    setRetryPhones(initial);
+    setRetryError(null);
+    setRetryOpen(true);
+  }
+
+  async function submitRetry() {
+    const updates = Object.entries(retryPhones)
+      .filter(([, phone]) => phone.trim().length > 0)
+      .map(([appointmentId, phone]) => ({ appointmentId: Number(appointmentId), phone: phone.trim() }));
+    if (updates.length === 0) {
+      setRetryError("Preencha ao menos um telefone pra reenviar.");
+      return;
+    }
+    setRetryBusy(true);
+    setRetryError(null);
+    try {
+      const result = await api.post<{ queued: number }>(`/api/lists/${list.id}/retry-failed`, { updates });
+      setRetryOpen(false);
+      setRetryNotice(`Reenviando pra ${result.queued} paciente(s)...`);
+      const finished = await runQueueUntilDone(({ sent, failed }) => {
+        setRetryNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.`);
+      });
+      setRetryNotice(
+        `Reenvio concluído — ${finished.sent} enviada(s)` + (finished.failed > 0 ? `, ${finished.failed} falharam` : "") + "."
+      );
+      detail.reload();
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : "Falha ao reenviar.");
+    } finally {
+      setRetryBusy(false);
+    }
+  }
 
   function startEdit(appointment: Appointment) {
     setEditing(appointment.id);
@@ -354,6 +415,11 @@ export function Revisao() {
           <Callout>{notice}</Callout>
         </div>
       )}
+      {retryNotice && (
+        <div className="mb-4">
+          <Callout>{retryNotice}</Callout>
+        </div>
+      )}
       {error && (
         <div className="mb-4">
           <ErrorNote message={error} />
@@ -449,10 +515,43 @@ export function Revisao() {
             Filtrar erros{pending > 0 ? ` (${pending})` : ""}
           </button>
         </div>
-        {(search || onlyIssues) && (
+        {(search || onlyIssues || statusFilter) && (
           <p className="mt-1 text-xs text-ink-faint">
             {filteredAppointments.length} de {appointments.length} pacientes
           </p>
+        )}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={statusFilter === ""}
+            className={`btn px-3 py-1.5 text-sm ${statusFilter === "" ? "btn-primary" : "btn-quiet"}`}
+            onClick={() => setStatusFilter("")}
+          >
+            Todas ({appointments.length})
+          </button>
+          {STATUS_FILTER_OPTIONS.map((status) => {
+            const count = appointments.filter((a) => a.status === status).length;
+            if (count === 0) return null;
+            return (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={statusFilter === status}
+                className={`btn px-3 py-1.5 text-sm ${statusFilter === status ? "btn-primary" : "btn-quiet"}`}
+                onClick={() => setStatusFilter(status)}
+              >
+                {STATUS_LABEL[status] ?? status} ({count})
+              </button>
+            );
+          })}
+        </div>
+        {failedAppointments.length > 0 && (
+          <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openRetry}>
+            Reenviar pra quem falhou ({failedAppointments.length})
+          </button>
         )}
       </div>
 
@@ -673,6 +772,29 @@ export function Revisao() {
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
+      <FormModal
+        open={retryOpen}
+        title="Reenviar pra quem falhou"
+        description="Quando o paciente tem outro celular no cadastro, já vem preenchido. Deixe em branco pra não reenviar pra esse paciente."
+        submitLabel="Reenviar"
+        busy={retryBusy}
+        error={retryError}
+        onSubmit={submitRetry}
+        onCancel={() => setRetryOpen(false)}
+      >
+        {failedAppointments.map((a) => (
+          <Field key={a.id} label={a.patient.name} hint={`Número que falhou: ${formatPhone(a.selectedPhone)}`}>
+            <input
+              className="field"
+              type="tel"
+              placeholder="Novo telefone (com DDD)"
+              value={retryPhones[a.id] ?? ""}
+              onChange={(e) => setRetryPhones((prev) => ({ ...prev, [a.id]: e.target.value }))}
+            />
+          </Field>
+        ))}
+      </FormModal>
     </>
   );
 }
