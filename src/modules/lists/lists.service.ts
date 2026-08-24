@@ -173,12 +173,27 @@ async function resolveCatalog(
 
 /** Encontra ou cria o paciente, deduplicando por CNS e depois por telefone. */
 async function resolvePatient(tx: TxClient, draft: AppointmentDraft) {
+  // Se o CNS bateu num paciente de nome bem diferente, não é seguro nem
+  // reaproveitar (pode ser gente diferente) nem levar esse CNS pro paciente
+  // novo (violaria o @unique — o CNS já pertence ao outro registro). Some
+  // esse dado no rascunho novo em vez de tentar salvar de qualquer jeito.
+  let cnsForNewPatient = draft.cns;
+
   if (draft.cns) {
     const byCns = await tx.patient.findUnique({ where: { cns: draft.cns } });
+    // Mesma cautela do telefone (achado em 2026-08-25) também aplicada aqui
+    // em 2026-08-26: CNS é forte prova de identidade, mas não é infalível —
+    // um bug de alinhamento na extração (já visto no parser SISREG, corrigido
+    // separadamente) pode colar o CNS de um registro no nome de outro. Exige
+    // nome parecido também antes de acumular telefone num cadastro existente;
+    // CNS batendo com nome bem diferente vira paciente novo, sem levar o CNS.
     if (byCns) {
-      // A lista pode trazer um número novo — acumular, nunca substituir.
-      const merged = Array.from(new Set([...byCns.phones, ...draft.phones]));
-      return tx.patient.update({ where: { id: byCns.id }, data: { phones: merged } });
+      if (namesMatch(byCns.name, draft.name)) {
+        // A lista pode trazer um número novo — acumular, nunca substituir.
+        const merged = Array.from(new Set([...byCns.phones, ...draft.phones]));
+        return tx.patient.update({ where: { id: byCns.id }, data: { phones: merged } });
+      }
+      cnsForNewPatient = null;
     }
   }
 
@@ -194,9 +209,12 @@ async function resolvePatient(tx: TxClient, draft: AppointmentDraft) {
     const byPhone = candidates.find((p) => namesMatch(p.name, draft.name));
     if (byPhone) {
       const merged = Array.from(new Set([...byPhone.phones, ...draft.phones]));
+      // cnsForNewPatient já vem null se o CNS do rascunho pertencia a outro
+      // paciente (não pode duplicar, é @unique) — só completa o CNS do
+      // paciente achado por telefone se ele ainda não tinha nenhum.
       return tx.patient.update({
         where: { id: byPhone.id },
-        data: { phones: merged, cns: byPhone.cns ?? draft.cns },
+        data: { phones: merged, cns: byPhone.cns ?? cnsForNewPatient },
       });
     }
   }
@@ -204,7 +222,7 @@ async function resolvePatient(tx: TxClient, draft: AppointmentDraft) {
   return tx.patient.create({
     data: {
       name: draft.name,
-      cns: draft.cns,
+      cns: cnsForNewPatient,
       birthDate: draft.birthDate ? new Date(draft.birthDate) : null,
       phones: draft.phones,
     },
