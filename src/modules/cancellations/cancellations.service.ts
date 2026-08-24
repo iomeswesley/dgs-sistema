@@ -223,6 +223,7 @@ export interface CancellationBatchDetail extends CancellationBatchSummary {
   appointments: {
     id: number;
     patientName: string;
+    phone: string | null;
     procedureName: string;
     scheduledAt: Date;
     messageStatus: string | null;
@@ -285,6 +286,7 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
       return {
         id: a.id,
         patientName: a.patient.name,
+        phone: a.selectedPhone,
         procedureName: a.procedure.name,
         scheduledAt: a.scheduledAt,
         messageStatus: a.messages[0]?.status ?? null,
