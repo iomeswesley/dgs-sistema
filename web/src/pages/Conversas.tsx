@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "../components/AppShell";
 import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner } from "../components/ui";
@@ -90,6 +90,14 @@ export function Conversas() {
   const [bodyValues, setBodyValues] = useState<string[]>([]);
   const [templateBusy, setTemplateBusy] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Abre a conversa já no fim (mensagem mais recente), como o WhatsApp de
+  // verdade — sem isso o painel abre mostrando a mensagem mais antiga.
+  // Reage também a novas mensagens chegando (refresh periódico ou envio).
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [selectedPhone, thread.data?.messages.length]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -279,6 +287,7 @@ export function Conversas() {
                 {thread.data && thread.data.messages.length === 0 && (
                   <p className="text-sm text-ink-muted">Nenhuma mensagem com esse número ainda.</p>
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               <div className="shrink-0 bg-wa-input-bar p-3">

@@ -39,14 +39,19 @@ interface CancellationAppointment {
   messageStatus: string | null;
 }
 
+interface CancellationSourceInfo {
+  date: string;
+  doctorName: string;
+  municipalityName: string;
+  unitName: string | null;
+}
+
 interface CancellationBatchDetail {
   id: number;
+  source: CancellationSourceInfo;
   reason: string;
   createdAt: string;
   createdByName: string;
-  agendaDate: string;
-  doctorName: string;
-  municipalityName: string;
   appointments: CancellationAppointment[];
 }
 
@@ -58,8 +63,12 @@ export function CancelamentoDetalhe() {
     <>
       <PageHeader
         eyebrow="Cancelamento"
-        title={detail.data ? `${detail.data.doctorName} — ${formatDate(detail.data.agendaDate)}` : "Cancelamento"}
-        description={detail.data ? `${detail.data.municipalityName} · disparado por ${detail.data.createdByName}` : ""}
+        title={
+          detail.data ? `${detail.data.source.doctorName} — ${formatDate(detail.data.source.date)}` : "Cancelamento"
+        }
+        description={
+          detail.data ? `${detail.data.source.municipalityName} · disparado por ${detail.data.createdByName}` : ""
+        }
       />
 
       {detail.loading && <Spinner />}

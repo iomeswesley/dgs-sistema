@@ -232,6 +232,7 @@ model List {
   uploadedBy   User          @relation("ListUploadedBy", fields: [uploadedById], references: [id])
   approvedBy   User?         @relation("ListApprovedBy", fields: [approvedById], references: [id])
   appointments Appointment[]
+  cancellationBatches CancellationBatch[]
 
   @@index([municipalityId])
   @@index([status])
@@ -333,18 +334,25 @@ model Appointment {
 // (mesma agenda, mesmo motivo, mesma hora), pra dar a tela de histórico
 // ("mostrar todas as mensagens de cancelamento enviadas") sem precisar
 // recalcular agrupamento por data/hora toda vez.
+// Origem do cancelamento: uma Agenda já cadastrada (caminho normal) OU uma
+// List enviada na hora, sem agenda nenhuma (caminho "nunca passou pela
+// plataforma" — 2026-08-25). Exatamente um dos dois é preenchido, nunca os
+// dois nem nenhum — validado na camada de aplicação, não no banco.
 model CancellationBatch {
   id          Int      @id @default(autoincrement())
-  agendaId    Int
+  agendaId    Int?
+  listId      Int?
   reason      String
   createdById Int
   createdAt   DateTime @default(now())
 
-  agenda       Agenda        @relation(fields: [agendaId], references: [id])
+  agenda       Agenda?       @relation(fields: [agendaId], references: [id])
+  list         List?         @relation(fields: [listId], references: [id])
   createdBy    User          @relation(fields: [createdById], references: [id])
   appointments Appointment[]
 
   @@index([agendaId])
+  @@index([listId])
   @@map("cancellation_batches")
 }
 

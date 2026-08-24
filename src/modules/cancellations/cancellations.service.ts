@@ -6,43 +6,37 @@ import { processQueue } from "@/modules/queue/queue.service.js";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender (cirurgia,
-  licença etc.), e todo mundo já agendado precisa saber. Diferente de Listas:
-  não tem upload nenhum, parte de uma Agenda já cadastrada — município,
-  unidade, médico e data já vêm dela, não precisa selecionar de novo.
+  licença etc.), e todo mundo já agendado precisa saber. Duas origens
+  possíveis:
+
+  - Agenda já cadastrada (caminho normal) — município/unidade/médico/data
+    vêm dela, sem precisar selecionar de novo.
+  - List enviada na hora, sem agenda vinculada (2026-08-25) — pro caso da
+    agenda nunca ter passado pela plataforma. Reaproveita o mesmo upload +
+    extração de Listas (`POST /api/lists` sem `agendaId`), só que em vez de
+    seguir pro fluxo normal (Revisão → Aprovar → Disparar com CONFIRMACAO),
+    a equipe cancela direto os agendamentos extraídos.
 
   Status vira CANCELADO na hora do disparo (decisão da equipe), não depende
   do envio ter sucesso — ver comentário em queue.service.ts.
 */
 
+export type CancellationSource = { agendaId: number } | { listId: number };
+
 // Quem NÃO recebe o aviso: já recusou antes (não faz sentido reavisar quem
 // já disse que não ia), já foi cancelado (idempotência — não duplica se
-// alguém tentar cancelar a mesma agenda duas vezes) ou não tem telefone.
-// Opt-out (LGPD) é filtrado à parte, pelo paciente, não pelo status.
+// alguém tentar cancelar a mesma agenda/lista duas vezes) ou não tem
+// telefone. Opt-out (LGPD) é filtrado à parte, pelo paciente, não pelo status.
 const EXCLUDED_STATUSES: AppointmentStatus[] = ["RECUSADO", "CANCELADO", "SEM_TELEFONE"];
 
-export interface CancellablePatient {
-  appointmentId: number;
-  patientName: string;
-  scheduledAt: Date;
-  procedureName: string;
-  status: string;
+function sourceWhere(source: CancellationSource) {
+  return "agendaId" in source ? { agendaId: source.agendaId } : { listId: source.listId };
 }
 
-export interface CancellationPreview {
-  agenda: {
-    id: number;
-    date: Date;
-    doctorName: string;
-    municipalityName: string;
-    unitName: string | null;
-  };
-  patients: CancellablePatient[];
-}
-
-async function eligibleAppointments(agendaId: number) {
+async function eligibleAppointments(source: CancellationSource) {
   return prisma.appointment.findMany({
     where: {
-      agendaId,
+      ...sourceWhere(source),
       status: { notIn: EXCLUDED_STATUSES },
       selectedPhone: { not: null },
       patient: { optedOut: false },
@@ -52,23 +46,68 @@ async function eligibleAppointments(agendaId: number) {
   });
 }
 
-export async function previewCancellation(agendaId: number): Promise<CancellationPreview> {
-  const agenda = await prisma.agenda.findUnique({
-    where: { id: agendaId },
-    include: { doctor: true, municipality: true, unit: true },
-  });
-  if (!agenda) throw new AppError("Agenda não encontrada.", 404);
+export interface CancellablePatient {
+  appointmentId: number;
+  patientName: string;
+  scheduledAt: Date;
+  procedureName: string;
+  status: string;
+}
 
-  const appointments = await eligibleAppointments(agendaId);
+export interface CancellationSourceInfo {
+  date: Date;
+  doctorName: string;
+  municipalityName: string;
+  unitName: string | null;
+}
 
-  return {
-    agenda: {
-      id: agenda.id,
+export interface CancellationPreview {
+  source: CancellationSourceInfo;
+  patients: CancellablePatient[];
+}
+
+/**
+ * Info descritiva da origem, pra mostrar no topo da revisão — vem direto da
+ * Agenda quando existe; quando é uma List sem agenda, é reconstruída a
+ * partir do primeiro agendamento extraído (data/médico) + o município da
+ * própria List. Se a lista tiver mais de um médico misturado (raro, PDF
+ * malformado), só o primeiro aparece aqui — não afeta quem recebe o aviso.
+ */
+async function describeSource(source: CancellationSource): Promise<CancellationSourceInfo> {
+  if ("agendaId" in source) {
+    const agenda = await prisma.agenda.findUnique({
+      where: { id: source.agendaId },
+      include: { doctor: true, municipality: true, unit: true },
+    });
+    if (!agenda) throw new AppError("Agenda não encontrada.", 404);
+    return {
       date: agenda.date,
       doctorName: agenda.doctor.name,
       municipalityName: agenda.municipality.name,
       unitName: agenda.unit?.name ?? null,
-    },
+    };
+  }
+
+  const list = await prisma.list.findUnique({ where: { id: source.listId }, include: { municipality: true } });
+  if (!list) throw new AppError("Lista não encontrada.", 404);
+  const firstAppointment = await prisma.appointment.findFirst({
+    where: { listId: source.listId },
+    orderBy: { scheduledAt: "asc" },
+    include: { doctor: true },
+  });
+  return {
+    date: firstAppointment?.scheduledAt ?? list.createdAt,
+    doctorName: firstAppointment?.doctor.name ?? "—",
+    municipalityName: list.municipality.name,
+    unitName: null,
+  };
+}
+
+export async function previewCancellation(source: CancellationSource): Promise<CancellationPreview> {
+  const [info, appointments] = await Promise.all([describeSource(source), eligibleAppointments(source)]);
+
+  return {
+    source: info,
     patients: appointments.map((a) => ({
       appointmentId: a.id,
       patientName: a.patient.name,
@@ -80,19 +119,26 @@ export async function previewCancellation(agendaId: number): Promise<Cancellatio
 }
 
 export async function dispatchCancellation(
-  agendaId: number,
+  source: CancellationSource,
   reason: string,
   userId: number
 ): Promise<{ batchId: number; queued: number }> {
   // Reconsulta no servidor em vez de confiar na lista que o preview mandou
   // pro cliente — evita cancelar quem respondeu (confirmou/recusou) entre
   // o preview e o clique em "Disparar".
-  const appointments = await eligibleAppointments(agendaId);
+  const appointments = await eligibleAppointments(source);
   if (appointments.length === 0) {
     throw new AppError("Nenhum paciente elegível pra notificar nessa agenda.", 400);
   }
 
-  const batch = await prisma.cancellationBatch.create({ data: { agendaId, reason, createdById: userId } });
+  const batch = await prisma.cancellationBatch.create({
+    data: {
+      reason,
+      createdById: userId,
+      agendaId: "agendaId" in source ? source.agendaId : null,
+      listId: "listId" in source ? source.listId : null,
+    },
+  });
 
   const now = new Date();
   for (const appointment of appointments) {
@@ -110,7 +156,7 @@ export async function dispatchCancellation(
     action: "cancel",
     entity: "CancellationBatch",
     entityId: batch.id,
-    metadata: { agendaId, reason, queued: appointments.length },
+    metadata: { ...source, reason, queued: appointments.length },
   });
 
   // Mesma convenção do disparo de lista: enfileira e já processa na hora,
@@ -122,36 +168,39 @@ export async function dispatchCancellation(
 
 export interface CancellationBatchSummary {
   id: number;
-  agendaId: number;
+  source: CancellationSourceInfo;
   reason: string;
   createdAt: Date;
   createdByName: string;
-  agendaDate: Date;
-  doctorName: string;
-  municipalityName: string;
   count: number;
+}
+
+async function summarize(batch: {
+  id: number;
+  agendaId: number | null;
+  listId: number | null;
+  reason: string;
+  createdAt: Date;
+  createdBy: { name: string };
+  _count: { appointments: number };
+}): Promise<CancellationBatchSummary> {
+  const source: CancellationSource = batch.agendaId ? { agendaId: batch.agendaId } : { listId: batch.listId! };
+  return {
+    id: batch.id,
+    source: await describeSource(source),
+    reason: batch.reason,
+    createdAt: batch.createdAt,
+    createdByName: batch.createdBy.name,
+    count: batch._count.appointments,
+  };
 }
 
 export async function listCancellationBatches(): Promise<CancellationBatchSummary[]> {
   const batches = await prisma.cancellationBatch.findMany({
     orderBy: { createdAt: "desc" },
-    include: {
-      agenda: { include: { doctor: true, municipality: true } },
-      createdBy: true,
-      _count: { select: { appointments: true } },
-    },
+    include: { createdBy: true, _count: { select: { appointments: true } } },
   });
-  return batches.map((b) => ({
-    id: b.id,
-    agendaId: b.agendaId,
-    reason: b.reason,
-    createdAt: b.createdAt,
-    createdByName: b.createdBy.name,
-    agendaDate: b.agenda.date,
-    doctorName: b.agenda.doctor.name,
-    municipalityName: b.agenda.municipality.name,
-    count: b._count.appointments,
-  }));
+  return Promise.all(batches.map(summarize));
 }
 
 export interface CancellationBatchDetail extends CancellationBatchSummary {
@@ -168,7 +217,6 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
   const batch = await prisma.cancellationBatch.findUnique({
     where: { id },
     include: {
-      agenda: { include: { doctor: true, municipality: true } },
       createdBy: true,
       appointments: {
         include: {
@@ -181,16 +229,10 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
   });
   if (!batch) throw new AppError("Cancelamento não encontrado.", 404);
 
+  const summary = await summarize({ ...batch, _count: { appointments: batch.appointments.length } });
+
   return {
-    id: batch.id,
-    agendaId: batch.agendaId,
-    reason: batch.reason,
-    createdAt: batch.createdAt,
-    createdByName: batch.createdBy.name,
-    agendaDate: batch.agenda.date,
-    doctorName: batch.agenda.doctor.name,
-    municipalityName: batch.agenda.municipality.name,
-    count: batch.appointments.length,
+    ...summary,
     appointments: batch.appointments.map((a) => ({
       id: a.id,
       patientName: a.patient.name,
