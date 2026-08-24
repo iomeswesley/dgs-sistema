@@ -37,6 +37,8 @@ interface CancellationAppointment {
   procedureName: string;
   scheduledAt: string;
   messageStatus: string | null;
+  replied: boolean;
+  replyPreview: string | null;
 }
 
 interface CancellationSourceInfo {
@@ -92,6 +94,7 @@ export function CancelamentoDetalhe() {
                 <Th>Paciente</Th>
                 <Th>Procedimento</Th>
                 <Th>Horário original</Th>
+                <Th>Respondeu</Th>
                 <Th align="right">Mensagem</Th>
               </tr>
             }
@@ -101,6 +104,18 @@ export function CancelamentoDetalhe() {
                 <Td>{a.patientName}</Td>
                 <Td muted>{a.procedureName}</Td>
                 <Td muted>{formatDateTime(a.scheduledAt)}</Td>
+                <Td>
+                  {a.replied ? (
+                    <span className="text-mark-green">
+                      <span className="font-semibold">Sim</span>
+                      {a.replyPreview && (
+                        <span className="ml-1 italic text-ink-faint">"{a.replyPreview}"</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-ink-faint">Ainda não</span>
+                  )}
+                </Td>
                 <Td align="right">
                   {a.messageStatus ? (
                     <MessageStatusBadge status={a.messageStatus} />

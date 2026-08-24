@@ -143,4 +143,29 @@ R68`;
     expect(result.rows).toHaveLength(0);
     expect(result.warnings.length).toBeGreaterThan(0);
   });
+
+  it("tira o nome duplicado quando 'Nome Social' repete o nome civil em vez de vir '---'", () => {
+    // Achado real em 2026-08-26 (lista 11): em vez de "---", o SISREG às
+    // vezes repete o nome inteiro no campo Nome Social — sem o dedupe, o
+    // paciente ficava cadastrado como "MARIA EXEMPLO MARIA EXEMPLO".
+    const text = `PROPRIEDADES DA AGENDA
+Unidade Executante: 	POLICLINICA MUNICIPAL EXEMPLO (0000000)
+Profissional Executante: FULANO EXEMPLO DA SILVA (00000000000)
+Procedimento Ambulatorial: GRUPO - EXAMES EXEMPLO (0000000)
+679232319
+SAB
+25/07/2026
+08:00
+704801008439444 MARIA EXEMPLO
+MARIA EXEMPLO 19/11/1964 	61 EXEMPLOPOLIS
+- SC
+(47) 99903-3484
+SECRETARIA MUNICIPAL DE SAUDE
+1ª VEZ
+01 - EXAME EXEMPLO
+I70
+`;
+    const [first] = parseSisreg(text).rows;
+    expect(first?.name).toBe("MARIA EXEMPLO");
+  });
 });

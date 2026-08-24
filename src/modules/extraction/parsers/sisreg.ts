@@ -77,6 +77,25 @@ export function parseSisreg(text: string): ExtractionResult {
   };
 }
 
+// "Nome Social" costuma vir "---" (vazio) quando o paciente não tem um nome
+// social distinto do nome civil — mas achado em 2026-08-26 (lista 11): em
+// alguns registros o SISREG repete o nome civil ali em vez de "---", e como
+// o parser junta "Nome" + "Nome Social" numa string só antes do nascimento,
+// o resultado saía com o nome duas vezes ("FULANA DE TAL FULANA DE TAL").
+// Colapsa quando a segunda metade das palavras é idêntica, palavra por
+// palavra, à primeira — não afeta nome real nenhum (não existe nome de
+// pessoa formado pela repetição exata do próprio nome inteiro).
+function dedupeRepeatedName(name: string): string {
+  const words = name.split(/\s+/);
+  if (words.length >= 2 && words.length % 2 === 0) {
+    const half = words.length / 2;
+    const first = words.slice(0, half).join(" ");
+    const second = words.slice(half).join(" ");
+    if (first && first === second) return first;
+  }
+  return name;
+}
+
 function parseRecord(chunk: string[]): ExtractedRow | null {
   // Junta as linhas do registro numa string só. Telefone às vezes é cortado
   // logo depois do hífen ("3387-" / "2221") — sem isso o número reconstruído
@@ -108,7 +127,7 @@ function parseRecord(chunk: string[]): ExtractedRow | null {
   if (!birthMatch) return null;
   const [, namePart, birthHead, birthTail, afterBirth] = birthMatch;
   if (!namePart || !birthHead || !birthTail) return null;
-  const name = namePart.replace(/-{2,}\s*$/, "").trim();
+  const name = dedupeRepeatedName(namePart.replace(/-{2,}\s*$/, "").trim());
   const birthDate = toIsoDate(`${birthHead}${birthTail}`);
   remainder = afterBirth ?? "";
 

@@ -4,6 +4,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
+import { phoneCandidates } from "@/lib/phone.js";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender (cirurgia,
@@ -225,6 +226,9 @@ export interface CancellationBatchDetail extends CancellationBatchSummary {
     procedureName: string;
     scheduledAt: Date;
     messageStatus: string | null;
+    /** Se o paciente respondeu QUALQUER coisa depois (não só o botão do template). */
+    replied: boolean;
+    replyPreview: string | null;
   }[];
 }
 
@@ -246,14 +250,47 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
 
   const summary = await summarize({ ...batch, _count: { appointments: batch.appointments.length } });
 
+  // Resposta do paciente é QUALQUER mensagem recebida depois do aviso, não
+  // só o botão pronto do template ("Ciente, obrigado(a)") — pedido do
+  // usuário em 2026-08-26, pra saber quem já ficou ciente de verdade, texto
+  // livre incluído. Casada por telefone (mesmo `phoneCandidates` de
+  // Conversas — o formato bruto salvo varia entre envio e recebimento).
+  const phones = batch.appointments.map((a) => a.selectedPhone).filter((p): p is string => !!p);
+  const candidateSet = [...new Set(phones.flatMap((p) => phoneCandidates(p)))];
+  const replies =
+    candidateSet.length > 0
+      ? await prisma.whatsappMessage.findMany({
+          where: { direction: "RECEBIDA", phone: { in: candidateSet } },
+          orderBy: { createdAt: "desc" },
+          select: { phone: true, body: true, buttonPayload: true },
+        })
+      : [];
+  const replyByPhone = new Map<string, { body: string | null; buttonPayload: string | null }>();
+  for (const reply of replies) {
+    if (!replyByPhone.has(reply.phone)) replyByPhone.set(reply.phone, reply);
+  }
+  function findReply(phone: string | null) {
+    if (!phone) return null;
+    for (const candidate of phoneCandidates(phone)) {
+      const hit = replyByPhone.get(candidate);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
   return {
     ...summary,
-    appointments: batch.appointments.map((a) => ({
-      id: a.id,
-      patientName: a.patient.name,
-      procedureName: a.procedure.name,
-      scheduledAt: a.scheduledAt,
-      messageStatus: a.messages[0]?.status ?? null,
-    })),
+    appointments: batch.appointments.map((a) => {
+      const reply = findReply(a.selectedPhone);
+      return {
+        id: a.id,
+        patientName: a.patient.name,
+        procedureName: a.procedure.name,
+        scheduledAt: a.scheduledAt,
+        messageStatus: a.messages[0]?.status ?? null,
+        replied: !!reply,
+        replyPreview: reply?.body ?? reply?.buttonPayload ?? null,
+      };
+    }),
   };
 }
