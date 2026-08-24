@@ -5,7 +5,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatCalendarDate, formatDateTime } from "../lib/format";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender, e todo
@@ -249,7 +249,7 @@ export function Cancelamentos() {
               <option value="">Selecione…</option>
               {agendas.data?.agendas.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {formatDate(a.date)} — {a.doctor.name} — {a.municipality.name}
+                  {formatCalendarDate(a.date)} — {a.doctor.name} — {a.municipality.name}
                   {a.unit ? ` (${a.unit.name})` : ""}
                 </option>
               ))}
@@ -335,7 +335,7 @@ export function Cancelamentos() {
             {preview.data && (
               <>
                 <p className="mt-1 text-xs text-ink-faint">
-                  {preview.data.source.doctorName} · {formatDate(preview.data.source.date)} ·{" "}
+                  {preview.data.source.doctorName} · {formatCalendarDate(preview.data.source.date)} ·{" "}
                   {preview.data.source.municipalityName}
                   {preview.data.source.unitName ? ` (${preview.data.source.unitName})` : ""}
                 </p>
@@ -406,7 +406,7 @@ export function Cancelamentos() {
         >
           {batches.data.batches.map((b) => (
             <tr key={b.id}>
-              <Td>{formatDate(b.source.date)}</Td>
+              <Td>{formatCalendarDate(b.source.date)}</Td>
               <Td muted>{b.source.doctorName}</Td>
               <Td muted>{b.source.municipalityName}</Td>
               <Td align="right" muted>

@@ -2,7 +2,7 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "../components/AppShell";
 import { Callout, ErrorNote, Spinner, Table, Td, Th } from "../components/ui";
 import { useApi } from "../lib/useApi";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatCalendarDate, formatDateTime } from "../lib/format";
 
 // Status de entrega da mensagem (DeliveryStatus), não de agendamento — por
 // isso não reaproveita StatusPill, que é rotulado pra confirmação/recusa.
@@ -64,7 +64,7 @@ export function CancelamentoDetalhe() {
       <PageHeader
         eyebrow="Cancelamento"
         title={
-          detail.data ? `${detail.data.source.doctorName} — ${formatDate(detail.data.source.date)}` : "Cancelamento"
+          detail.data ? `${detail.data.source.doctorName} — ${formatCalendarDate(detail.data.source.date)}` : "Cancelamento"
         }
         description={
           detail.data ? `${detail.data.source.municipalityName} · disparado por ${detail.data.createdByName}` : ""

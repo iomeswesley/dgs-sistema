@@ -7,7 +7,7 @@ import { StatusBand } from "../components/StatusBand";
 import { ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
+import { formatCalendarDate, formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
 
 interface ListSummary {
   id: number;
@@ -456,7 +456,7 @@ export function Listas() {
               <option value="">Nenhuma</option>
               {agendaOptions.map((agenda) => (
                 <option key={agenda.id} value={agenda.id}>
-                  {agenda.doctor.name} — {formatDate(agenda.date)}
+                  {agenda.doctor.name} — {formatCalendarDate(agenda.date)}
                 </option>
               ))}
             </select>
@@ -662,7 +662,7 @@ export function Listas() {
                   </p>
                   <p className="mt-0.5 text-sm text-ink-muted">
                     {list.municipality.name}
-                    {list.agenda && ` · agenda de ${formatDate(list.agenda.date)}`} · enviada por{" "}
+                    {list.agenda && ` · agenda de ${formatCalendarDate(list.agenda.date)}`} · enviada por{" "}
                     {list.uploadedBy.name} em {formatDate(list.createdAt)}
                   </p>
                 </div>

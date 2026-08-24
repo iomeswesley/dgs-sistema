@@ -37,3 +37,14 @@ export function parseBrasiliaDateTime(value: string): Date {
   const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(value);
   return new Date(hasOffset ? value : `${value}-03:00`);
 }
+
+/**
+ * "YYYY-MM-DD" do dia local em Brasília de um timestamp de verdade (não
+ * uma coluna `@db.Date` — pra essa, ler os componentes UTC direto, nunca
+ * passar por `timeZone`, ver `formatCalendarDate` no frontend). `timeZone`
+ * explícito no formatador É confiável (diferente de parsing de string sem
+ * offset, que foi o bug de 2026-08-25) — não depende de `process.env.TZ`.
+ */
+export function toBrasiliaDateString(date: Date): string {
+  return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}

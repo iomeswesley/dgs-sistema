@@ -29,6 +29,24 @@ export function formatDate(value: string | Date | null | undefined): string {
   return new Date(value).toLocaleDateString("pt-BR", { timeZone: BR_TIMEZONE });
 }
 
+/**
+ * Pra colunas `@db.Date` (`Agenda.date`, `DailyClosing.date`,
+ * `Patient.birthDate`) — o valor já vem como a data certa em UTC (meia-noite
+ * exata, sem hora nenhuma que faça sentido converter). Formatar com
+ * `timeZone: "America/Sao_Paulo"` (como `formatDate` faz, certo pra
+ * timestamp de verdade) SUBTRAI 3h e cai no dia anterior — achado em
+ * 2026-08-26: uma agenda de 27/08 aparecia como "26/08" em Listas,
+ * Cancelamento e Configurações. Lê os componentes UTC direto, nunca passa
+ * por conversão de fuso nenhuma.
+ */
+export function formatCalendarDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${date.getUTCFullYear()}`;
+}
+
 export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
   return `${(value * 100).toFixed(1).replace(".", ",")}%`;

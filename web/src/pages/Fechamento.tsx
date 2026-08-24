@@ -4,7 +4,7 @@ import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { daysAgo, formatDate, localDateString } from "../lib/format";
+import { daysAgo, formatCalendarDate, localDateString } from "../lib/format";
 
 interface ClosingRow {
   doctorId: number;
@@ -103,7 +103,7 @@ export function Fechamento() {
             <ul className="mt-1 list-inside list-disc">
               {rowsWithAlerts.slice(0, 5).map((row) => (
                 <li key={`${row.doctorId}-${row.date}-${row.procedureId}`}>
-                  {formatDate(row.date)} · {row.doctorName}: {row.alerts[0]}
+                  {formatCalendarDate(row.date)} · {row.doctorName}: {row.alerts[0]}
                 </li>
               ))}
             </ul>
@@ -141,7 +141,7 @@ export function Fechamento() {
               style={row.alerts.length > 0 ? { background: "var(--mark-yellow-soft)" } : undefined}
             >
               <Td>
-                <span className="font-medium">{formatDate(row.date)}</span> · {row.doctorName}
+                <span className="font-medium">{formatCalendarDate(row.date)}</span> · {row.doctorName}
                 <p className="text-xs text-ink-faint">
                   {row.municipalityName}
                   {row.procedureName && ` · ${row.procedureName}`}
@@ -187,7 +187,7 @@ export function Fechamento() {
 
       <FormModal
         open={editing !== null}
-        title={editing ? `${formatDate(editing.date)} · ${editing.doctorName}` : ""}
+        title={editing ? `${formatCalendarDate(editing.date)} · ${editing.doctorName}` : ""}
         description={
           editing
             ? `O sistema apurou ${editing.confirmed} confirmados de ${editing.planned} da lista. Lance abaixo o que o médico informou e o que as guias comprovam.`

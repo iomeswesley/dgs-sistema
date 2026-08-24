@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { toBrasiliaDateString } from "@/lib/timezone.js";
 import { buildAlerts } from "./closings.alerts.js";
 
 /*
@@ -41,11 +42,16 @@ export interface ClosingRow {
   alerts: string[];
 }
 
-function dateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+// Duas funções, de propósito — misturar as duas era o bug (achado em
+// 2026-08-26, mesma classe do horário 3h errado): `appointment.scheduledAt`
+// é timestamp de verdade (precisa do dia local em Brasília, ver
+// toBrasiliaDateString), `closing.date` é `@db.Date` (já é meia-noite UTC
+// do dia certo — ler local dependeria do fuso do processo, que já provou
+// não ser confiável; lê UTC direto).
+function closingDateKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    date.getUTCDate()
+  ).padStart(2, "0")}`;
 }
 
 /** Grade do fechamento: uma linha por médico × município × procedimento × dia. */
@@ -67,7 +73,7 @@ export async function listClosings(from: Date, to: Date): Promise<ClosingRow[]> 
   const groups = new Map<string, Omit<ClosingRow, "alerts">>();
 
   for (const appointment of appointments) {
-    const date = dateKey(appointment.scheduledAt);
+    const date = toBrasiliaDateString(appointment.scheduledAt);
     const key = `${appointment.doctorId}|${appointment.municipalityId}|${appointment.procedureId}|${date}`;
 
     let group = groups.get(key);
@@ -112,7 +118,7 @@ export async function listClosings(from: Date, to: Date): Promise<ClosingRow[]> 
   });
 
   for (const closing of closings) {
-    const key = `${closing.doctorId}|${closing.municipalityId}|${closing.procedureId}|${dateKey(closing.date)}`;
+    const key = `${closing.doctorId}|${closing.municipalityId}|${closing.procedureId}|${closingDateKey(closing.date)}`;
     const group = groups.get(key);
     if (!group) continue;
     group.closingId = closing.id;

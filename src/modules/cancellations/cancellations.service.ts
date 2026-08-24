@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
+import { toBrasiliaDateString } from "@/lib/timezone.js";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender (cirurgia,
@@ -55,10 +56,22 @@ export interface CancellablePatient {
 }
 
 export interface CancellationSourceInfo {
-  date: Date;
+  /** "YYYY-MM-DD" — já resolvido pro dia certo, o frontend só formata pra exibir. */
+  date: string;
   doctorName: string;
   municipalityName: string;
   unitName: string | null;
+}
+
+/**
+ * `agenda.date` (`@db.Date`) já é meia-noite UTC do dia certo — lê os
+ * componentes UTC direto, nunca `toLocaleDateString` com `timeZone`
+ * (isso subtrairia 3h e cairia no dia anterior, achado em 2026-08-26).
+ */
+function agendaDateString(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    date.getUTCDate()
+  ).padStart(2, "0")}`;
 }
 
 export interface CancellationPreview {
@@ -81,7 +94,7 @@ async function describeSource(source: CancellationSource): Promise<CancellationS
     });
     if (!agenda) throw new AppError("Agenda não encontrada.", 404);
     return {
-      date: agenda.date,
+      date: agendaDateString(agenda.date),
       doctorName: agenda.doctor.name,
       municipalityName: agenda.municipality.name,
       unitName: agenda.unit?.name ?? null,
@@ -96,7 +109,9 @@ async function describeSource(source: CancellationSource): Promise<CancellationS
     include: { doctor: true },
   });
   return {
-    date: firstAppointment?.scheduledAt ?? list.createdAt,
+    // scheduledAt é timestamp de verdade (não @db.Date) — aqui sim
+    // converte pro fuso de Brasília, é o dia local que interessa.
+    date: toBrasiliaDateString(firstAppointment?.scheduledAt ?? list.createdAt),
     doctorName: firstAppointment?.doctor.name ?? "—",
     municipalityName: list.municipality.name,
     unitName: null,

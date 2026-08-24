@@ -29,11 +29,15 @@ export function routeId(req: Request, param = "id"): number {
   return value;
 }
 
-/** Data YYYY-MM-DD como Date local à meia-noite (coluna @db.Date). */
+// UTC explícito, não `new Date(ano, mês, dia)` (fuso local do processo) —
+// mesma cautela do achado de 2026-08-26: mesmo quando o resultado batia por
+// coincidência (offset de Brasília nunca cruza dia em UTC), depender do fuso
+// do processo pra uma coluna @db.Date é o padrão que já causou bug antes.
+/** Data YYYY-MM-DD como meia-noite UTC (coluna @db.Date). */
 export function parseDateOnly(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) throw new AppError(`Data inválida: ${value}`, 400);
-  return new Date(year, month - 1, day);
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 export const dateOnlySchema = z

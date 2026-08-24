@@ -5,7 +5,7 @@ import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatCalendarDate, formatDate, formatDateTime } from "../lib/format";
 
 interface Municipality {
   id: number;
@@ -1131,7 +1131,7 @@ function AgendasTab() {
           {data.data.agendas.map((agenda) => (
             <tr key={agenda.id}>
               <Td>
-                {formatDate(agenda.date)}
+                {formatCalendarDate(agenda.date)}
                 <p className="text-xs text-ink-faint">{SHIFT_LABEL[agenda.shift] ?? agenda.shift}</p>
               </Td>
               <Td muted>
@@ -1297,7 +1297,7 @@ function AgendasTab() {
 
       <FormModal
         open={viewingSlots !== null}
-        title={viewingSlots ? `Vagas abertas — ${viewingSlots.doctor.name}, ${formatDate(viewingSlots.date)}` : ""}
+        title={viewingSlots ? `Vagas abertas — ${viewingSlots.doctor.name}, ${formatCalendarDate(viewingSlots.date)}` : ""}
         description="Recusas, sem resposta e sem telefone. Devolva esta lista pra secretaria pedir substitutos."
         submitLabel="Baixar CSV"
         onSubmit={() => {

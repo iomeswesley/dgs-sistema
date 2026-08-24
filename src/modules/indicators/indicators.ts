@@ -84,6 +84,19 @@ export interface IndicatorReport {
   breakdown: IndicatorBreakdown[];
 }
 
+// Mesma classe de bug achada em 2026-08-26 (closings.service.ts): agrupar por
+// mês com getters locais depende do fuso do processo, que já provou não ser
+// confiável. `scheduledAt` é timestamp de verdade (mês local em Brasília,
+// via timeZone explícito); `closing.date` é `@db.Date` (já é meia-noite UTC
+// do dia certo — lê os componentes UTC direto, nunca timeZone).
+function monthKeyFromTimestamp(date: Date): string {
+  return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }).slice(0, 7);
+}
+
+function monthKeyFromCalendarDate(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function rate(numerator: number, denominator: number): number | null {
   if (denominator <= 0) return null;
   return numerator / denominator;
@@ -141,7 +154,8 @@ export function buildIndicatorsCore(
     doctorId: number;
     municipalityId: number;
     procedureId: number | null;
-    date: Date;
+    /** "YYYY-MM" já resolvido pelo chamador — ver nota abaixo sobre por quê. */
+    monthKey: string;
     doctorName: string;
     municipalityName: string;
     procedureName: string | null;
@@ -158,9 +172,8 @@ export function buildIndicatorsCore(
       key = `p${item.procedureId ?? 0}`;
       label = item.procedureName ?? "Não informado";
     } else {
-      const month = `${item.date.getFullYear()}-${String(item.date.getMonth() + 1).padStart(2, "0")}`;
-      key = month;
-      label = month;
+      key = item.monthKey;
+      label = item.monthKey;
     }
 
     let group = groups.get(key);
@@ -176,7 +189,7 @@ export function buildIndicatorsCore(
       doctorId: appointment.doctorId,
       municipalityId: appointment.municipalityId,
       procedureId: appointment.procedureId,
-      date: appointment.scheduledAt,
+      monthKey: monthKeyFromTimestamp(appointment.scheduledAt),
       doctorName: appointment.doctorName,
       municipalityName: appointment.municipalityName,
       procedureName: appointment.procedureName,
@@ -198,7 +211,7 @@ export function buildIndicatorsCore(
       doctorId: closing.doctorId,
       municipalityId: closing.municipalityId,
       procedureId: closing.procedureId,
-      date: closing.date,
+      monthKey: monthKeyFromCalendarDate(closing.date),
       doctorName: closing.doctorName,
       municipalityName: closing.municipalityName,
       procedureName: closing.procedureName,
