@@ -29,15 +29,22 @@ const MESSAGE_STATUS_EXPLANATION: { status: string; text: string }[] = [
   { status: "FALHOU", text: "Não chegou — na prática, quase sempre número sem WhatsApp, inválido ou inalcançável (a Meta não distingue qual dos três)." },
 ];
 
+// Enviado/Entregue ainda em trânsito (amarelo, como o resto do sistema usa
+// pra "aguardando"), Lido é o desfecho positivo (verde), Falhou é o negativo
+// (vermelho) — achado pelo usuário que estava tudo cinza, sem diferenciar.
+const MESSAGE_STATUS_TONE: Record<string, { bg: string; fg: string }> = {
+  ENVIADO: { bg: "var(--mark-yellow-soft)", fg: "var(--mark-yellow)" },
+  ENTREGUE: { bg: "var(--mark-yellow-soft)", fg: "var(--mark-yellow)" },
+  LIDO: { bg: "var(--mark-green-soft)", fg: "var(--mark-green)" },
+  FALHOU: { bg: "var(--mark-red-soft)", fg: "var(--mark-red)" },
+};
+
 function MessageStatusBadge({ status }: { status: string }) {
-  const isFailed = status === "FALHOU";
+  const tone = MESSAGE_STATUS_TONE[status] ?? { bg: "var(--mark-gray-soft)", fg: "var(--mark-gray)" };
   return (
     <span
       className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold"
-      style={{
-        background: isFailed ? "var(--mark-red-soft)" : "var(--mark-gray-soft)",
-        color: isFailed ? "var(--mark-red)" : "var(--mark-gray)",
-      }}
+      style={{ background: tone.bg, color: tone.fg }}
     >
       {MESSAGE_STATUS_LABEL[status] ?? status}
     </span>
