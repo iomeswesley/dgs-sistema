@@ -119,6 +119,40 @@ async function describeSource(source: CancellationSource): Promise<CancellationS
   };
 }
 
+export interface ExtractionReconciliation {
+  /** Quantos pacientes o PDF original trazia, segundo a extração. */
+  extracted: number;
+  /** Quantos continuam vinculados à lista agora (extraído menos o que a equipe removeu na revisão). */
+  remaining: number;
+}
+
+/**
+ * Reconciliação "extraído do PDF × restou depois da revisão" — pra quem for
+ * conferir o número final do cancelamento bater conta com facilidade, sem
+ * precisar ir no log de auditoria (pedido do usuário em 2026-08-26, depois
+ * de perguntar por que uma lista de 113 virou 109 no cancelamento — eram 4
+ * linhas removidas na revisão por duplicata/paciente errado, um recurso que
+ * já existia). `null` quando a origem não tem uma `List` associada com
+ * extração (agenda criada à mão, sem upload de PDF nunca).
+ */
+async function getExtractionReconciliation(source: CancellationSource): Promise<ExtractionReconciliation | null> {
+  const list =
+    "listId" in source
+      ? await prisma.list.findUnique({ where: { id: source.listId }, select: { id: true, extractionRaw: true } })
+      : await prisma.list.findFirst({
+          where: { agendaId: source.agendaId },
+          select: { id: true, extractionRaw: true },
+        });
+  if (!list) return null;
+
+  const raw = list.extractionRaw as { rows?: unknown[] } | null;
+  const extracted = raw?.rows?.length;
+  if (extracted == null) return null;
+
+  const remaining = await prisma.appointment.count({ where: { listId: list.id } });
+  return { extracted, remaining };
+}
+
 export async function previewCancellation(source: CancellationSource): Promise<CancellationPreview> {
   const [info, appointments] = await Promise.all([describeSource(source), eligibleAppointments(source)]);
 
@@ -220,6 +254,7 @@ export async function listCancellationBatches(): Promise<CancellationBatchSummar
 }
 
 export interface CancellationBatchDetail extends CancellationBatchSummary {
+  extractionReconciliation: ExtractionReconciliation | null;
   appointments: {
     id: number;
     patientName: string;
@@ -259,7 +294,11 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
   });
   if (!batch) throw new AppError("Cancelamento não encontrado.", 404);
 
-  const summary = await summarize({ ...batch, _count: { appointments: batch.appointments.length } });
+  const source: CancellationSource = batch.agendaId ? { agendaId: batch.agendaId } : { listId: batch.listId! };
+  const [summary, extractionReconciliation] = await Promise.all([
+    summarize({ ...batch, _count: { appointments: batch.appointments.length } }),
+    getExtractionReconciliation(source),
+  ]);
 
   // Resposta do paciente é QUALQUER mensagem recebida depois do aviso, não
   // só o botão pronto do template ("Ciente, obrigado(a)") — pedido do
@@ -291,6 +330,7 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
 
   return {
     ...summary,
+    extractionReconciliation,
     appointments: batch.appointments.map((a) => {
       const reply = findReply(a.selectedPhone);
       return {

@@ -78,12 +78,18 @@ interface CancellationSourceInfo {
   unitName: string | null;
 }
 
+interface ExtractionReconciliation {
+  extracted: number;
+  remaining: number;
+}
+
 interface CancellationBatchDetail {
   id: number;
   source: CancellationSourceInfo;
   reason: string;
   createdAt: string;
   createdByName: string;
+  extractionReconciliation: ExtractionReconciliation | null;
   appointments: CancellationAppointment[];
 }
 
@@ -173,6 +179,24 @@ export function CancelamentoDetalhe() {
               <p className="mt-2 text-xs text-ink-faint">
                 Disparado em {formatDateTime(detail.data.createdAt)} por {detail.data.createdByName}
               </p>
+              {detail.data.extractionReconciliation && (
+                <p className="mt-2 text-xs text-ink-faint">
+                  {detail.data.extractionReconciliation.extracted === detail.data.extractionReconciliation.remaining ? (
+                    <>
+                      Confere com o PDF original: {detail.data.extractionReconciliation.remaining} de{" "}
+                      {detail.data.extractionReconciliation.extracted} pacientes extraídos.
+                    </>
+                  ) : (
+                    <>
+                      Confere com o PDF original: {detail.data.extractionReconciliation.extracted} pacientes
+                      extraídos, {detail.data.extractionReconciliation.extracted -
+                        detail.data.extractionReconciliation.remaining}{" "}
+                      removido(s) na revisão antes de aprovar (duplicata ou linha que não era dessa agenda) —{" "}
+                      {detail.data.extractionReconciliation.remaining} restaram, batendo com o total abaixo.
+                    </>
+                  )}
+                </p>
+              )}
             </Callout>
           </div>
 
