@@ -389,6 +389,30 @@ export async function removeAppointment(appointmentId: number, userId: number): 
   }
 
   await prisma.appointment.delete({ where: { id: appointmentId } });
+
+  // Se essa linha era metade de um "duplicado" (mesmo paciente aparecendo
+  // mais de uma vez na lista — resolvePatient() já resolve as duas linhas
+  // pro mesmo patientId), tira o aviso de quem sobrou. Sem isso "duplicado"
+  // ficava preso pra sempre em quem já não tem mais duplicata nenhuma
+  // (achado pelo usuário em 2026-08-26) — mesma classe do bug já corrigido
+  // pros outros avisos em `clearResolvedIssues`, só que esse dispara ao
+  // remover, não ao editar.
+  const siblings = await prisma.appointment.findMany({
+    where: { listId: appointment.listId, patientId: appointment.patientId },
+  });
+  if (siblings.length === 1) {
+    const [sibling] = siblings;
+    const rawLine = sibling!.rawLine as RawLine | null;
+    if (rawLine?.issues?.includes("duplicado")) {
+      await prisma.appointment.update({
+        where: { id: sibling!.id },
+        data: {
+          rawLine: { ...rawLine, issues: rawLine.issues.filter((i) => i !== "duplicado") } as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+  }
+
   await recordAudit({
     userId,
     action: "remove_review",
