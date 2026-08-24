@@ -133,6 +133,16 @@ export function CancelamentoDetalhe() {
           </div>
 
           <Table
+            colgroup={
+              <colgroup>
+                <col className="w-[20%]" />
+                <col className="w-[13%]" />
+                <col className="w-[17%]" />
+                <col className="w-[13%]" />
+                <col className="w-[27%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+            }
             head={
               <tr>
                 <Th>Paciente</Th>

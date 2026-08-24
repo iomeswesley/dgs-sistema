@@ -88,10 +88,27 @@ export function Stat({
   );
 }
 
-export function Table({ head, children }: { head: ReactNode; children: ReactNode }) {
+export function Table({
+  head,
+  children,
+  colgroup,
+}: {
+  head: ReactNode;
+  children: ReactNode;
+  /**
+   * `<col>` por coluna, com `width` fixo — sem isso o layout é `auto`, e a
+   * largura de cada coluna reflete o conteúdo das linhas visíveis no
+   * momento. Numa tabela que filtra (ex.: Cancelamento por situação da
+   * mensagem), isso faz as colunas "pularem" de largura a cada filtro
+   * clicado (achado em 2026-08-26). Passar `colgroup` trava o layout —
+   * `table-layout: fixed` some do lugar assim que `<col>` existe.
+   */
+  colgroup?: ReactNode;
+}) {
   return (
     <div className="card overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
+      <table className={`w-full min-w-[720px] border-collapse text-sm ${colgroup ? "table-fixed" : ""}`}>
+        {colgroup}
         <thead className="border-b border-rule bg-sheet-alt text-left">{head}</thead>
         <tbody>{children}</tbody>
       </table>
