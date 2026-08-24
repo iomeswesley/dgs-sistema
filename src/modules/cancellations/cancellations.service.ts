@@ -48,12 +48,34 @@ async function eligibleAppointments(source: CancellationSource) {
   });
 }
 
+/**
+ * Quem não tem telefone nenhum — não dá pra notificar, mas o agendamento
+ * ainda precisa virar CANCELADO e ficar visível no lote (achado em
+ * 2026-08-26: antes desse fix, esse paciente nunca era tocado — status
+ * ficava travado em SEM_TELEFONE pra sempre, sem nunca aparecer em
+ * nenhuma tela de cancelamento, um "limbo" sem jeito de encontrar depois
+ * ou de completar o telefone e reenviar).
+ */
+async function noPhoneAppointments(source: CancellationSource) {
+  return prisma.appointment.findMany({
+    where: {
+      ...sourceWhere(source),
+      status: "SEM_TELEFONE",
+      patient: { optedOut: false },
+    },
+    orderBy: { scheduledAt: "asc" },
+    include: { patient: true, procedure: true },
+  });
+}
+
 export interface CancellablePatient {
   appointmentId: number;
   patientName: string;
   scheduledAt: Date;
   procedureName: string;
   status: string;
+  /** false = sem telefone, vai ficar CANCELADO mas ninguém recebe aviso nenhum. */
+  notifiable: boolean;
 }
 
 export interface CancellationSourceInfo {
@@ -154,17 +176,32 @@ async function getExtractionReconciliation(source: CancellationSource): Promise<
 }
 
 export async function previewCancellation(source: CancellationSource): Promise<CancellationPreview> {
-  const [info, appointments] = await Promise.all([describeSource(source), eligibleAppointments(source)]);
+  const [info, appointments, noPhone] = await Promise.all([
+    describeSource(source),
+    eligibleAppointments(source),
+    noPhoneAppointments(source),
+  ]);
 
   return {
     source: info,
-    patients: appointments.map((a) => ({
-      appointmentId: a.id,
-      patientName: a.patient.name,
-      scheduledAt: a.scheduledAt,
-      procedureName: a.procedure.name,
-      status: a.status,
-    })),
+    patients: [
+      ...appointments.map((a) => ({
+        appointmentId: a.id,
+        patientName: a.patient.name,
+        scheduledAt: a.scheduledAt,
+        procedureName: a.procedure.name,
+        status: a.status,
+        notifiable: true,
+      })),
+      ...noPhone.map((a) => ({
+        appointmentId: a.id,
+        patientName: a.patient.name,
+        scheduledAt: a.scheduledAt,
+        procedureName: a.procedure.name,
+        status: a.status,
+        notifiable: false,
+      })),
+    ],
   };
 }
 
@@ -176,9 +213,9 @@ export async function dispatchCancellation(
   // Reconsulta no servidor em vez de confiar na lista que o preview mandou
   // pro cliente — evita cancelar quem respondeu (confirmou/recusou) entre
   // o preview e o clique em "Disparar".
-  const appointments = await eligibleAppointments(source);
-  if (appointments.length === 0) {
-    throw new AppError("Nenhum paciente elegível pra notificar nessa agenda.", 400);
+  const [appointments, noPhone] = await Promise.all([eligibleAppointments(source), noPhoneAppointments(source)]);
+  if (appointments.length === 0 && noPhone.length === 0) {
+    throw new AppError("Nenhum paciente elegível pra cancelar nessa agenda.", 400);
   }
 
   const batch = await prisma.cancellationBatch.create({
@@ -191,6 +228,19 @@ export async function dispatchCancellation(
   });
 
   const now = new Date();
+
+  // Sem telefone: vira CANCELADO e fica visível no lote (aba "Sem envio"),
+  // mas não tem MessageJob nenhum — não tem pra onde mandar. É o que dá
+  // pra equipe achar depois e usar "Reenviar pra quem falhou" pra
+  // completar o telefone e notificar, em vez de ficar perdido sem
+  // aparecer em tela nenhuma (achado em 2026-08-26).
+  for (const appointment of noPhone) {
+    await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: { status: "CANCELADO", cancellationBatchId: batch.id, canceledById: userId, canceledAt: now },
+    });
+  }
+
   for (const appointment of appointments) {
     await prisma.appointment.update({
       where: { id: appointment.id },
@@ -206,7 +256,7 @@ export async function dispatchCancellation(
     action: "cancel",
     entity: "CancellationBatch",
     entityId: batch.id,
-    metadata: { ...source, reason, queued: appointments.length },
+    metadata: { ...source, reason, queued: appointments.length, semTelefone: noPhone.length },
   });
 
   // Mesma convenção do disparo de lista: enfileira e já processa na hora,

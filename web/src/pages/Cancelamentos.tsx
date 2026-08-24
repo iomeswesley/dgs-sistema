@@ -42,6 +42,8 @@ interface CancellablePatient {
   scheduledAt: string;
   procedureName: string;
   status: string;
+  /** false = sem telefone, vai ficar cancelado mas ninguém recebe aviso nenhum. */
+  notifiable: boolean;
 }
 
 interface CancellationSourceInfo {
@@ -359,45 +361,69 @@ export function Cancelamentos() {
                   {preview.data.source.municipalityName}
                   {preview.data.source.unitName ? ` (${preview.data.source.unitName})` : ""}
                 </p>
-                {preview.data.patients.length === 0 ? (
-                  <p className="mt-3 text-sm text-ink-muted">
-                    Ninguém elegível pra notificar (todo mundo já recusou, foi cancelado antes, ou não tem
-                    telefone).
-                  </p>
-                ) : (
-                  <>
-                    <p className="mt-3 text-sm text-ink-muted">
-                      {preview.data.patients.length} paciente(s) vão receber o aviso:
-                    </p>
-                    <Table
-                      head={
-                        <tr>
-                          <Th>Paciente</Th>
-                          <Th>Procedimento</Th>
-                          <Th>Horário</Th>
-                        </tr>
-                      }
-                    >
-                      {preview.data.patients.map((p) => (
-                        <tr key={p.appointmentId}>
-                          <Td>{p.patientName}</Td>
-                          <Td muted>{p.procedureName}</Td>
-                          <Td muted>{formatDateTime(p.scheduledAt)}</Td>
-                        </tr>
-                      ))}
-                    </Table>
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={!reason.trim()}
-                        onClick={() => setConfirming(true)}
+                {(() => {
+                  const notifiable = preview.data.patients.filter((p) => p.notifiable);
+                  const noPhone = preview.data.patients.filter((p) => !p.notifiable);
+                  if (preview.data.patients.length === 0) {
+                    return (
+                      <p className="mt-3 text-sm text-ink-muted">
+                        Ninguém elegível pra cancelar (todo mundo já recusou ou foi cancelado antes).
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      <p className="mt-3 text-sm text-ink-muted">
+                        {notifiable.length} paciente(s) vão receber o aviso
+                        {noPhone.length > 0 && (
+                          <>
+                            {" "}
+                            · <span className="text-mark-red">{noPhone.length} sem telefone</span> — ficam
+                            marcados como cancelados mas ninguém avisa; dá pra completar o telefone depois em
+                            "Reenviar pra quem falhou" no detalhe do lote.
+                          </>
+                        )}
+                        :
+                      </p>
+                      <Table
+                        head={
+                          <tr>
+                            <Th>Paciente</Th>
+                            <Th>Procedimento</Th>
+                            <Th>Horário</Th>
+                            <Th align="right">Aviso</Th>
+                          </tr>
+                        }
                       >
-                        Cancelar e notificar {preview.data.patients.length} paciente(s)
-                      </button>
-                    </div>
-                  </>
-                )}
+                        {preview.data.patients.map((p) => (
+                          <tr key={p.appointmentId}>
+                            <Td>{p.patientName}</Td>
+                            <Td muted>{p.procedureName}</Td>
+                            <Td muted>{formatDateTime(p.scheduledAt)}</Td>
+                            <Td align="right">
+                              {p.notifiable ? (
+                                <span className="text-ink-faint">Sim</span>
+                              ) : (
+                                <span className="text-mark-red">Sem telefone</span>
+                              )}
+                            </Td>
+                          </tr>
+                        ))}
+                      </Table>
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={!reason.trim()}
+                          onClick={() => setConfirming(true)}
+                        >
+                          Cancelar {preview.data.patients.length} paciente(s)
+                          {notifiable.length > 0 ? ` · notificar ${notifiable.length}` : ""}
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               </>
             )}
           </>
@@ -448,7 +474,15 @@ export function Cancelamentos() {
         title="Cancelar e notificar?"
         description={
           preview.data
-            ? `Vai mandar a mensagem de cancelamento pra ${preview.data.patients.length} paciente(s) agora. Isso não pode ser desfeito.`
+            ? (() => {
+                const notifiable = preview.data.patients.filter((p) => p.notifiable).length;
+                const noPhone = preview.data.patients.length - notifiable;
+                return (
+                  `Vai cancelar ${preview.data.patients.length} paciente(s) agora — mensagem de cancelamento pra ${notifiable}` +
+                  (noPhone > 0 ? `, ${noPhone} sem telefone não recebem aviso nenhum` : "") +
+                  ". Isso não pode ser desfeito."
+                );
+              })()
             : ""
         }
         confirmLabel="Sim, cancelar e notificar"

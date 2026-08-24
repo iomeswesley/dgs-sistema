@@ -92,6 +92,20 @@ const ISSUE_LABEL: Record<string, string> = {
   duplicado: "duplicado",
 };
 
+// Legenda do que cada situação quer dizer — mesmo pedido/padrão da tela de
+// Cancelamento (2026-08-26), pra não depender de perguntar toda vez.
+const STATUS_EXPLANATION: { status: string; text: string }[] = [
+  { status: "PENDENTE", text: "Ainda não entrou na fila de envio, ou está esperando a próxima rodada." },
+  { status: "ENVIADO", text: "Saiu do nosso número, ainda sem confirmação de entrega." },
+  { status: "ENTREGUE", text: "Chegou no celular do paciente. Não significa que ele já respondeu." },
+  { status: "CONFIRMADO", text: "O paciente respondeu confirmando presença." },
+  { status: "RECUSADO", text: "O paciente respondeu que não vai comparecer." },
+  { status: "SEM_RESPOSTA", text: "Chegou, mas o paciente não respondeu dentro do prazo — fechado automaticamente." },
+  { status: "SEM_TELEFONE", text: "O cadastro não tem nenhum número válido — nunca chegou a ser tentado. Use \"Reenviar\" pra completar o telefone." },
+  { status: "FALHA", text: "Não chegou — na prática, quase sempre número sem WhatsApp, inválido ou inalcançável." },
+  { status: "CANCELADO", text: "A agenda inteira foi cancelada pela equipe (módulo de Cancelamento), não depende de resposta do paciente." },
+];
+
 export function Revisao() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -171,7 +185,14 @@ export function Revisao() {
     (appointment) => (appointment.rawLine?.issues?.length ?? 0) > 0
   ).length;
   const isReviewing = list.status === "EM_REVISAO";
-  const failedAppointments = appointments.filter((appointment) => appointment.status === "FALHA");
+  // Inclui SEM_TELEFONE junto com FALHA — sem telefone nenhum nunca chega
+  // a entrar na fila, e depois do disparo a edição normal ("Corrigir") já
+  // não é mais permitida (só funciona em EM_REVISAO). Sem isso esse
+  // paciente ficava sem nenhum jeito de completar o telefone e receber a
+  // mensagem depois (achado em 2026-08-26).
+  const failedAppointments = appointments.filter(
+    (appointment) => appointment.status === "FALHA" || appointment.status === "SEM_TELEFONE"
+  );
 
   function openRetry() {
     const initial: Record<number, string> = {};
@@ -497,6 +518,20 @@ export function Revisao() {
         )}
       </div>
 
+      <div className="card mb-5 p-4">
+        <p className="eyebrow mb-2">O que significa cada situação</p>
+        <dl className="grid gap-2 sm:grid-cols-2">
+          {STATUS_EXPLANATION.filter((item) => (counts[item.status] ?? 0) > 0).map((item) => (
+            <div key={item.status} className="flex items-start gap-2">
+              <dt className="mt-0.5 shrink-0">
+                <StatusPill status={item.status} />
+              </dt>
+              <dd className="text-xs text-ink-muted">{item.text}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
       <div className="mb-3">
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -550,7 +585,7 @@ export function Revisao() {
         </div>
         {failedAppointments.length > 0 && (
           <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openRetry}>
-            Reenviar pra quem falhou ({failedAppointments.length})
+            Reenviar pra quem falhou/sem telefone ({failedAppointments.length})
           </button>
         )}
       </div>
@@ -775,7 +810,7 @@ export function Revisao() {
 
       <FormModal
         open={retryOpen}
-        title="Reenviar pra quem falhou"
+        title="Reenviar pra quem falhou/sem telefone"
         description="Quando o paciente tem outro celular no cadastro, já vem preenchido. Deixe em branco pra não reenviar pra esse paciente."
         submitLabel="Reenviar"
         busy={retryBusy}
@@ -784,7 +819,11 @@ export function Revisao() {
         onCancel={() => setRetryOpen(false)}
       >
         {failedAppointments.map((a) => (
-          <Field key={a.id} label={a.patient.name} hint={`Número que falhou: ${formatPhone(a.selectedPhone)}`}>
+          <Field
+            key={a.id}
+            label={a.patient.name}
+            hint={a.selectedPhone ? `Número que falhou: ${formatPhone(a.selectedPhone)}` : "Sem telefone no cadastro"}
+          >
             <input
               className="field"
               type="tel"

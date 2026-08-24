@@ -114,8 +114,13 @@ export function CancelamentoDetalhe() {
     return appointments.filter((a) => a.messageStatus === messageFilter);
   }, [detail.data, messageFilter]);
 
+  // Inclui tanto FALHOU quanto "sem envio" (sem telefone nenhum no
+  // cadastro — vira CANCELADO mas nunca teve pra onde mandar mensagem,
+  // achado em 2026-08-26): os dois precisam do mesmo "digite um telefone e
+  // reenvia", pra ninguém ficar sem ser avisado por falta de um jeito de
+  // corrigir depois do disparo.
   const failedAppointments = useMemo(
-    () => detail.data?.appointments.filter((a) => a.messageStatus === "FALHOU") ?? [],
+    () => detail.data?.appointments.filter((a) => a.messageStatus === "FALHOU" || !a.messageStatus) ?? [],
     [detail.data]
   );
 
@@ -244,7 +249,7 @@ export function CancelamentoDetalhe() {
             </div>
             {failedAppointments.length > 0 && (
               <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openRetry}>
-                Reenviar pra quem falhou ({failedAppointments.length})
+                Reenviar pra quem falhou/sem telefone ({failedAppointments.length})
               </button>
             )}
           </div>
@@ -307,7 +312,7 @@ export function CancelamentoDetalhe() {
 
           <FormModal
             open={retryOpen}
-            title="Reenviar pra quem falhou"
+            title="Reenviar pra quem falhou/sem telefone"
             description="Quando o paciente tem outro celular no cadastro, já vem preenchido. Deixe em branco pra não reenviar pra esse paciente."
             submitLabel="Reenviar"
             busy={retryBusy}
@@ -316,7 +321,11 @@ export function CancelamentoDetalhe() {
             onCancel={() => setRetryOpen(false)}
           >
             {failedAppointments.map((a) => (
-              <Field key={a.id} label={a.patientName} hint={`Número que falhou: ${formatPhone(a.phone)}`}>
+              <Field
+                key={a.id}
+                label={a.patientName}
+                hint={a.phone ? `Número que falhou: ${formatPhone(a.phone)}` : "Sem telefone no cadastro"}
+              >
                 <input
                   className="field"
                   type="tel"
