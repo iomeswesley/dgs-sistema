@@ -7,6 +7,7 @@ import { Callout, ErrorNote, Spinner, StatusPill, Table, Td, Th } from "../compo
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatDateTime, formatPhone, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
+import { runQueueUntilDone } from "../lib/queue";
 
 /*
   Tela de revisão: a etapa obrigatória entre a leitura automática e o disparo.
@@ -218,14 +219,28 @@ export function Revisao() {
           deferred: number;
           capacity: { remaining: number };
         }>(`/api/lists/${list.id}/dispatch`);
+        let sent = result.sent;
+        let failed = result.failed;
+        setNotice(`${sent} mensagens enviadas até agora, ${failed} falharam. Enviando o restante...`);
+        // Lista grande pode não caber inteira na primeira chamada (o
+        // servidor pára sozinho perto do limite de tempo da função) —
+        // continua chamando sozinho até esvaziar, sem depender do cron do
+        // dia seguinte pra terminar um disparo de hoje (achado em
+        // 2026-08-26, ver comentário em lib/queue.ts).
+        const finished = await runQueueUntilDone((progress) => {
+          sent = result.sent + progress.sent;
+          failed = result.failed + progress.failed;
+          setNotice(`${sent} mensagens enviadas até agora, ${failed} falharam. Enviando o restante...`);
+        });
+        sent = result.sent + finished.sent;
+        failed = result.failed + finished.failed;
         setNotice(
-          `${result.sent} mensagens enviadas` +
-            (result.failed > 0 ? `, ${result.failed} falharam` : "") +
+          `${sent} mensagens enviadas` +
+            (failed > 0 ? `, ${failed} falharam` : "") +
             (result.skipped > 0 ? `. ${result.skipped} ignoradas (opt-out ou já enfileiradas)` : "") +
-            (result.deferred > 0
-              ? `. ${result.deferred} continuam na fila (limite diário) — saem quando rodar a cadência de novo.`
-              : ".") +
-            ` Cabem mais ${result.capacity.remaining} envios hoje.`
+            (finished.remainingToday === 0 && sent + failed < result.queued
+              ? " — limite diário de hoje acabou, o restante sai amanhã automaticamente."
+              : ".")
         );
       } else {
         await api.post(`/api/lists/${list.id}/conclude`);

@@ -22,7 +22,10 @@ import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.servic
 /** Intervalo entre envios, pra não disparar em rajada. */
 const SEND_INTERVAL_MS = 250;
 
-/** Quantos jobs processar por chamada do cron, pra caber no timeout. */
+// Teto de quantos jobs buscar por chamada — quem garante não estourar o
+// tempo da função é o TIME_BUDGET_MS abaixo (que já pára o loop sozinho
+// bem antes disso ser um problema); esse número aqui é só um limite de
+// memória/consulta razoável, não precisa ser preciso.
 const BATCH_SIZE = 60;
 
 function startOfToday(): Date {
@@ -130,20 +133,41 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
 export interface ProcessResult {
   sent: number;
   failed: number;
-  /** Jobs que não couberam no limite de hoje. */
+  /** Jobs que não couberam no limite de hoje (só volta amanhã). */
   deferred: number;
   remainingToday: number;
+  /**
+   * Pendentes que já estão no horário de sair AGORA (não confundir com
+   * `deferred`, que soma também lembrete/reenvio agendado pro futuro).
+   * Achado em 2026-08-26: um disparo de 109 mensagens foi morto pelo
+   * `maxDuration` de 60s da Vercel no meio do processamento — a equipe só
+   * descobriu porque foi conferir no banco. `dueNow > 0` é o sinal pro
+   * chamador (frontend) saber que precisa chamar `processQueue` nesta
+   * função de novo JÁ, em vez de confiar que o cron de amanhã resolve.
+   */
+  dueNow: number;
 }
+
+// maxDuration é 60s (vercel.json) — pára de propósito antes disso pra nunca
+// arriscar ser morto no meio de um job (o que deixava o MessageJob preso em
+// "ENVIANDO" pra sempre, sem nenhuma mensagem de verdade ter saído — achado
+// em 2026-08-26). O resto que não coube nessa chamada fica PENDENTE, pronto
+// pra próxima — que o frontend já dispara sozinho, ver runQueueUntilDone()
+// no lado do cliente.
+const TIME_BUDGET_MS = 45_000;
 
 /**
  * Processa a fila respeitando o teto diário.
  *
- * Chamado pelo cron do Vercel e pelo botão "processar agora" no painel.
+ * Chamado pelo cron do Vercel e pelo botão "processar agora" no painel — e,
+ * quando sobra `dueNow`, automaticamente de novo pelo frontend até esvaziar
+ * (nunca fica esperando o cron do dia seguinte pra terminar um disparo de
+ * hoje).
  */
 export async function processQueue(): Promise<ProcessResult> {
   const capacity = await queueCapacity();
   if (capacity.remaining === 0) {
-    return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0 };
+    return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0 };
   }
 
   const jobs = await prisma.messageJob.findMany({
@@ -166,8 +190,11 @@ export async function processQueue(): Promise<ProcessResult> {
 
   let sent = 0;
   let failed = 0;
+  const start = Date.now();
 
   for (const job of jobs) {
+    if (Date.now() - start > TIME_BUDGET_MS) break;
+
     await prisma.messageJob.update({
       where: { id: job.id },
       data: { status: "ENVIANDO", attempts: { increment: 1 } },
@@ -239,7 +266,10 @@ export async function processQueue(): Promise<ProcessResult> {
   }
 
   const after = await queueCapacity();
-  return { sent, failed, deferred: after.pending, remainingToday: after.remaining };
+  const dueNow = await prisma.messageJob.count({
+    where: { status: "PENDENTE", scheduledFor: { lte: new Date() } },
+  });
+  return { sent, failed, deferred: after.pending, remainingToday: after.remaining, dueNow };
 }
 
 type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrThrow>> & {

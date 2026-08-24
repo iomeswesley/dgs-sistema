@@ -51,8 +51,10 @@ conversationsRouter.get(
   })
 );
 
+// Faltava CANCELAMENTO aqui (achado em 2026-08-26) — o frontend já oferecia
+// a opção em Conversas, mas o backend rejeitava com erro de validação.
 const templateSchema = z.object({
-  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA"]),
+  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA", "CANCELAMENTO"]),
   header: z.array(z.string()).optional(),
   body: z.array(z.string().min(1, "Preencha todos os campos do template")),
 });

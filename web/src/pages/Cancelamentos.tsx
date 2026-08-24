@@ -6,6 +6,7 @@ import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatCalendarDate, formatDateTime } from "../lib/format";
+import { runQueueUntilDone } from "../lib/queue";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender, e todo
@@ -174,9 +175,28 @@ export function Cancelamentos() {
         ...(mode === "agenda" ? { agendaId: Number(agendaId) } : { listId: uploadedListId }),
         reason,
       });
-      setNotice(`Cancelamento disparado — ${result.queued} paciente(s) notificado(s).`);
       setConfirming(false);
       switchMode(mode);
+      batches.reload();
+
+      // O disparo em si (criar o lote + marcar CANCELADO) já aconteceu — o
+      // que falta é o envio de verdade das mensagens, que pode não caber
+      // numa chamada só se a lista for grande (achado em 2026-08-26: 109
+      // mensagens estouraram o limite de 60s da função na Vercel no meio do
+      // processamento). `runQueueUntilDone` continua chamando sozinho até
+      // não sobrar nada pra agora, sem depender do cron de amanhã.
+      setNotice(`Cancelamento disparado — ${result.queued} paciente(s) notificado(s). Enviando mensagens...`);
+      const { sent, failed, remainingToday } = await runQueueUntilDone(({ sent, failed }) => {
+        setNotice(`Cancelamento disparado — enviando... ${sent} enviada(s), ${failed} falharam.`);
+      });
+      setNotice(
+        `Cancelamento disparado — ${result.queued} paciente(s) notificado(s). ${sent} mensagem(ns) enviada(s)` +
+          (failed > 0 ? `, ${failed} falharam` : "") +
+          (remainingToday === 0 && sent + failed < result.queued
+            ? " — limite diário de hoje acabou, o restante sai amanhã automaticamente"
+            : "") +
+          "."
+      );
       batches.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao disparar o cancelamento.");

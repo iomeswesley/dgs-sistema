@@ -5,6 +5,7 @@ import { StatusBand } from "../components/StatusBand";
 import { Callout, ErrorNote, Field, Spinner, StatusPill, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
+import { runQueueUntilDone } from "../lib/queue";
 import {
   daysAgo,
   formatDateTime,
@@ -92,11 +93,18 @@ export function Hoje() {
   async function processQueue() {
     setBusy(true);
     try {
-      const result = await api.post<{ sent: number; failed: number; deferred: number; remainingToday: number }>(
-        "/api/queue/process"
-      );
+      // Continua chamando sozinho até esvaziar o que já está no horário de
+      // sair — uma lista grande pode não caber numa chamada só (o servidor
+      // pára perto do limite de tempo da função), e nunca deve depender do
+      // cron do dia seguinte pra terminar (achado em 2026-08-26, ver
+      // comentário em lib/queue.ts).
+      const result = await runQueueUntilDone(({ sent, failed }) => {
+        setProcessResult(`${sent} enviadas, ${failed} falharam até agora — ainda processando...`);
+        data.reload();
+        summary.reload();
+      });
       setProcessResult(
-        `${result.sent} enviadas, ${result.failed} falharam. ${result.deferred} continuam na fila; cabem mais ${result.remainingToday} hoje.`
+        `${result.sent} enviadas, ${result.failed} falharam. Cabem mais ${result.remainingToday} hoje.`
       );
       data.reload();
       summary.reload();
@@ -124,10 +132,23 @@ export function Hoje() {
         retriesQueued: number;
         closedAsNoAnswer: number;
       }>("/api/queue/run-cadence");
+      let sent = result.sent;
+      let failed = result.failed;
+      setProcessResult(`${sent} enviadas, ${failed} falharam até agora — ainda processando...`);
+      // O envio em si (o passo que mais demora) pode não ter cabido inteiro
+      // na chamada da cadência — completa sozinho, sem depender do cron do
+      // dia seguinte (achado em 2026-08-26, ver comentário em lib/queue.ts).
+      const finished = await runQueueUntilDone((progress) => {
+        sent = result.sent + progress.sent;
+        failed = result.failed + progress.failed;
+        setProcessResult(`${sent} enviadas, ${failed} falharam até agora — ainda processando...`);
+      });
+      sent = result.sent + finished.sent;
+      failed = result.failed + finished.failed;
       setProcessResult(
-        `${result.sent} enviadas, ${result.failed} falharam · ${result.remindersQueued} lembretes e ` +
+        `${sent} enviadas, ${failed} falharam · ${result.remindersQueued} lembretes e ` +
           `${result.retriesQueued} reenvios criados · ${result.closedAsNoAnswer} fechados sem resposta. ` +
-          `Cabem mais ${result.remainingToday} hoje.`
+          `Cabem mais ${finished.remainingToday} hoje.`
       );
       data.reload();
       summary.reload();
