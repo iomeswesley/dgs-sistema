@@ -21,11 +21,12 @@ const MESSAGE_STATUS_LABEL: Record<string, string> = {
 // pra não depender de perguntar toda vez. "Entregue" sem "Lido" é comum e
 // não indica problema: muita gente desativa o recibo de leitura do
 // WhatsApp, a mensagem chega e a pessoa consegue ler/responder normalmente
-// mesmo assim, só não gera a confirmação "Lido" pro remetente.
+// mesmo assim, só não gera a confirmação "Lido" pro remetente — por isso
+// "Lido" aqui também conta como respondido (ver `effectiveMessageStatus`).
 const MESSAGE_STATUS_EXPLANATION: { status: string; text: string }[] = [
   { status: "ENVIADO", text: "Saiu do nosso número, ainda sem confirmação de chegada." },
-  { status: "ENTREGUE", text: "Chegou no celular do paciente. Pode não virar \"Lido\" mesmo assim — muita gente desativa o recibo de leitura, mas continua recebendo e respondendo normalmente." },
-  { status: "LIDO", text: "O paciente abriu a conversa e viu a mensagem." },
+  { status: "ENTREGUE", text: "Chegou no celular do paciente, ainda sem confirmação de leitura nem resposta." },
+  { status: "LIDO", text: "O paciente abriu a conversa (recibo de leitura) ou já respondeu — as duas contam como \"Lido\" aqui, porque responder já prova que viu, mesmo se o recibo de leitura estiver desativado." },
   { status: "FALHOU", text: "Não chegou — na prática, quase sempre número sem WhatsApp, inválido ou inalcançável (a Meta não distingue qual dos três)." },
 ];
 
@@ -38,6 +39,19 @@ const MESSAGE_STATUS_TONE: Record<string, { bg: string; fg: string }> = {
   LIDO: { bg: "var(--mark-green-soft)", fg: "var(--mark-green)" },
   FALHOU: { bg: "var(--mark-red-soft)", fg: "var(--mark-red)" },
 };
+
+/**
+ * Resposta do paciente é prova mais forte de que ele viu a mensagem do que
+ * o recibo de leitura da Meta (que muita gente desativa) — se respondeu,
+ * mostra "Lido" mesmo que o status bruto ainda esteja em "Entregue".
+ * Unificado a pedido do usuário em 2026-08-26: as duas colunas
+ * (Respondeu/Mensagem) pareciam contradizer uma a outra quando isso
+ * acontecia.
+ */
+function effectiveMessageStatus(a: { messageStatus: string | null; replied: boolean }): string | null {
+  if (a.replied && (a.messageStatus === "ENTREGUE" || a.messageStatus === "ENVIADO")) return "LIDO";
+  return a.messageStatus;
+}
 
 function MessageStatusBadge({ status }: { status: string }) {
   const tone = MESSAGE_STATUS_TONE[status] ?? { bg: "var(--mark-gray-soft)", fg: "var(--mark-gray)" };
@@ -118,7 +132,7 @@ export function CancelamentoDetalhe() {
     const appointments = detail.data?.appointments ?? [];
     if (!messageFilter) return appointments;
     if (messageFilter === SEM_ENVIO) return appointments.filter((a) => !a.messageStatus);
-    return appointments.filter((a) => a.messageStatus === messageFilter);
+    return appointments.filter((a) => effectiveMessageStatus(a) === messageFilter);
   }, [detail.data, messageFilter]);
 
   // Inclui tanto FALHOU quanto "sem envio" (sem telefone nenhum no
@@ -240,7 +254,7 @@ export function CancelamentoDetalhe() {
                     ? detail.data!.appointments.length
                     : opt.value === SEM_ENVIO
                       ? detail.data!.appointments.filter((a) => !a.messageStatus).length
-                      : detail.data!.appointments.filter((a) => a.messageStatus === opt.value).length;
+                      : detail.data!.appointments.filter((a) => effectiveMessageStatus(a) === opt.value).length;
                 return (
                   <button
                     key={opt.value}
@@ -264,12 +278,11 @@ export function CancelamentoDetalhe() {
           <Table
             colgroup={
               <colgroup>
-                <col className="w-[20%]" />
-                <col className="w-[13%]" />
-                <col className="w-[17%]" />
-                <col className="w-[13%]" />
-                <col className="w-[27%]" />
-                <col className="w-[10%]" />
+                <col className="w-[22%]" />
+                <col className="w-[15%]" />
+                <col className="w-[18%]" />
+                <col className="w-[15%]" />
+                <col className="w-[30%]" />
               </colgroup>
             }
             head={
@@ -278,40 +291,33 @@ export function CancelamentoDetalhe() {
                 <Th>Telefone</Th>
                 <Th>Procedimento</Th>
                 <Th>Horário original</Th>
-                <Th>Respondeu</Th>
-                <Th align="right">Mensagem</Th>
+                <Th align="right">Situação</Th>
               </tr>
             }
           >
-            {filtered.map((a) => (
-              <tr key={a.id}>
-                <Td>{a.patientName}</Td>
-                <Td muted>
-                  <span className="tabular">{formatPhone(a.phone)}</span>
-                </Td>
-                <Td muted>{a.procedureName}</Td>
-                <Td muted>{formatDateTime(a.scheduledAt)}</Td>
-                <Td>
-                  {a.replied ? (
-                    <span className="text-mark-green">
-                      <span className="font-semibold">Sim</span>
-                      {a.replyPreview && (
-                        <span className="ml-1 italic text-ink-faint">"{a.replyPreview}"</span>
+            {filtered.map((a) => {
+              const status = effectiveMessageStatus(a);
+              return (
+                <tr key={a.id}>
+                  <Td>{a.patientName}</Td>
+                  <Td muted>
+                    <span className="tabular">{formatPhone(a.phone)}</span>
+                  </Td>
+                  <Td muted>{a.procedureName}</Td>
+                  <Td muted>{formatDateTime(a.scheduledAt)}</Td>
+                  <Td align="right">
+                    <div className="flex flex-col items-end gap-0.5">
+                      {status ? <MessageStatusBadge status={status} /> : <span className="text-ink-faint">—</span>}
+                      {a.replied && a.replyPreview && (
+                        <span className="max-w-[240px] truncate text-right text-xs italic text-ink-faint">
+                          "{a.replyPreview}"
+                        </span>
                       )}
-                    </span>
-                  ) : (
-                    <span className="text-ink-faint">Ainda não</span>
-                  )}
-                </Td>
-                <Td align="right">
-                  {a.messageStatus ? (
-                    <MessageStatusBadge status={a.messageStatus} />
-                  ) : (
-                    <span className="text-ink-faint">—</span>
-                  )}
-                </Td>
-              </tr>
-            ))}
+                    </div>
+                  </Td>
+                </tr>
+              );
+            })}
           </Table>
           {filtered.length === 0 && (
             <p className="mt-3 text-sm text-ink-muted">Nenhum paciente nessa situação.</p>
