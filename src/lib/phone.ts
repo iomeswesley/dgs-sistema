@@ -35,7 +35,8 @@ export interface NormalizedPhone {
  * se o número não for discável no Brasil.
  *
  * Aceita com ou sem DDI 55, com ou sem o nono dígito. Celular = 9 dígitos
- * começando com 9; fixo = 8 dígitos começando de 2 a 5.
+ * começando com 9; fixo = 8 dígitos começando de 2 a 5. Celular de 8 dígitos
+ * (sem o nono) é reconstruído sozinho — ver comentário mais abaixo.
  */
 export function normalizePhone(raw: string | null | undefined): NormalizedPhone | null {
   if (!raw) return null;
@@ -59,18 +60,25 @@ export function normalizePhone(raw: string | null | undefined): NormalizedPhone 
   const first = subscriber[0];
 
   let kind: PhoneKind;
+  let subscriberFull = subscriber;
   if (subscriber.length === 9) {
     // Celular precisa começar com 9. "912345678" ok; "812345678" não existe.
     if (first !== "9") return null;
     kind = "mobile";
-  } else {
-    // Fixo começa de 2 a 5. Um "9xxxxxxx" de 8 dígitos é celular antigo sem
-    // o nono dígito — não dá pra reconstruir com segurança, então descarta.
-    if (!first || first < "2" || first > "5") return null;
+  } else if (first && first >= "6" && first <= "9") {
+    // 8 dígitos começando 6-9 só existe como celular sem o nono dígito —
+    // fixo nunca começa nessa faixa (sempre 2-5), então reconstruir é
+    // seguro: é exatamente o motivo mais comum de "telefone inválido" na
+    // extração (a prefeitura manda a lista sem o 9, formato antigo).
+    kind = "mobile";
+    subscriberFull = `9${subscriber}`;
+  } else if (first && first >= "2" && first <= "5") {
     kind = "landline";
+  } else {
+    return null;
   }
 
-  return { e164: `${BR_COUNTRY_CODE}${digits}`, areaCode, kind };
+  return { e164: `${BR_COUNTRY_CODE}${digits.slice(0, 2)}${subscriberFull}`, areaCode, kind };
 }
 
 /** Só celulares recebem WhatsApp. */

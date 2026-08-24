@@ -35,8 +35,17 @@ describe("normalizePhone", () => {
     expect(normalizePhone("(47) 89894-3232")).toBeNull(); // celular sem o 9 inicial
   });
 
-  it("rejeita celular antigo de 8 dígitos, que não dá pra reconstruir", () => {
-    expect(normalizePhone("4798943232")).toBeNull();
+  it("reconstrói celular de 8 dígitos sem o nono (formato antigo, comum nas listas da prefeitura)", () => {
+    // 8 dígitos começando 6-9 só existe como celular sem o 9 — fixo nunca
+    // começa nessa faixa, então reconstruir é seguro.
+    const phone = normalizePhone("4798943232");
+    expect(phone?.e164).toBe("5547998943232");
+    expect(phone?.kind).toBe("mobile");
+  });
+
+  it("continua tratando 8 dígitos começando 2-5 como fixo, sem reconstruir", () => {
+    expect(normalizePhone("4733804983")?.kind).toBe("landline");
+    expect(normalizePhone("4733804983")?.e164).toBe("554733804983");
   });
 });
 

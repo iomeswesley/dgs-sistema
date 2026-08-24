@@ -84,6 +84,7 @@ export function Revisao() {
   );
 
   const [search, setSearch] = useState("");
+  const [onlyIssues, setOnlyIssues] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -134,6 +135,7 @@ export function Revisao() {
   const searchDigits = search.replace(/\D/g, "");
   const searchName = search.trim().toLocaleLowerCase("pt-BR");
   const filteredAppointments = appointments.filter((appointment) => {
+    if (onlyIssues && (appointment.rawLine?.issues?.length ?? 0) === 0) return false;
     if (!searchName) return true;
     const nameMatch = appointment.patient.name.toLocaleLowerCase("pt-BR").includes(searchName);
     const phoneMatch = searchDigits.length > 0 && appointment.phones.some((phone) => phone.includes(searchDigits));
@@ -359,7 +361,9 @@ export function Revisao() {
               <dl className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
                 <dt className="text-ink-muted">PDF diz:</dt>
                 <dd>{unitCheck.pdfUnit ?? "(não leu unidade nenhuma)"}</dd>
-                <dt className="text-ink-muted">Cadastro diz:</dt>
+                <dt className="text-ink-muted">
+                  Cadastro diz <span className="font-semibold text-ink">(vai pra mensagem)</span>:
+                </dt>
                 <dd>
                   {unitCheck.agendaUnit
                     ? `${unitCheck.agendaUnit.name} — ${unitCheck.agendaUnit.address ?? "sem endereço cadastrado"}`
@@ -413,14 +417,24 @@ export function Revisao() {
       </div>
 
       <div className="mb-3">
-        <input
-          type="search"
-          className="field max-w-sm"
-          placeholder="Buscar por nome ou telefone…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        {search && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            className="field max-w-sm"
+            placeholder="Buscar por nome ou telefone…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => setOnlyIssues((prev) => !prev)}
+            aria-pressed={onlyIssues}
+            className={`btn px-3 py-1.5 text-sm ${onlyIssues ? "btn-primary" : "btn-quiet"}`}
+          >
+            Filtrar erros{pending > 0 ? ` (${pending})` : ""}
+          </button>
+        </div>
+        {(search || onlyIssues) && (
           <p className="mt-1 text-xs text-ink-faint">
             {filteredAppointments.length} de {appointments.length} pacientes
           </p>
