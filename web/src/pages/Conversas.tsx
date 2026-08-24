@@ -189,9 +189,16 @@ export function Conversas() {
 
       {/* Altura fixa: a janela inteira (lista + thread) não cresce com o
           conteúdo — só o painel de mensagens rola por dentro, como no
-          WhatsApp de verdade (e como já é no barbearia-saas/odonto-saas). */}
-      <div className="grid h-[75vh] gap-4 overflow-hidden lg:grid-cols-[320px_1fr]">
-        <div className="card flex flex-col overflow-hidden p-0">
+          WhatsApp de verdade (e como já é no barbearia-saas/odonto-saas).
+
+          No celular só uma coluna aparece por vez (lista OU conversa,
+          nunca as duas — era o que cobria a tela inteira antes), com um
+          "← Voltar" pra sair da conversa. A partir de md (mesmo ponto de
+          quebra que o menu lateral já usa) as duas ficam lado a lado. */}
+      <div className="grid h-[75vh] gap-4 overflow-hidden md:grid-cols-[320px_1fr]">
+        <div
+          className={`card flex-col overflow-hidden p-0 ${selectedPhone ? "hidden md:flex" : "flex"}`}
+        >
           <div className="shrink-0 border-b border-rule px-4 py-3">
             <p className="text-sm font-semibold text-ink">Conversas</p>
           </div>
@@ -237,7 +244,11 @@ export function Conversas() {
           </div>
         </div>
 
-        <div className="flex flex-col overflow-hidden rounded-lg shadow-[var(--shadow-card)]">
+        <div
+          className={`flex-col overflow-hidden rounded-lg shadow-[var(--shadow-card)] ${
+            selectedPhone ? "flex" : "hidden md:flex"
+          }`}
+        >
           {!selectedPhone && (
             <div className="flex h-full items-center justify-center bg-sheet">
               <p className="text-sm text-ink-muted">Selecione uma conversa à esquerda.</p>
@@ -248,8 +259,18 @@ export function Conversas() {
             <>
               {/* Cabeçalho no estilo WhatsApp — verde-escuro, sempre com
                   texto claro (não segue o token ink, é fixo como o header
-                  do app real). */}
+                  do app real). Botão de voltar só existe abaixo de md —
+                  ali a coluna da lista some enquanto a conversa está
+                  aberta, então precisa de um jeito de sair dela. */}
               <div className="flex shrink-0 items-center gap-3 bg-wa-header px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPhone(null)}
+                  className="-ml-1 shrink-0 rounded-full p-1 text-white/90 hover:bg-white/10 md:hidden"
+                  aria-label="Voltar pra lista de conversas"
+                >
+                  ←
+                </button>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold text-white">
                   {initials(selectedName)}
                 </span>
