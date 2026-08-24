@@ -15,11 +15,24 @@ export interface StatusCounts {
   semTelefone: number;
 }
 
+// "semTelefone" nunca foi só sem telefone — sempre somou sem telefone +
+// falha no envio + sem resposta (prazo estourado, o sistema desistiu de
+// esperar). O nome "Sem telefone" escondia isso (achado em 2026-08-26,
+// depois de uma lista mostrar 25 nessa faixa sendo 8 sem telefone + 17
+// falha) — renomeado pra "Precisa de ação", que é o que as três têm em
+// comum: nenhuma resolve sozinha, precisa de alguém mexer (completar
+// telefone, reenviar, ligar). Detalhe da composição no `title` (tooltip),
+// pra não estourar o espaço nos cards compactos de Listas.
 const SEGMENTS = [
   { key: "confirmados", label: "Confirmados", color: "var(--mark-green)" },
   { key: "recusados", label: "Recusados", color: "var(--mark-red)" },
   { key: "aguardando", label: "Aguardando", color: "var(--mark-yellow)" },
-  { key: "semTelefone", label: "Sem telefone", color: "var(--mark-gray)" },
+  {
+    key: "semTelefone",
+    label: "Precisa de ação",
+    title: "Sem telefone + falhou + estourou prazo sem resposta",
+    color: "var(--mark-gray)",
+  },
 ] as const;
 
 export function StatusBand({ counts, showLegend = true }: { counts: StatusCounts; showLegend?: boolean }) {
@@ -55,7 +68,11 @@ export function StatusBand({ counts, showLegend = true }: { counts: StatusCounts
       {showLegend && (
         <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
           {SEGMENTS.map((segment) => (
-            <div key={segment.key} className="flex items-center gap-1.5 text-xs">
+            <div
+              key={segment.key}
+              className="flex items-center gap-1.5 text-xs"
+              title={"title" in segment ? segment.title : undefined}
+            >
               <span className="h-2 w-2 rounded-full" style={{ background: segment.color }} aria-hidden />
               <span className="text-ink-muted">{segment.label}</span>
               <span className="tabular font-semibold text-ink">{counts[segment.key]}</span>
