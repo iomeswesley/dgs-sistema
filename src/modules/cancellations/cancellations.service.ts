@@ -4,7 +4,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
-import { phoneCandidates } from "@/lib/phone.js";
+import { phoneCandidates, normalizePhoneList } from "@/lib/phone.js";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender (cirurgia,
@@ -224,6 +224,8 @@ export interface CancellationBatchDetail extends CancellationBatchSummary {
     id: number;
     patientName: string;
     phone: string | null;
+    /** Outro celular do cadastro, diferente do que já foi tentado — sugestão pronta pro reenvio. */
+    alternatePhone: string | null;
     procedureName: string;
     scheduledAt: Date;
     messageStatus: string | null;
@@ -231,6 +233,14 @@ export interface CancellationBatchDetail extends CancellationBatchSummary {
     replied: boolean;
     replyPreview: string | null;
   }[];
+}
+
+/** Outro celular do cadastro do paciente, diferente do que já falhou — ou null se não tem nenhum. */
+function pickAlternatePhone(patientPhones: string[], triedPhone: string | null): string | null {
+  const alternative = normalizePhoneList(patientPhones).find(
+    (p) => p.kind === "mobile" && p.e164 !== triedPhone
+  );
+  return alternative?.e164 ?? null;
 }
 
 export async function getCancellationBatch(id: number): Promise<CancellationBatchDetail> {
@@ -287,6 +297,7 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
         id: a.id,
         patientName: a.patient.name,
         phone: a.selectedPhone,
+        alternatePhone: pickAlternatePhone(a.patient.phones, a.selectedPhone),
         procedureName: a.procedure.name,
         scheduledAt: a.scheduledAt,
         messageStatus: a.messages[0]?.status ?? null,
@@ -295,4 +306,66 @@ export async function getCancellationBatch(id: number): Promise<CancellationBatc
       };
     }),
   };
+}
+
+export interface RetryFailedUpdate {
+  appointmentId: number;
+  phone: string;
+}
+
+/**
+ * Reenvia o aviso de cancelamento pra quem falhou — com um telefone novo
+ * (normalmente o alternativo do cadastro, sugerido pelo `alternatePhone` do
+ * detalhe do lote, mas a equipe pode digitar qualquer outro). Atualiza
+ * `Appointment.selectedPhone` pro número novo e enfileira um `MessageJob`
+ * CANCELAMENTO — não mexe em `Appointment.status` (já é CANCELADO desde o
+ * disparo original, continua sendo, sucesso ou falha do reenvio).
+ */
+export async function retryFailedMessages(
+  batchId: number,
+  updates: RetryFailedUpdate[],
+  userId: number
+): Promise<{ queued: number }> {
+  if (updates.length === 0) throw new AppError("Nenhum telefone informado pra reenviar.", 400);
+
+  const appointments = await prisma.appointment.findMany({
+    where: { id: { in: updates.map((u) => u.appointmentId) }, cancellationBatchId: batchId },
+  });
+  const byId = new Map(appointments.map((a) => [a.id, a]));
+
+  let queued = 0;
+  for (const update of updates) {
+    const appointment = byId.get(update.appointmentId);
+    if (!appointment) continue; // não pertence a esse lote — ignora em silêncio
+
+    const [normalized] = normalizePhoneList([update.phone]);
+    if (!normalized || normalized.kind !== "mobile") {
+      throw new AppError(`Telefone inválido pro paciente do agendamento ${update.appointmentId}.`, 400);
+    }
+
+    await prisma.$transaction([
+      prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { selectedPhone: normalized.e164 },
+      }),
+      prisma.messageJob.create({
+        data: { appointmentId: appointment.id, template: "CANCELAMENTO", phone: normalized.e164 },
+      }),
+    ]);
+    queued++;
+  }
+
+  await recordAudit({
+    userId,
+    action: "cancel_retry",
+    entity: "CancellationBatch",
+    entityId: batchId,
+    metadata: { queued, appointmentIds: updates.map((u) => u.appointmentId) },
+  });
+
+  // Mesma convenção do disparo original: enfileira e já processa na hora
+  // (o resto, se não couber, o frontend completa sozinho — ver runQueueUntilDone).
+  await processQueue();
+
+  return { queued };
 }

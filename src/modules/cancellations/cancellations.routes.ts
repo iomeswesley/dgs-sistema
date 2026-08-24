@@ -8,6 +8,7 @@ import {
   getCancellationBatch,
   listCancellationBatches,
   previewCancellation,
+  retryFailedMessages,
   type CancellationSource,
 } from "./cancellations.service.js";
 
@@ -57,6 +58,27 @@ cancellationsRouter.post(
     const { agendaId, listId, reason } = parseBody(req, dispatchSchema);
     const source = parseSource({ agendaId, listId });
     const result = await dispatchCancellation(source, reason, currentUserId(req));
+    res.status(201).json(result);
+  })
+);
+
+const retryFailedSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        appointmentId: z.number().int().positive(),
+        phone: z.string().trim().min(1, "Telefone vazio"),
+      })
+    )
+    .min(1, "Nenhum telefone informado"),
+});
+
+/** Reenvia o cancelamento pra quem falhou, com telefone novo por agendamento. */
+cancellationsRouter.post(
+  "/api/cancellations/:id/retry-failed",
+  asyncHandler(async (req, res) => {
+    const { updates } = parseBody(req, retryFailedSchema);
+    const result = await retryFailedMessages(routeId(req), updates, currentUserId(req));
     res.status(201).json(result);
   })
 );
