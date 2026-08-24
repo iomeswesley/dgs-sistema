@@ -30,6 +30,7 @@ interface ThreadMessage {
   direction: "ENVIADA" | "RECEBIDA";
   body: string | null;
   template: string | null;
+  buttonPayload: string | null;
   status: string;
   createdAt: string;
 }
@@ -230,7 +231,9 @@ export function Conversas() {
                         m.direction === "ENVIADA" ? "bg-accent-soft" : "bg-sheet-sunken"
                       } text-ink`}
                     >
-                      <p className="whitespace-pre-wrap">{m.body ?? (m.template ? `[modelo: ${m.template}]` : "—")}</p>
+                      <p className="whitespace-pre-wrap">
+                        {m.body ?? m.buttonPayload ?? (m.template ? `[modelo: ${m.template}]` : "—")}
+                      </p>
                       <p className="mt-1 text-right text-xs text-ink-faint">
                         {new Date(m.createdAt).toLocaleString("pt-BR")}
                       </p>

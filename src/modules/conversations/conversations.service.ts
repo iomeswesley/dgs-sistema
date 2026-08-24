@@ -30,8 +30,11 @@ export interface ConversationSummary {
   withinWindow: boolean;
 }
 
-function previewBody(message: { body: string | null; template: string | null }): string | null {
+function previewBody(message: { body: string | null; template: string | null; buttonPayload: string | null }): string | null {
   if (message.body) return message.body;
+  // Resposta por clique de botão (Sim/Não etc.) não vem em `body` — o texto
+  // do botão fica em `buttonPayload`. Sem isso a mensagem aparecia em branco.
+  if (message.buttonPayload) return message.buttonPayload;
   if (message.template) return `[modelo: ${message.template}]`;
   return null;
 }
@@ -51,6 +54,7 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
       phone: true,
       body: true,
       template: true,
+      buttonPayload: true,
       direction: true,
       createdAt: true,
       appointment: { select: { patient: { select: { name: true, phones: true } } } },
@@ -112,6 +116,7 @@ export interface ThreadMessage {
   direction: "ENVIADA" | "RECEBIDA";
   body: string | null;
   template: string | null;
+  buttonPayload: string | null;
   status: string;
   createdAt: Date;
 }
@@ -128,6 +133,7 @@ export async function getThread(rawPhone: string): Promise<{ patientName: string
       direction: true,
       body: true,
       template: true,
+      buttonPayload: true,
       status: true,
       createdAt: true,
       appointment: { select: { patient: { select: { name: true } } } },
