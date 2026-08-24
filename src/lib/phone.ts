@@ -136,6 +136,18 @@ export function phoneCandidates(from: string): string[] {
   if (digits.length === 12 && digits.startsWith(BR_COUNTRY_CODE)) {
     candidates.push(`${BR_COUNTRY_CODE}${digits.slice(2, 4)}9${digits.slice(4)}`);
   }
+  // E o caminho inverso: acha 12 dígitos a partir de 13 — achado em
+  // 2026-08-26. `WhatsappMessage.phone` de uma mensagem RECEBIDA grava o
+  // "from" cru da Meta (`whatsapp.service.ts`), sem passar por
+  // `normalizePhone`; quando a Meta manda sem o 9º dígito, essa linha fica
+  // salva com 12 dígitos. `getThread()` (tela de Conversas) busca a partir
+  // do telefone já normalizado (13 dígitos, com o 9) — sem esse candidato
+  // de volta pra 12, a mensagem recebida nunca batia no `WHERE phone IN
+  // (...)` e sumia do chat (a lista da esquerda ainda mostrava certo, ela
+  // agrupa por `normalizePhone` de cada mensagem, não por este helper).
+  if (digits.length === 13 && digits.startsWith(BR_COUNTRY_CODE) && digits[4] === "9") {
+    candidates.push(`${BR_COUNTRY_CODE}${digits.slice(2, 4)}${digits.slice(5)}`);
+  }
   return candidates;
 }
 

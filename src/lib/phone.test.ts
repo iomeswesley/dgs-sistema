@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPhone, normalizePhone, normalizePhoneList, pickDispatchPhone } from "@/lib/phone.js";
+import { formatPhone, normalizePhone, normalizePhoneList, phoneCandidates, pickDispatchPhone } from "@/lib/phone.js";
 
 describe("normalizePhone", () => {
   it("normaliza celular formatado como nas listas das prefeituras", () => {
@@ -85,5 +85,24 @@ describe("formatPhone", () => {
   it("formata celular e fixo pra exibição", () => {
     expect(formatPhone("5547998943232")).toBe("(47) 99894-3232");
     expect(formatPhone("554733804983")).toBe("(47) 3380-4983");
+  });
+});
+
+describe("phoneCandidates", () => {
+  it("de 12 dígitos (sem o 9), inclui o candidato de 13 (com o 9)", () => {
+    expect(phoneCandidates("554797760610")).toEqual(["554797760610", "5547997760610"]);
+  });
+
+  it("de 13 dígitos (com o 9), inclui o candidato de 12 (sem o 9) — achado em 2026-08-26", () => {
+    // Sem isso, uma mensagem RECEBIDA gravada com o "from" cru da Meta sem
+    // o 9º dígito (bug conhecido da Meta) nunca batia contra o telefone já
+    // normalizado (com o 9) usado pra abrir a conversa ou checar a janela
+    // de 24h — a mensagem sumia do chat principal mesmo aparecendo certo
+    // na lista da esquerda (que agrupa por outro caminho, normalizePhone).
+    expect(phoneCandidates("5547997760610")).toEqual(["5547997760610", "554797760610"]);
+  });
+
+  it("sem DDI (10/11 dígitos) não gera candidato extra — só o formato E.164 completo entra nessa reconstrução", () => {
+    expect(phoneCandidates("47998943232")).toEqual(["47998943232"]);
   });
 });
