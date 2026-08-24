@@ -183,7 +183,15 @@ async function resolvePatient(tx: TxClient, draft: AppointmentDraft) {
   }
 
   if (draft.phones.length > 0) {
-    const byPhone = await tx.patient.findFirst({ where: { phones: { hasSome: draft.phones } } });
+    // Telefone sozinho NÃO é prova de identidade — número de celular é
+    // reatribuído pela operadora com frequência, e fixo pode ser de outra
+    // pessoa da mesma casa. Achado em 2026-08-25: casar só por telefone já
+    // tinha misturado o histórico de pessoas de 4 estados diferentes num
+    // único cadastro (coincidência de dígito, provavelmente de listas
+    // antigas de teste). Exige nome parecido também — telefone batendo com
+    // nome completamente diferente vira paciente novo, não reaproveita.
+    const candidates = await tx.patient.findMany({ where: { phones: { hasSome: draft.phones } } });
+    const byPhone = candidates.find((p) => namesMatch(p.name, draft.name));
     if (byPhone) {
       const merged = Array.from(new Set([...byPhone.phones, ...draft.phones]));
       return tx.patient.update({
