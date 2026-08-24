@@ -8,8 +8,10 @@ import { useApi } from "../lib/useApi";
 /*
   Todo mensagem trocada com o paciente, não só a parte de confirmação de
   agendamento (que já tem tela própria em Acompanhamento). Lista de
-  conversas à esquerda, thread à direita — mesmo padrão que já existe nos
-  outros projetos da DGS (barbearia-saas, odonto).
+  conversas à esquerda, thread à direita — mesmo padrão visual que já existe
+  nos outros projetos da DGS (barbearia-saas/odonto-saas, ver webroot/chat.html
+  neles): janela de altura fixa imitando o WhatsApp de verdade, com rolagem
+  só dentro do painel de mensagens, não da página inteira.
 
   Sem WebSocket/push: a atualização "quase ao vivo" é um refresh periódico
   simples enquanto a tela está aberta.
@@ -35,7 +37,7 @@ interface ThreadMessage {
   createdAt: string;
 }
 
-type TemplateKind = "CONFIRMACAO" | "LEMBRETE" | "VAGA_ABERTA";
+type TemplateKind = "CONFIRMACAO" | "LEMBRETE" | "VAGA_ABERTA" | "CANCELAMENTO";
 interface TemplateFieldsConfig {
   header?: string[];
   body: string[];
@@ -44,6 +46,7 @@ const TEMPLATE_LABEL: Record<TemplateKind, string> = {
   CONFIRMACAO: "Confirmação de consulta",
   LEMBRETE: "Lembrete de véspera",
   VAGA_ABERTA: "Convite pra vaga aberta",
+  CANCELAMENTO: "Cancelamento",
 };
 
 const REFRESH_MS = 15_000;
@@ -59,6 +62,11 @@ function loadSeenMap(): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
 export function Conversas() {
@@ -95,6 +103,7 @@ export function Conversas() {
   }, [selectedPhone]);
 
   const selected = conversations.data?.conversations.find((c) => c.phone === selectedPhone);
+  const selectedName = thread.data?.patientName ?? selected?.phoneFormatted ?? selectedPhone ?? "";
 
   function selectConversation(c: ConversationSummary) {
     setSelectedPhone(c.phone);
@@ -170,56 +179,81 @@ export function Conversas() {
         description="Toda mensagem trocada com o paciente — não só a confirmação de agendamento."
       />
 
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        <div className="card max-h-[70vh] overflow-y-auto p-0">
-          {conversations.loading && <Spinner />}
-          {conversations.error && (
-            <div className="p-3">
-              <ErrorNote message={conversations.error} />
-            </div>
-          )}
-          {conversations.data?.conversations.length === 0 && !conversations.loading && (
-            <p className="p-4 text-sm text-ink-muted">Nenhuma conversa ainda.</p>
-          )}
-          {conversations.data?.conversations.map((c) => (
-            <button
-              key={c.phone}
-              type="button"
-              onClick={() => selectConversation(c)}
-              className={`block w-full border-b border-rule p-3 text-left text-sm transition-colors hover:bg-sheet-alt ${
-                selectedPhone === c.phone ? "bg-sheet-alt" : ""
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                {isUnread(c) && (
-                  <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Não lida" />
-                )}
-                <p className={`truncate ${isUnread(c) ? "font-semibold text-ink" : "font-medium text-ink"}`}>
-                  {c.patientName ?? c.phoneFormatted}
-                </p>
+      {/* Altura fixa: a janela inteira (lista + thread) não cresce com o
+          conteúdo — só o painel de mensagens rola por dentro, como no
+          WhatsApp de verdade (e como já é no barbearia-saas/odonto-saas). */}
+      <div className="grid h-[75vh] gap-4 overflow-hidden lg:grid-cols-[320px_1fr]">
+        <div className="card flex flex-col overflow-hidden p-0">
+          <div className="shrink-0 border-b border-rule px-4 py-3">
+            <p className="text-sm font-semibold text-ink">Conversas</p>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {conversations.loading && <Spinner />}
+            {conversations.error && (
+              <div className="p-3">
+                <ErrorNote message={conversations.error} />
               </div>
-              {c.patientName && <p className="text-xs text-ink-faint">{c.phoneFormatted}</p>}
-              <p className="mt-1 truncate text-ink-muted">
-                {c.lastDirection === "ENVIADA" ? "Você: " : ""}
-                {c.lastMessage ?? "—"}
-              </p>
-            </button>
-          ))}
+            )}
+            {conversations.data?.conversations.length === 0 && !conversations.loading && (
+              <p className="p-4 text-sm text-ink-muted">Nenhuma conversa ainda.</p>
+            )}
+            {conversations.data?.conversations.map((c) => (
+              <button
+                key={c.phone}
+                type="button"
+                onClick={() => selectConversation(c)}
+                className={`flex w-full items-center gap-3 border-b border-rule p-3 text-left text-sm transition-colors hover:bg-sheet-alt ${
+                  selectedPhone === c.phone ? "bg-sheet-alt" : ""
+                }`}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent">
+                  {initials(c.patientName ?? c.phoneFormatted)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    {isUnread(c) && (
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Não lida" />
+                    )}
+                    <p className={`truncate ${isUnread(c) ? "font-semibold text-ink" : "font-medium text-ink"}`}>
+                      {c.patientName ?? c.phoneFormatted}
+                    </p>
+                  </div>
+                  {c.patientName && <p className="text-xs text-ink-faint">{c.phoneFormatted}</p>}
+                  <p className="mt-0.5 truncate text-ink-muted">
+                    {c.lastDirection === "ENVIADA" ? "Você: " : ""}
+                    {c.lastMessage ?? "—"}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="card flex min-h-[70vh] flex-col p-0">
-          {!selectedPhone && <p className="m-auto text-sm text-ink-muted">Selecione uma conversa à esquerda.</p>}
+        <div className="flex flex-col overflow-hidden rounded-lg shadow-[var(--shadow-card)]">
+          {!selectedPhone && (
+            <div className="flex h-full items-center justify-center bg-sheet">
+              <p className="text-sm text-ink-muted">Selecione uma conversa à esquerda.</p>
+            </div>
+          )}
 
           {selectedPhone && (
             <>
-              <div className="border-b border-rule p-3">
-                <p className="font-medium text-ink">
-                  {thread.data?.patientName ?? selected?.phoneFormatted ?? selectedPhone}
-                </p>
-                {thread.data?.patientName && <p className="text-xs text-ink-faint">{selected?.phoneFormatted}</p>}
+              {/* Cabeçalho no estilo WhatsApp — verde-escuro, sempre com
+                  texto claro (não segue o token ink, é fixo como o header
+                  do app real). */}
+              <div className="flex shrink-0 items-center gap-3 bg-wa-header px-4 py-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold text-white">
+                  {initials(selectedName)}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">{selectedName}</p>
+                  {thread.data?.patientName && (
+                    <p className="truncate text-xs text-white/70">{selected?.phoneFormatted}</p>
+                  )}
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto bg-wa-bg p-4">
                 {thread.loading && <Spinner />}
                 {thread.data?.messages.map((m) => (
                   <div
@@ -227,8 +261,10 @@ export function Conversas() {
                     className={`mb-2 flex ${m.direction === "ENVIADA" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                        m.direction === "ENVIADA" ? "bg-accent-soft" : "bg-sheet-sunken"
+                      className={`max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm ${
+                        m.direction === "ENVIADA"
+                          ? "rounded-tr-none bg-wa-bubble-out"
+                          : "rounded-tl-none bg-wa-bubble-in"
                       } text-ink`}
                     >
                       <p className="whitespace-pre-wrap">
@@ -245,7 +281,7 @@ export function Conversas() {
                 )}
               </div>
 
-              <div className="border-t border-rule p-3">
+              <div className="shrink-0 bg-wa-input-bar p-3">
                 {error && (
                   <div className="mb-2">
                     <ErrorNote message={error} />
@@ -265,7 +301,7 @@ export function Conversas() {
                 )}
                 <div className="flex gap-2">
                   <input
-                    className="field flex-1"
+                    className="field flex-1 rounded-full"
                     placeholder="Escrever mensagem…"
                     value={text}
                     disabled={!selected?.withinWindow || sending}
@@ -279,11 +315,13 @@ export function Conversas() {
                   />
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="btn btn-primary aspect-square w-10 shrink-0 rounded-full p-0"
                     disabled={!selected?.withinWindow || sending || !text.trim()}
                     onClick={() => void send()}
+                    aria-label="Enviar"
+                    title="Enviar"
                   >
-                    {sending ? "Enviando…" : "Enviar"}
+                    {sending ? "…" : "➤"}
                   </button>
                 </div>
               </div>

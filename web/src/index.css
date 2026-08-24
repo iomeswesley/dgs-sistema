@@ -44,6 +44,16 @@
   --accent-hover: #0b626a;
   --accent-soft: #e0f1f2;
 
+  /* Exceção deliberada à regra "sem cor decorativa": a tela de Conversas
+     imita a janela do WhatsApp de propósito (pedido do usuário, 2026-08-25,
+     mesmo padrão visual do barbearia-saas/odonto-saas) — cores do próprio
+     WhatsApp, não do marca-texto de status. */
+  --wa-header: #075e54;
+  --wa-bg: #e5ddd5;
+  --wa-bubble-out: #dcf8c6;
+  --wa-bubble-in: #ffffff;
+  --wa-input-bar: #f0f2f5;
+
   /* Sombras de elevação — discretas, só pra separar cartão do fundo e dar
      feedback de hover. Mesma escala usada nos produtos irmãos (agenda-saas/
      odonto-saas): 2 camadas, a de baixo mais espalhada e mais fraca. */
@@ -82,6 +92,13 @@
   --accent-hover: #38b9c4;
   --accent-soft: #10303a;
 
+  /* WhatsApp Web tema escuro. */
+  --wa-header: #202c33;
+  --wa-bg: #0b141a;
+  --wa-bubble-out: #005c4b;
+  --wa-bubble-in: #202c33;
+  --wa-input-bar: #202c33;
+
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 3px 1px rgb(0 0 0 / 0.18);
   --shadow-hover: 0 1px 3px 0 rgb(0 0 0 / 0.45), 0 4px 8px 3px rgb(0 0 0 / 0.22);
 }
@@ -114,6 +131,12 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+
+  --color-wa-header: var(--wa-header);
+  --color-wa-bg: var(--wa-bg);
+  --color-wa-bubble-out: var(--wa-bubble-out);
+  --color-wa-bubble-in: var(--wa-bubble-in);
+  --color-wa-input-bar: var(--wa-input-bar);
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
