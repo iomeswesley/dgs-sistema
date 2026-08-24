@@ -225,3 +225,31 @@ export async function getTemplateStatuses(wabaId: string, accessToken: string): 
     };
   });
 }
+
+function fillVariables(text: string, values: string[]): string {
+  return text.replace(/\{\{(\d+)\}\}/g, (_match, index: string) => values[Number(index) - 1] ?? "");
+}
+
+/**
+ * Reconstrói o texto final de um template já enviado, pra guardar em
+ * `WhatsappMessage.body` — sem isso a tela de Conversas só teria o nome cru
+ * do template (`[modelo: confirmacao_consulta]`) em vez da mensagem que o
+ * paciente realmente recebeu. Só funciona pros templates cadastrados aqui
+ * (`DEFAULT_TEMPLATES`); template desconhecido devolve string vazia.
+ */
+export function renderTemplateText(templateName: string, header: string[] | undefined, body: string[]): string {
+  const template = DEFAULT_TEMPLATES.find((t) => t.name === templateName);
+  if (!template) return "";
+
+  const parts: string[] = [];
+  for (const raw of template.components) {
+    const component = raw as { type?: string; text?: string };
+    if (component.type === "HEADER" && component.text && header?.length) {
+      parts.push(fillVariables(component.text, header));
+    }
+    if (component.type === "BODY" && component.text) {
+      parts.push(fillVariables(component.text, body));
+    }
+  }
+  return parts.join("\n\n");
+}

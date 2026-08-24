@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
+import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
 
@@ -178,9 +179,9 @@ export async function processQueue(): Promise<ProcessResult> {
     // mensagem funcionar. Aqui só registra a mensagem em si, sem mexer no
     // status: sucesso ou falha de entrega não desfaz o cancelamento.
     const isCancellation = job.template === "CANCELAMENTO";
+    const params = buildTemplateParams(job.template, job.appointment);
 
     try {
-      const params = buildTemplateParams(job.template, job.appointment);
       const result = await sendTemplate(job.phone, TEMPLATE_NAMES[job.template], params);
 
       await prisma.$transaction([
@@ -195,6 +196,7 @@ export async function processQueue(): Promise<ProcessResult> {
             direction: "ENVIADA",
             template: job.template,
             phone: job.phone,
+            body: renderTemplateText(TEMPLATE_NAMES[job.template], params.header, params.body),
             status: "ENVIADO",
             sentAt: new Date(),
           },
@@ -219,6 +221,7 @@ export async function processQueue(): Promise<ProcessResult> {
             direction: "ENVIADA",
             template: job.template,
             phone: job.phone,
+            body: renderTemplateText(TEMPLATE_NAMES[job.template], params.header, params.body),
             status: "FALHOU",
             errorCode: code ?? null,
             errorMessage: message,

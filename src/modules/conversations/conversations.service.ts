@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma.js";
 import { normalizePhone, phoneCandidates, formatPhone } from "@/lib/phone.js";
 import { sendTemplate, sendText, type TemplateComponentParams } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
+import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { AppError } from "@/middleware/errorHandler.js";
 
 /*
@@ -57,9 +58,19 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
   });
 
   const byPhone = new Map<string, ConversationSummary>();
+  // Data da última mensagem RECEBIDA por telefone — separado da mensagem
+  // mais recente (que pode ser nossa). A janela de 24h conta a partir do
+  // paciente, não de quando a equipe respondeu por último.
+  const lastInboundAt = new Map<string, Date>();
+
   for (const message of messages) {
     const key = normalizePhone(message.phone)?.e164 ?? message.phone;
-    if (byPhone.has(key)) continue; // já pegou a mais recente pra esse número
+
+    if (message.direction === "RECEBIDA" && !lastInboundAt.has(key)) {
+      lastInboundAt.set(key, message.createdAt);
+    }
+
+    if (byPhone.has(key)) continue; // já pegou a mais recente pra esse número (a mensagens estão em ordem desc)
 
     byPhone.set(key, {
       phone: key,
@@ -68,8 +79,13 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
       lastMessage: previewBody(message),
       lastDirection: message.direction,
       lastAt: message.createdAt,
-      withinWindow: message.direction === "RECEBIDA" && Date.now() - message.createdAt.getTime() < WINDOW_24H_MS,
+      withinWindow: false, // recalculado abaixo, depois de varrer tudo
     });
+  }
+
+  for (const conversation of byPhone.values()) {
+    const lastInbound = lastInboundAt.get(conversation.phone);
+    conversation.withinWindow = !!lastInbound && Date.now() - lastInbound.getTime() < WINDOW_24H_MS;
   }
 
   // Nome do paciente pode não ter vindo por Appointment (mensagem sem
@@ -175,7 +191,7 @@ export async function sendTemplateReply(
       direction: "ENVIADA",
       template,
       phone: key,
-      body: null,
+      body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body),
       status: "ENVIADO",
     },
   });

@@ -8,7 +8,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { requireAuth, currentUserId } from "@/middleware/auth.js";
 import { parseBody } from "@/lib/http.js";
 import { normalizePhoneList } from "@/lib/phone.js";
-import { sendTemplate } from "@/lib/whatsapp.js";
+import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import {
   adoptEnvAccount,
@@ -21,7 +21,12 @@ import {
   setActiveAccount,
   subscribeAppToWaba,
 } from "./whatsapp-account.service.js";
-import { getTemplateStatuses, registerPhoneNumber, submitDefaultTemplates } from "@/lib/whatsapp-templates.js";
+import {
+  getTemplateStatuses,
+  registerPhoneNumber,
+  renderTemplateText,
+  submitDefaultTemplates,
+} from "@/lib/whatsapp-templates.js";
 
 export const whatsappSignupRouter = Router();
 whatsappSignupRouter.use("/api/whatsapp/signup", requireAuth);
@@ -216,8 +221,42 @@ whatsappSignupRouter.post(
     if (normalized.kind !== "mobile") throw new AppError("Só celular recebe WhatsApp.", 400);
 
     const params = buildTestParams(template);
-    const result = await sendTemplate(normalized.e164, TEMPLATE_NAMES[template], params);
-    res.json(result);
+
+    // Grava no banco igual o disparo de verdade (queue.service.ts) — sem
+    // isso o aviso de "sem forma de pagamento" (que olha o último envio
+    // registrado) fica preso num teste falho antigo pra sempre, mesmo
+    // depois de corrigir o billing e um teste novo dar certo.
+    try {
+      const result = await sendTemplate(normalized.e164, TEMPLATE_NAMES[template], params);
+      await prisma.whatsappMessage.create({
+        data: {
+          wamid: result.wamid,
+          direction: "ENVIADA",
+          template,
+          phone: normalized.e164,
+          body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body),
+          status: "ENVIADO",
+          sentAt: new Date(),
+        },
+      });
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha desconhecida";
+      const code = err instanceof WhatsappSendError ? err.code : undefined;
+      await prisma.whatsappMessage.create({
+        data: {
+          direction: "ENVIADA",
+          template,
+          phone: normalized.e164,
+          body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body),
+          status: "FALHOU",
+          errorCode: code ?? null,
+          errorMessage: message,
+          failedAt: new Date(),
+        },
+      });
+      throw err;
+    }
   })
 );
 
