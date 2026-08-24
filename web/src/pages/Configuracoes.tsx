@@ -5,7 +5,7 @@ import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatDate } from "../lib/format";
+import { formatDate, formatDateTime } from "../lib/format";
 
 interface Municipality {
   id: number;
@@ -1318,7 +1318,7 @@ function AgendasTab() {
                   <span className="ml-1 text-xs text-ink-faint">{slot.procedure.name}</span>
                 </span>
                 <span className="tabular shrink-0 text-ink-faint">
-                  {new Date(slot.scheduledAt).toLocaleString("pt-BR")}
+                  {formatDateTime(slot.scheduledAt)}
                 </span>
               </li>
             ))}

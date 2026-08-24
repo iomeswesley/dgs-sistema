@@ -7,6 +7,11 @@ export function formatPhone(e164: string | null | undefined): string {
   return e164;
 }
 
+// timeZone explícito sempre — não depende do relógio/fuso do navegador de
+// quem está operando (achado em 2026-08-25: nem o fuso do servidor era
+// confiável, ver comentário em lib/timezone.ts no backend).
+const BR_TIMEZONE = "America/Sao_Paulo";
+
 export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return "—";
   return new Date(value).toLocaleString("pt-BR", {
@@ -15,12 +20,13 @@ export function formatDateTime(value: string | Date | null | undefined): string 
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: BR_TIMEZONE,
   });
 }
 
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("pt-BR");
+  return new Date(value).toLocaleDateString("pt-BR", { timeZone: BR_TIMEZONE });
 }
 
 export function formatPercent(value: number | null | undefined): string {

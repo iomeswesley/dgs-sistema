@@ -150,8 +150,14 @@ export function Revisao() {
     setDraft({
       name: appointment.patient.name,
       phone: appointment.selectedPhone ?? "",
-      // datetime-local exige o formato AAAA-MM-DDTHH:MM sem fuso.
-      scheduledAt: new Date(appointment.scheduledAt).toLocaleString("sv-SE").slice(0, 16).replace(" ", "T"),
+      // datetime-local exige o formato AAAA-MM-DDTHH:MM sem fuso. timeZone
+      // explícito é obrigatório — não pode depender do fuso do computador
+      // de quem está editando (achado em 2026-08-25, mesmo problema do
+      // parsing no backend, ver lib/timezone.ts).
+      scheduledAt: new Date(appointment.scheduledAt)
+        .toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" })
+        .slice(0, 16)
+        .replace(" ", "T"),
     });
   }
 

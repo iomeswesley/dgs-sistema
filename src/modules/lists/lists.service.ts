@@ -6,6 +6,7 @@ import { mapExtraction, type AppointmentDraft } from "@/modules/extraction/extra
 import { normalizePhoneList } from "@/lib/phone.js";
 import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { parseBrasiliaDateTime } from "@/lib/timezone.js";
 
 /*
   Ciclo de vida de uma lista:
@@ -222,7 +223,7 @@ async function createAppointmentFromDraft(
       doctorId,
       procedureId,
       requestingUnitId,
-      scheduledAt: draft.scheduledAt ? new Date(draft.scheduledAt) : new Date(),
+      scheduledAt: draft.scheduledAt ? parseBrasiliaDateTime(draft.scheduledAt) : new Date(),
       isFirstVisit: draft.isFirstVisit,
       phones: draft.phones,
       selectedPhone: draft.dispatchPhone,
@@ -248,6 +249,37 @@ const editableFields = [
   "procedureId",
   "isFirstVisit",
 ] as const;
+
+interface RawLine {
+  issues?: string[];
+  invalidPhones?: string[];
+  notes?: string | null;
+  executingUnit?: string | null;
+}
+
+/**
+ * Tira da lista de avisos (`rawLine.issues`) o que essa edição resolveu —
+ * sem isso "telefone inválido"/"sem data" etc. ficam mostrando pra sempre
+ * na revisão, mesmo depois de corrigido, porque `rawLine` é um retrato de
+ * quando a extração rodou, nunca atualizado depois.
+ */
+function clearResolvedIssues(rawLine: Prisma.JsonValue, edit: AppointmentEdit): Prisma.InputJsonValue | undefined {
+  if (!rawLine || typeof rawLine !== "object" || Array.isArray(rawLine)) return undefined;
+  const current = rawLine as unknown as RawLine;
+  const issues = new Set(current.issues ?? []);
+  let invalidPhones = current.invalidPhones ?? [];
+
+  if (edit.selectedPhone) {
+    issues.delete("telefone_invalido");
+    issues.delete("sem_telefone");
+    invalidPhones = [];
+  }
+  if (edit.scheduledAt) issues.delete("sem_data");
+  if (edit.doctorId) issues.delete("sem_medico");
+  if (edit.procedureId) issues.delete("sem_procedimento");
+
+  return { ...current, issues: [...issues], invalidPhones } as unknown as Prisma.InputJsonValue;
+}
 
 export interface AppointmentEdit {
   patientName?: string;
@@ -289,7 +321,7 @@ export async function editAppointment(
       where: { id: appointmentId },
       data: {
         selectedPhone: edit.selectedPhone,
-        scheduledAt: edit.scheduledAt ? new Date(edit.scheduledAt) : undefined,
+        scheduledAt: edit.scheduledAt ? parseBrasiliaDateTime(edit.scheduledAt) : undefined,
         doctorId: edit.doctorId,
         procedureId: edit.procedureId,
         isFirstVisit: edit.isFirstVisit,
@@ -297,6 +329,10 @@ export async function editAppointment(
         // Corrigido à mão deixa de ser "sem telefone" se ganhou um número.
         status:
           edit.selectedPhone && appointment.status === "SEM_TELEFONE" ? "PENDENTE" : undefined,
+        // Sem isso, o aviso ("telefone inválido" etc.) ficava preso pra
+        // sempre na revisão mesmo depois de corrigido — rawLine.issues é
+        // um retrato de quando a extração rodou, nunca era atualizado.
+        rawLine: clearResolvedIssues(appointment.rawLine, edit),
       },
     });
   });

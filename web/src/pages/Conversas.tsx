@@ -4,6 +4,7 @@ import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
+import { formatDateTime } from "../lib/format";
 
 /*
   Todo mensagem trocada com o paciente, não só a parte de confirmação de
@@ -300,7 +301,7 @@ export function Conversas() {
                         {m.body ?? m.buttonPayload ?? (m.template ? `[modelo: ${m.template}]` : "—")}
                       </p>
                       <p className="mt-1 text-right text-xs text-ink-faint">
-                        {new Date(m.createdAt).toLocaleString("pt-BR")}
+                        {formatDateTime(m.createdAt)}
                       </p>
                     </div>
                   </div>

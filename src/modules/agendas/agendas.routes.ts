@@ -146,7 +146,7 @@ agendasRouter.get(
     const csv = toCsv(
       ["Horário vago", "Paciente que liberou", "Procedimento", "Situação anterior", "Motivo", "Unidade solicitante"],
       appointments.map((appointment) => [
-        appointment.scheduledAt.toLocaleString("pt-BR"),
+        appointment.scheduledAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
         appointment.patient.name,
         appointment.procedure.name,
         appointment.status === "RECUSADO"

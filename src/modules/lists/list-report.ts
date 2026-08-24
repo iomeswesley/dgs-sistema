@@ -33,7 +33,7 @@ export async function buildListReportCsv(listId: number): Promise<{ csv: string;
       appointment.patient.name,
       appointment.selectedPhone ? formatPhone(appointment.selectedPhone) : "",
       appointment.patient.cns ?? "",
-      appointment.scheduledAt.toLocaleString("pt-BR"),
+      appointment.scheduledAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
       appointment.procedure.name,
       appointment.doctor.name,
       STATUS_LABEL[appointment.status] ?? appointment.status,

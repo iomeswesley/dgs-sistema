@@ -250,12 +250,20 @@ type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrTh
   cancellationBatch: { reason: string } | null;
 };
 
+// timeZone explícito é obrigatório aqui — vira texto de WhatsApp que o
+// paciente lê. Não depender do fuso do processo (ver comentário em
+// lib/timezone.ts: já mostrou não ser confiável em produção).
 function formatDate(date: Date): string {
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  });
 }
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 }
 
 /**

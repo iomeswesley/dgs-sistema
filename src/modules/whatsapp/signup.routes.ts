@@ -262,7 +262,12 @@ whatsappSignupRouter.post(
 
 function buildTestParams(template: TemplateKind) {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const date = tomorrow.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const date = tomorrow.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  });
   const time = "10:00";
   const firstName = "Teste";
   const municipality = "Município de Teste";
