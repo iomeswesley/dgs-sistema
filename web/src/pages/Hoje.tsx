@@ -310,17 +310,23 @@ export function Hoje() {
                   {lastError && <p className="text-xs text-mark-red">{lastError.errorMessage}</p>}
                 </Td>
                 <Td align="right">
-                  <button
-                    type="button"
-                    className="btn btn-quiet px-2 py-1 text-xs"
-                    onClick={() => {
-                      setContacting(appointment);
-                      setOutcome("CONFIRMADO");
-                      setNote("");
-                    }}
-                  >
-                    Registrar contato
-                  </button>
+                  {appointment.status === "CANCELADO" ? (
+                    <span className="text-xs text-ink-faint" title="A agenda foi cancelada pela equipe — não tem presença pra confirmar ou recusar.">
+                      —
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => {
+                        setContacting(appointment);
+                        setOutcome("CONFIRMADO");
+                        setNote("");
+                      }}
+                    >
+                      Registrar contato
+                    </button>
+                  )}
                 </Td>
               </tr>
             );

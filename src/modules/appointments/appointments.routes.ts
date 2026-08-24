@@ -116,6 +116,12 @@ appointmentsRouter.post(
     const data = parseBody(req, contactSchema);
     const before = await prisma.appointment.findUnique({ where: { id } });
     if (!before) throw new AppError("Agendamento não encontrado", 404);
+    // A agenda inteira foi cancelada pela equipe — não tem presença pra
+    // confirmar/recusar mais (achado em 2026-08-26: o botão "Registrar
+    // contato" aparecia mesmo assim e sobrescrevia CANCELADO em silêncio).
+    if (before.status === "CANCELADO") {
+      throw new AppError("Esse agendamento foi cancelado — não dá pra registrar contato.", 409);
+    }
 
     const appointment = await prisma.appointment.update({
       where: { id },

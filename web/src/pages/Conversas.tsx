@@ -80,6 +80,7 @@ export function Conversas() {
   const templateFields = useApi<{ fields: Record<TemplateKind, TemplateFieldsConfig> }>(
     "/api/conversations/template-fields"
   );
+  const [search, setSearch] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +114,17 @@ export function Conversas() {
 
   const selected = conversations.data?.conversations.find((c) => c.phone === selectedPhone);
   const selectedName = thread.data?.patientName ?? selected?.phoneFormatted ?? selectedPhone ?? "";
+
+  // Busca por nome (parcial, sem acento/caixa) ou telefone (só os dígitos)
+  // — mesmo padrão já usado em Revisão.
+  const searchDigits = search.replace(/\D/g, "");
+  const searchName = search.trim().toLocaleLowerCase("pt-BR");
+  const filteredConversations = (conversations.data?.conversations ?? []).filter((c) => {
+    if (!searchName) return true;
+    const nameMatch = (c.patientName ?? "").toLocaleLowerCase("pt-BR").includes(searchName);
+    const phoneMatch = searchDigits.length > 0 && c.phone.includes(searchDigits);
+    return nameMatch || phoneMatch;
+  });
 
   function selectConversation(c: ConversationSummary) {
     setSelectedPhone(c.phone);
@@ -201,7 +213,14 @@ export function Conversas() {
           className={`card flex-col overflow-hidden p-0 ${selectedPhone ? "hidden md:flex" : "flex"}`}
         >
           <div className="shrink-0 border-b border-rule px-4 py-3">
-            <p className="text-sm font-semibold text-ink">Conversas</p>
+            <p className="mb-2 text-sm font-semibold text-ink">Conversas</p>
+            <input
+              type="search"
+              className="field w-full text-sm"
+              placeholder="Buscar por nome ou telefone…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
           </div>
           <div className="flex-1 overflow-y-auto">
             {conversations.loading && <Spinner />}
@@ -213,7 +232,10 @@ export function Conversas() {
             {conversations.data?.conversations.length === 0 && !conversations.loading && (
               <p className="p-4 text-sm text-ink-muted">Nenhuma conversa ainda.</p>
             )}
-            {conversations.data?.conversations.map((c) => (
+            {conversations.data && filteredConversations.length === 0 && search && (
+              <p className="p-4 text-sm text-ink-muted">Nenhuma conversa encontrada pra "{search}".</p>
+            )}
+            {filteredConversations.map((c) => (
               <button
                 key={c.phone}
                 type="button"
