@@ -322,7 +322,7 @@ export function Revisao() {
     setAddBusy(true);
     setAddError(null);
     try {
-      await api.post(`/api/lists/${list.id}/appointments`, {
+      const result = await api.post<{ appointmentId: number; queued: boolean }>(`/api/lists/${list.id}/appointments`, {
         patientName: addForm.patientName.trim(),
         cns: addForm.cns.trim() || null,
         phone: addForm.phone.trim(),
@@ -333,6 +333,19 @@ export function Revisao() {
       });
       setAddOpen(false);
       detail.reload();
+      // Lista já passou da revisão: a mensagem pra essa pessoa já foi
+      // enfileirada no backend — completa o envio sozinho, mesma garantia
+      // de sempre terminar sem depender do cron (ver lib/queue.ts).
+      if (result.queued) {
+        setNotice(`${addForm.patientName.trim()} adicionado(a) — enviando confirmação...`);
+        const finished = await runQueueUntilDone(({ sent, failed }) => {
+          setNotice(`${addForm.patientName.trim()} adicionado(a) — ${sent} enviada(s), ${failed} falharam.`);
+        });
+        setNotice(
+          `${addForm.patientName.trim()} adicionado(a) — ${finished.sent > 0 ? "confirmação enviada." : finished.failed > 0 ? "falha ao enviar." : "aguardando envio."}`
+        );
+        detail.reload();
+      }
     } catch (err) {
       setAddError(err instanceof Error ? err.message : "Falha ao adicionar paciente.");
     } finally {
@@ -574,13 +587,16 @@ export function Revisao() {
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
-            {isReviewing && (
-              <p className="mt-3">
-                <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openAddModal}>
-                  + Adicionar paciente manualmente
-                </button>
-              </p>
-            )}
+            <p className="mt-3">
+              <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openAddModal}>
+                + Adicionar paciente manualmente
+              </button>
+              {!isReviewing && (
+                <span className="ml-2 text-xs text-ink-faint">
+                  A lista já {list.status === "DISPARADA" || list.status === "CONCLUIDA" ? "foi disparada" : "foi aprovada"} — a mensagem sai pra essa pessoa na hora, separado do resto.
+                </span>
+              )}
+            </p>
           </Callout>
         </div>
       )}

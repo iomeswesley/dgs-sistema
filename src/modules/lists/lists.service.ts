@@ -442,12 +442,20 @@ export interface ManualAppointmentInput {
 }
 
 /**
- * Adiciona um paciente à mão na revisão — pro caso de "Registro não
- * reconhecido" (a extração não conseguiu ler aquela linha do PDF de jeito
- * nenhum, então a pessoa simplesmente não aparece na lista). Pedido do
- * usuário em 2026-08-26: antes disso não existia nenhum jeito de completar
- * a lista com quem ficou de fora, só reprocessar do zero (o que perderia
- * qualquer correção manual já feita nas outras linhas).
+ * Adiciona um paciente à mão — pro caso de "Registro não reconhecido" (a
+ * extração não conseguiu ler aquela linha do PDF de jeito nenhum, então a
+ * pessoa simplesmente não aparece na lista). Pedido do usuário em
+ * 2026-08-26: antes disso não existia nenhum jeito de completar a lista
+ * com quem ficou de fora, só reprocessar do zero (o que perderia qualquer
+ * correção manual já feita nas outras linhas).
+ *
+ * Funciona em qualquer status da lista, de propósito — diferente de editar/
+ * remover uma linha existente (só em `EM_REVISAO`, porque mexeria em algo
+ * que já foi ou vai ser enviado). Faltar alguém só costuma ser percebido
+ * DEPOIS de disparar, exatamente quando a edição normal já está trancada
+ * (achado pelo usuário: o botão não aparecia numa lista já disparada).
+ * Quando a lista já passou da revisão, a mensagem sai pra esse paciente na
+ * hora — não fica esperando um "disparar" que não existe mais.
  *
  * Reaproveita `resolvePatient()` — mesma proteção de identidade (CNS/nome/
  * telefone) da extração normal, pra não criar um paciente duplicado se
@@ -457,25 +465,28 @@ export async function addManualAppointment(
   listId: number,
   input: ManualAppointmentInput,
   userId: number
-): Promise<{ appointmentId: number }> {
+): Promise<{ appointmentId: number; queued: boolean }> {
   const list = await prisma.list.findUnique({ where: { id: listId } });
   if (!list) throw new AppError("Lista não encontrada", 404);
-  if (list.status !== "EM_REVISAO") {
-    throw new AppError("Só dá pra adicionar paciente com a lista em revisão.", 409);
-  }
 
   const [normalized] = normalizePhoneList([input.phone]);
   if (!normalized) throw new AppError("Telefone inválido.", 400);
   if (normalized.kind !== "mobile") throw new AppError("Só celular recebe confirmação por WhatsApp.", 400);
 
-  const appointment = await prisma.$transaction(async (tx) => {
+  // Antes da revisão, a mensagem sai junto com o disparo normal da lista —
+  // depois disso não tem mais "disparar" esperando, então enfileira na
+  // hora (mesmo template que o resto da lista já usa).
+  const dispatchNow = list.status !== "EM_REVISAO";
+  const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+
+  const { appointment, patientOptedOut } = await prisma.$transaction(async (tx) => {
     const patient = await resolvePatient(tx, {
       name: input.patientName,
       cns: input.cns?.trim() || null,
       phones: [normalized.e164],
     });
 
-    return tx.appointment.create({
+    const created = await tx.appointment.create({
       data: {
         listId,
         agendaId: list.agendaId,
@@ -494,11 +505,19 @@ export async function addManualAppointment(
         rawLine: {
           issues: [],
           invalidPhones: [],
-          notes: "Adicionado manualmente na revisão (não veio da leitura automática).",
+          notes: "Adicionado manualmente (não veio da leitura automática).",
           executingUnit: null,
         } as unknown as Prisma.InputJsonValue,
       },
     });
+
+    if (dispatchNow && !patient.optedOut) {
+      await tx.messageJob.create({
+        data: { appointmentId: created.id, template, phone: normalized.e164 },
+      });
+    }
+
+    return { appointment: created, patientOptedOut: patient.optedOut };
   });
 
   await recordAudit({
@@ -509,7 +528,7 @@ export async function addManualAppointment(
     newValue: input.patientName,
   });
 
-  return { appointmentId: appointment.id };
+  return { appointmentId: appointment.id, queued: dispatchNow && !patientOptedOut };
 }
 
 export interface RetryFailedUpdate {

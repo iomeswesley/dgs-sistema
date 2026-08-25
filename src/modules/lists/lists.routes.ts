@@ -291,12 +291,18 @@ const manualAppointmentSchema = z.object({
   isFirstVisit: z.boolean().nullish(),
 });
 
-/** Adiciona um paciente à mão na revisão — pra "Registro não reconhecido". */
+/**
+ * Adiciona um paciente à mão — pra "Registro não reconhecido". Funciona em
+ * qualquer status da lista; se já passou da revisão, a mensagem sai na
+ * hora (mesma convenção do dispatch normal — enfileira e já processa, o
+ * resto o frontend completa sozinho com runQueueUntilDone).
+ */
 listsRouter.post(
   "/api/lists/:id/appointments",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, manualAppointmentSchema);
     const result = await addManualAppointment(routeId(req), data, currentUserId(req));
+    if (result.queued) await processQueue();
     res.status(201).json(result);
   })
 );
