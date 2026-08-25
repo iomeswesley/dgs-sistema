@@ -121,6 +121,22 @@ describe("mapExtraction — revisão humana", () => {
     expect(mapped.summary.readyToSend).toBe(0);
   });
 
+  it("não marca 'duplicado' pra pessoas diferentes que só compartilham telefone (ex.: família)", () => {
+    // Caso real de Camboriú/CELK: KAUE GUEDES CORREIA e MATHEUS DE BRITO
+    // FIGUEIREDO, sem CNS, mesmo celular — identityKey() cai pro telefone
+    // (não tem CNS pra usar) e batia igual, mas são duas pessoas de
+    // verdade diferentes (achado pelo usuário em 2026-08-27).
+    const mapped = mapExtraction(
+      extraction({
+        rows: [
+          row({ name: "Kaue Guedes Correia", phones: ["(47) 99636-8146"] }),
+          row({ name: "Matheus de Brito Figueiredo", phones: ["(47) 99636-8146"] }),
+        ],
+      })
+    );
+    expect(mapped.drafts.every((draft) => !draft.issues.includes("duplicado"))).toBe(true);
+  });
+
   it("não confunde pacientes diferentes com o mesmo primeiro nome", () => {
     const mapped = mapExtraction(
       extraction({

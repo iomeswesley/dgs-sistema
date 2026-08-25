@@ -1,4 +1,5 @@
 import { normalizePhoneList, pickDispatchPhone } from "@/lib/phone.js";
+import { namesMatch } from "@/lib/text-match.js";
 import type { ExtractedRow, ExtractionResult } from "./extraction.schema.js";
 
 /*
@@ -126,20 +127,32 @@ export function mapExtraction(extraction: ExtractionResult): MappedList {
   const drafts = extraction.rows.map((row, index) => mapRow(row, index, extraction));
 
   // Duplicidade é comum nessas listas (dois procedimentos no mesmo dia, ou
-  // erro da prefeitura). Marca as duas ocorrências e deixa a equipe decidir —
+  // erro da prefeitura). Marca as ocorrências e deixa a equipe decidir —
   // apagar automaticamente poderia cancelar um atendimento legítimo.
-  const seen = new Map<string, number>();
+  //
+  // `identityKey()` sozinho não basta: quando não há CNS, ele cai pro
+  // telefone, e telefone igual não significa a mesma pessoa — é comum
+  // duas pessoas da mesma casa (família) compartilharem um número. Achado
+  // pelo usuário em 2026-08-27, mesmo motivo que já tinha corrigido
+  // `resolvePatient()` em 25/08 (não juntar pacientes só por telefone
+  // batendo): sem o nome bater também, marcar "duplicado" aqui confundia
+  // duas pessoas de verdade diferentes como se fossem uma só duplicada —
+  // cada uma virava paciente próprio (protegido, correto), mas ficava
+  // presa com o aviso amarelo sem nenhuma linha-irmã de fato pra resolver.
+  const groups = new Map<string, AppointmentDraft[]>();
   for (const draft of drafts) {
     const key = identityKey(draft);
-    const firstIndex = seen.get(key);
-    if (firstIndex === undefined) {
-      seen.set(key, draft.index);
-      continue;
-    }
-    for (const duplicate of [drafts[firstIndex], draft]) {
-      if (duplicate && !duplicate.issues.includes("duplicado")) {
-        duplicate.issues.push("duplicado");
-        duplicate.readyToSend = false;
+    const group = groups.get(key);
+    if (group) group.push(draft);
+    else groups.set(key, [draft]);
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    for (const draft of group) {
+      const hasNamesake = group.some((other) => other !== draft && namesMatch(other.name, draft.name));
+      if (hasNamesake && !draft.issues.includes("duplicado")) {
+        draft.issues.push("duplicado");
+        draft.readyToSend = false;
       }
     }
   }
