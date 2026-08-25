@@ -37,15 +37,16 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 1. **Coexistência do WhatsApp ainda travada** — App Review de `business_management` submetido (2026-08-18), aguardando aprovação da Meta. Se aprovar e ainda travar, o próximo passo já é abrir chamado de suporte com a Meta (erro não documentado publicamente, código de referência `#1690130`).
 2. Popular o cadastro de produção antes do cliente operar pra valer.
 
-## Sessão de 2026-08-26 — resumo (detalhe completo nas 17 entradas "Resolvido em 2026-08-26" abaixo)
+## Sessão de 2026-08-26 — resumo (detalhe completo nas 18 entradas "Resolvido em 2026-08-26" abaixo)
 
 Cliente testando o sistema de ponta a ponta pela primeira vez (Listas, Revisão, Cancelamento, Conversas), vários bugs e pedidos de UX reais surgiram e foram resolvidos no mesmo dia:
 
-- **Confiabilidade do disparo**: `processQueue()` ganhou `TIME_BUDGET_MS` (pára sozinho antes do timeout de 60s da Vercel) + `web/src/lib/queue.ts` (`runQueueUntilDone`, o frontend completa o envio sozinho em requisições separadas) — nunca mais trava nem depende do cron do dia seguinte. Usado em Cancelamento, dispatch de Lista e Acompanhamento.
+- **Confiabilidade do disparo**: `processQueue()` ganhou `TIME_BUDGET_MS` (pára sozinho antes do timeout de 60s da Vercel) + `web/src/lib/queue.ts` (`runQueueUntilDone`, o frontend completa o envio sozinho em requisições separadas) — nunca mais trava nem depende do cron do dia seguinte. Usado em Cancelamento, dispatch de Lista, Acompanhamento e "Adicionar paciente manualmente".
 - **Cancelamento** ganhou: "Respondeu" (qualquer resposta, não só template), coluna de telefone + filtro por situação da mensagem + legenda, reenvio pra quem falhou/sem telefone (com telefone alternativo do cadastro), reconciliação "extraído × restante", cores por status, coluna "Situação" unificada (resposta conta como "Lido").
-- **Revisão** ganhou a mesma dinâmica: filtro por situação, reenvio pra quem falhou/sem telefone, legenda, **botão "Adicionar paciente manualmente"** (`addManualAppointment()`, `POST /api/lists/:id/appointments`) pra "Registro não reconhecido".
+- **Revisão** ganhou a mesma dinâmica: filtro por situação, reenvio pra quem falhou/sem telefone, legenda, e o **botão "Adicionar paciente manualmente"** (`addManualAppointment()`, `POST /api/lists/:id/appointments`) pra "Registro não reconhecido" — funciona em qualquer status da lista (não só em revisão), manda a mensagem na hora se a lista já foi disparada.
 - **Conversas** ganhou busca por nome/telefone; corrigido bug sério de `phoneCandidates()` só reconstruir telefone num sentido (12→13 dígitos, não o inverso) — causava mensagem sumindo do chat, janela de 24h errada, e "Respondeu" do Cancelamento quase todo errado.
-- **Bugs de dado corrigidos**: nome duplicado do SISREG (`dedupeRepeatedName`), registro sem horário sumindo da lista inteira (hora virou opcional no parser), identidade de paciente (mesma proteção nome+CNS/telefone agora também no caminho por CNS de `resolvePatient`), "duplicado" preso após excluir a outra ocorrência, "Registrar contato" bloqueado em agendamento cancelado.
+- **Parser SISREG, dois bugs sérios achados com PDF real**: registro sem horário sumia da lista inteira (hora virou opcional), e registro que atravessa quebra de página do PDF (2+ telefones) tinha risco real de vazar CID-10 (dado sensível) pro resultado — corrigido com corte global em vez de ancorado no fim do texto, e filtro do rodapé de página que sujava o meio do registro.
+- **Outros bugs de dado corrigidos**: nome duplicado do SISREG (`dedupeRepeatedName`), identidade de paciente (mesma proteção nome+CNS/telefone agora também no caminho por CNS de `resolvePatient`), "duplicado" preso após excluir a outra ocorrência, "Registrar contato" bloqueado em agendamento cancelado.
 - **Auditoria de produção**: achado e excluído 1 paciente órfão (telefones comprovadamente de outra pessoa, resíduo do bug de identidade já corrigido em 25/08).
 - Confirmado e documentado: templates da WABA ativa aprovados, billing configurado — as duas últimas pendências de WhatsApp fecharam.
 
