@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PageHeader } from "../components/AppShell";
 import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner } from "../components/ui";
@@ -81,9 +82,25 @@ function initials(name: string): string {
  * protegida por sessão (mesma auth de toda a API) — o navegador manda o
  * cookie sozinho num `<img>`/`<audio>` same-origin, sem precisar de token.
  */
-function MediaPreview({ url, mimeType }: { url: string; mimeType: string | null }) {
+function MediaPreview({
+  url,
+  mimeType,
+  onOpenImage,
+}: {
+  url: string;
+  mimeType: string | null;
+  /** Clique na miniatura — abre a imagem em tamanho grande (ver <ImageLightbox>). */
+  onOpenImage: (url: string) => void;
+}) {
   if (mimeType?.startsWith("image/")) {
-    return <img src={url} alt="Imagem enviada pelo paciente" className="mb-1.5 max-h-64 rounded-md object-contain" />;
+    return (
+      <img
+        src={url}
+        alt="Imagem enviada pelo paciente"
+        className="mb-1.5 max-h-64 cursor-zoom-in rounded-md object-contain"
+        onClick={() => onOpenImage(url)}
+      />
+    );
   }
   if (mimeType?.startsWith("audio/")) {
     return (
@@ -96,6 +113,44 @@ function MediaPreview({ url, mimeType }: { url: string; mimeType: string | null 
     <a href={url} target="_blank" rel="noreferrer" className="mb-1.5 block font-semibold underline">
       📎 Abrir arquivo
     </a>
+  );
+}
+
+/**
+ * Imagem recebida em tamanho grande, por cima de tudo — clicar na miniatura
+ * na bolha abre isso (pedido do usuário em 2026-08-27: clicar na imagem não
+ * fazia nada). Fecha clicando fora, no "×" ou com Esc.
+ */
+function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-2xl leading-none text-white hover:bg-white/20"
+        aria-label="Fechar"
+      >
+        ×
+      </button>
+      <img
+        src={url}
+        alt="Imagem enviada pelo paciente, em tamanho maior"
+        className="max-h-full max-w-full cursor-default rounded-md object-contain"
+        onClick={(event) => event.stopPropagation()}
+      />
+    </div>,
+    document.body
   );
 }
 
@@ -121,6 +176,9 @@ export function Conversas() {
   const [bodyValues, setBodyValues] = useState<string[]>([]);
   const [templateBusy, setTemplateBusy] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  // Imagem clicada na bolha — abre em tamanho grande por cima de tudo (ver
+  // <ImageLightbox> mais abaixo). `null` = fechado.
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Abre a conversa já no fim (mensagem mais recente), como o WhatsApp de
@@ -352,6 +410,7 @@ export function Conversas() {
                         <MediaPreview
                           url={`/api/conversations/${selectedPhone}/messages/${m.id}/media`}
                           mimeType={m.mediaMimeType}
+                          onOpenImage={setLightboxUrl}
                         />
                       )}
                       <p className="whitespace-pre-wrap">
@@ -471,6 +530,8 @@ export function Conversas() {
           </Field>
         ))}
       </FormModal>
+
+      {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </>
   );
 }
