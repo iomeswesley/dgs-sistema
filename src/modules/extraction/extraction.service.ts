@@ -85,6 +85,7 @@ export async function extractList(
             warnings: [
               "Formato do arquivo não reconhecido (não é SISREG nem CELK). Cadastre os agendamentos manualmente nesta lista.",
             ],
+            unrecognized: [],
           };
 
   const validated = extractionResultSchema.safeParse(result);

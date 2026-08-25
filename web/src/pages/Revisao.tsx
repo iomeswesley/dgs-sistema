@@ -77,6 +77,14 @@ interface UnitCheck {
   noAgenda: boolean;
 }
 
+interface UnrecognizedGuess {
+  rawText: string;
+  name: string | null;
+  cns: string | null;
+  birthDate: string | null;
+  phones: string[];
+}
+
 interface ListDetail {
   list: {
     id: number;
@@ -90,6 +98,7 @@ interface ListDetail {
   };
   appointments: Appointment[];
   warnings: string[];
+  unrecognized: UnrecognizedGuess[];
   unitCheck: UnitCheck;
 }
 
@@ -144,6 +153,7 @@ export function Revisao() {
   });
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [addRawText, setAddRawText] = useState<string | null>(null);
   const [retryOpen, setRetryOpen] = useState(false);
   const [retryPhones, setRetryPhones] = useState<Record<number, string>>({});
   const [retryBusy, setRetryBusy] = useState(false);
@@ -181,7 +191,7 @@ export function Revisao() {
   if (detail.error) return <ErrorNote message={detail.error} />;
   if (!detail.data) return null;
 
-  const { list, appointments, warnings, unitCheck } = detail.data;
+  const { list, appointments, warnings, unrecognized, unitCheck } = detail.data;
   const counts: Record<string, number> = {};
   for (const appointment of appointments) {
     counts[appointment.status] = (counts[appointment.status] ?? 0) + 1;
@@ -294,15 +304,19 @@ export function Revisao() {
     }
   }
 
-  function openAddModal() {
+  function openAddModal(guess?: UnrecognizedGuess) {
     // Pré-preenche médico/procedimento/data com o que o resto da lista já
     // usa — é a mesma agenda pra todo mundo, só a leitura que não conseguiu
     // ler essa linha específica. A equipe só troca se for mesmo diferente.
+    // Quando vem de um "Registro não reconhecido", também pré-preenche
+    // nome/CNS/telefone com o que o palpite melhor-esforço conseguiu pescar
+    // do texto bruto (pedido do usuário em 2026-08-26) — nunca 100%
+    // garantido, por isso o `rawText` aparece do lado pra conferir.
     const first = appointments[0];
     setAddForm({
-      patientName: "",
-      cns: "",
-      phone: "",
+      patientName: guess?.name ?? "",
+      cns: guess?.cns ?? "",
+      phone: guess?.phones[0] ?? "",
       scheduledAt: first
         ? new Date(first.scheduledAt).toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).slice(0, 16).replace(" ", "T")
         : "",
@@ -310,6 +324,7 @@ export function Revisao() {
       procedureId: first ? String(first.procedure.id) : "",
       isFirstVisit: false,
     });
+    setAddRawText(guess?.rawText ?? null);
     setAddError(null);
     setAddOpen(true);
   }
@@ -587,9 +602,29 @@ export function Revisao() {
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
+
+            {unrecognized.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {unrecognized.map((guess, i) => (
+                  <div key={i} className="rounded-md bg-sheet px-3 py-2">
+                    <p className="truncate text-xs italic text-ink-faint" title={guess.rawText}>
+                      "{guess.rawText}"
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-primary mt-1.5 px-3 py-1 text-xs"
+                      onClick={() => openAddModal(guess)}
+                    >
+                      + Adicionar {guess.name ? `"${guess.name}"` : "esse registro"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="mt-3">
-              <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openAddModal}>
-                + Adicionar paciente manualmente
+              <button type="button" className="btn btn-quiet px-3 py-1.5 text-sm" onClick={() => openAddModal()}>
+                + Adicionar outro paciente manualmente
               </button>
               {!isReviewing && (
                 <span className="ml-2 text-xs text-ink-faint">
@@ -944,6 +979,16 @@ export function Revisao() {
         onSubmit={submitAdd}
         onCancel={() => setAddOpen(false)}
       >
+        {addRawText && (
+          <Callout tone="warn">
+            <p className="text-xs font-semibold">Texto bruto lido do PDF pra esse registro:</p>
+            <p className="mt-1 text-xs italic">"{addRawText}"</p>
+            <p className="mt-1 text-xs text-ink-faint">
+              Os campos abaixo já vieram pré-preenchidos com o que deu pra reconhecer — confira contra esse texto
+              antes de adicionar, o palpite pode errar.
+            </p>
+          </Callout>
+        )}
         <Field label="Nome do paciente">
           <input
             className="field"

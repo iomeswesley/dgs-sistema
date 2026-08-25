@@ -244,4 +244,37 @@ N93
     expect(result.rows[0]?.name).toBe("MIRCEA ADRIANA DA");
     expect(result.warnings).toHaveLength(0);
   });
+
+  it("pesca um palpite melhor-esforço (CNS, nome, nascimento, telefone) quando o registro é mesmo irreconhecível", () => {
+    // Dia da semana garantido pra ficar ilegível ("---" em vez de "SEG")
+    // — headMatch não bate de jeito nenhum, mas ainda dá pra pescar CNS,
+    // nome, nascimento e telefone soltos no texto pra pré-preencher
+    // "Adicionar paciente manualmente" (pedido do usuário em 2026-08-26).
+    const text = `PROPRIEDADES DA AGENDA
+Unidade Executante: 	POLICLINICA MUNICIPAL EXEMPLO (0000000)
+Profissional Executante: FULANO EXEMPLO DA SILVA (00000000000)
+Procedimento Ambulatorial: GRUPO - EXAMES EXEMPLO (0000000)
+680608521
+---
+31/08/2026
+701406654876237 	JOAO EXEMPLO
+DA SILVA
+--- 	15/03/1980 	46 BLUMENAU
+- SC
+(47) 99999-8888
+ESF EXEMPLO
+1ª VEZ
+01 - EXAME EXEMPLO
+N93
+`;
+    const result = parseSisreg(text);
+    expect(result.rows).toHaveLength(0);
+    expect(result.warnings.some((w) => w.includes("não reconhecido"))).toBe(true);
+    expect(result.unrecognized).toHaveLength(1);
+    const guess = result.unrecognized[0]!;
+    expect(guess.cns).toBe("701406654876237");
+    expect(guess.birthDate).toBe("1980-03-15");
+    expect(guess.phones).toEqual(["(47) 99999-8888"]);
+    expect(guess.rawText).toContain("JOAO EXEMPLO");
+  });
 });

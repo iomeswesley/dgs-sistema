@@ -1,4 +1,4 @@
-import type { ExtractedRow, ExtractionResult } from "../extraction.schema.js";
+import type { ExtractedRow, ExtractionResult, UnrecognizedGuess } from "../extraction.schema.js";
 import { extractPhones, parseVaga, toIsoDate, toIsoDateTime } from "./shared.js";
 
 /*
@@ -72,10 +72,15 @@ export function parseSisreg(text: string): ExtractionResult {
   if (current) recordChunks.push(current);
 
   const rows: ExtractedRow[] = [];
+  const unrecognized: UnrecognizedGuess[] = [];
   for (const chunk of recordChunks) {
     const row = parseRecord(chunk);
-    if (row) rows.push(row);
-    else warnings.push(`Registro não reconhecido (começa com "${chunk[0]}") — confira manualmente.`);
+    if (row) {
+      rows.push(row);
+    } else {
+      warnings.push(`Registro não reconhecido (começa com "${chunk[0]}") — confira manualmente.`);
+      unrecognized.push(guessFromChunk(chunk));
+    }
   }
 
   if (rows.length === 0) {
@@ -90,7 +95,46 @@ export function parseSisreg(text: string): ExtractionResult {
     procedure: procedureMatch?.[1]?.trim() ?? null,
     rows,
     warnings,
+    unrecognized,
   };
+}
+
+/**
+ * Quando `parseRecord` não consegue reconhecer o registro de jeito nenhum
+ * (não bate nem o padrão mais básico de código+data), ainda vale tentar
+ * pescar o que der — pra pré-preencher "Adicionar paciente manualmente" em
+ * vez de a equipe começar do zero. Bem mais solto que `parseRecord`: não
+ * exige ordem nem presença de nenhum campo, só procura padrões conhecidos
+ * em qualquer lugar do texto. Nunca inventa — campo que não achar com
+ * confiança sai `null`, a equipe completa lendo `rawText`.
+ */
+function guessFromChunk(chunk: string[]): UnrecognizedGuess {
+  const text = chunk.join(" ").replace(/\t/g, " ").replace(/\s+/g, " ").trim();
+
+  const cnsMatch = text.match(/\b((?:\d\s?){15})\b/);
+  const cns = cnsMatch?.[1] ? cnsMatch[1].replace(/\s/g, "") : null;
+
+  // Duas datas costumam aparecer: a do atendimento (logo no início do
+  // registro) e a de nascimento (mais adiante, perto do CNS/nome). Chuta a
+  // segunda ocorrência como nascimento — se só tiver uma, não arrisca.
+  const allDates = [...text.matchAll(/\d{2}\/\d{2}\/\d{4}/g)];
+  const birthDateBr = allDates.length >= 2 ? allDates[1]?.[0] : null;
+  const birthDate = birthDateBr ? toIsoDate(birthDateBr) : null;
+
+  const phones = extractPhones(text);
+
+  // Nome: o trecho entre o fim do CNS e a data de nascimento chutada —
+  // só tenta quando os dois pontos de referência existem, senão o palpite
+  // vira ruído maior que ajuda.
+  let name: string | null = null;
+  if (cnsMatch && birthDateBr) {
+    const afterCns = text.slice((cnsMatch.index ?? 0) + cnsMatch[0].length);
+    const beforeBirth = afterCns.split(birthDateBr)[0] ?? "";
+    const cleaned = dedupeRepeatedName(beforeBirth.replace(/-{2,}/g, "").trim());
+    if (cleaned.length > 0 && cleaned.length < 60) name = cleaned;
+  }
+
+  return { rawText: text, name, cns, birthDate, phones };
 }
 
 // "Nome Social" costuma vir "---" (vazio) quando o paciente não tem um nome

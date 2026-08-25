@@ -234,6 +234,14 @@ listsRouter.get(
       list.extractionRaw && typeof list.extractionRaw === "object" && "executingUnit" in list.extractionRaw
         ? ((list.extractionRaw as { executingUnit?: string | null }).executingUnit ?? null)
         : null;
+    // Palpite melhor-esforço por registro que a leitura não conseguiu
+    // reconhecer de jeito nenhum — pré-preenche "Adicionar paciente
+    // manualmente" em vez de a equipe começar do zero (pedido do usuário
+    // em 2026-08-26).
+    const unrecognized =
+      list.extractionRaw && typeof list.extractionRaw === "object" && "unrecognized" in list.extractionRaw
+        ? ((list.extractionRaw as { unrecognized?: unknown[] }).unrecognized ?? [])
+        : [];
     // Recalcula contra o cadastro atual (não o que ficou congelado na
     // extração) — se alguém corrigiu o endereço da unidade depois, a
     // revisão já reflete isso sem precisar reprocessar a lista.
@@ -250,6 +258,7 @@ listsRouter.get(
       list: { ...list, extractionRaw: undefined },
       appointments: appointmentsWithAlternate,
       warnings,
+      unrecognized,
       unitCheck,
     });
   })

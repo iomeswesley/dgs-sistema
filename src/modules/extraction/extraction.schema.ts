@@ -34,6 +34,23 @@ export const extractedRowSchema = z.object({
   notes: z.string().nullable(),
 });
 
+/**
+ * Registro que o parser não conseguiu reconhecer de jeito nenhum
+ * ("Registro não reconhecido") — pra pré-preencher o formulário de
+ * "Adicionar paciente manualmente" com o que der pra aproveitar em vez de
+ * começar em branco. `rawText` é o texto bruto do registro inteiro, sempre
+ * presente (pra equipe conferir/copiar o que o palpite não pegou); os
+ * demais campos são melhor-esforço, `null`/vazio quando não achou nada com
+ * confiança nenhuma — nunca inventa valor.
+ */
+export const unrecognizedGuessSchema = z.object({
+  rawText: z.string(),
+  name: z.string().nullable(),
+  cns: z.string().nullable(),
+  birthDate: z.string().nullable(),
+  phones: z.array(z.string()),
+});
+
 export const extractionResultSchema = z.object({
   /** Sistema de origem reconhecido pelo layout. */
   sourceFormat: z.enum(["SISREG", "CELK", "OUTRO"]),
@@ -48,7 +65,10 @@ export const extractionResultSchema = z.object({
   rows: z.array(extractedRowSchema),
   /** Problemas gerais: página cortada, foto tremida, coluna ilegível. */
   warnings: z.array(z.string()),
+  /** Um item por "Registro não reconhecido" em `warnings`, na mesma ordem. */
+  unrecognized: z.array(unrecognizedGuessSchema).default([]),
 });
 
 export type ExtractedRow = z.infer<typeof extractedRowSchema>;
+export type UnrecognizedGuess = z.infer<typeof unrecognizedGuessSchema>;
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;

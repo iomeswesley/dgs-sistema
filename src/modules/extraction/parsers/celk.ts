@@ -85,5 +85,9 @@ export function parseCelk(text: string): ExtractionResult {
     procedure,
     rows,
     warnings,
+    // CELK é uma linha de texto por paciente, sem quebra de página no meio
+    // — não tem casos de "registro não reconhecido" com dado pra aproveitar
+    // como no SISREG, só a linha inteira ilegível ou nada.
+    unrecognized: [],
   };
 }

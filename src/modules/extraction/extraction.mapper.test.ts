@@ -32,6 +32,7 @@ function extraction(overrides: Partial<ExtractionResult> = {}): ExtractionResult
     procedure: "Ultrassonografia obstétrica",
     rows: [row()],
     warnings: [],
+    unrecognized: [],
     ...overrides,
   };
 }
