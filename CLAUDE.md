@@ -37,6 +37,18 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 1. **Coexistência do WhatsApp ainda travada** — App Review de `business_management` submetido (2026-08-18), aguardando aprovação da Meta. Se aprovar e ainda travar, o próximo passo já é abrir chamado de suporte com a Meta (erro não documentado publicamente, código de referência `#1690130`).
 2. Popular o cadastro de produção antes do cliente operar pra valer.
 
+## Sessão de 2026-08-26 — resumo (detalhe completo nas 17 entradas "Resolvido em 2026-08-26" abaixo)
+
+Cliente testando o sistema de ponta a ponta pela primeira vez (Listas, Revisão, Cancelamento, Conversas), vários bugs e pedidos de UX reais surgiram e foram resolvidos no mesmo dia:
+
+- **Confiabilidade do disparo**: `processQueue()` ganhou `TIME_BUDGET_MS` (pára sozinho antes do timeout de 60s da Vercel) + `web/src/lib/queue.ts` (`runQueueUntilDone`, o frontend completa o envio sozinho em requisições separadas) — nunca mais trava nem depende do cron do dia seguinte. Usado em Cancelamento, dispatch de Lista e Acompanhamento.
+- **Cancelamento** ganhou: "Respondeu" (qualquer resposta, não só template), coluna de telefone + filtro por situação da mensagem + legenda, reenvio pra quem falhou/sem telefone (com telefone alternativo do cadastro), reconciliação "extraído × restante", cores por status, coluna "Situação" unificada (resposta conta como "Lido").
+- **Revisão** ganhou a mesma dinâmica: filtro por situação, reenvio pra quem falhou/sem telefone, legenda, **botão "Adicionar paciente manualmente"** (`addManualAppointment()`, `POST /api/lists/:id/appointments`) pra "Registro não reconhecido".
+- **Conversas** ganhou busca por nome/telefone; corrigido bug sério de `phoneCandidates()` só reconstruir telefone num sentido (12→13 dígitos, não o inverso) — causava mensagem sumindo do chat, janela de 24h errada, e "Respondeu" do Cancelamento quase todo errado.
+- **Bugs de dado corrigidos**: nome duplicado do SISREG (`dedupeRepeatedName`), registro sem horário sumindo da lista inteira (hora virou opcional no parser), identidade de paciente (mesma proteção nome+CNS/telefone agora também no caminho por CNS de `resolvePatient`), "duplicado" preso após excluir a outra ocorrência, "Registrar contato" bloqueado em agendamento cancelado.
+- **Auditoria de produção**: achado e excluído 1 paciente órfão (telefones comprovadamente de outra pessoa, resíduo do bug de identidade já corrigido em 25/08).
+- Confirmado e documentado: templates da WABA ativa aprovados, billing configurado — as duas últimas pendências de WhatsApp fecharam.
+
 ### Resolvido em 2026-08-26 (8)
 - **Templates da WABA ativa aprovados + billing configurado — as duas últimas pendências da lista de WhatsApp fechadas.** Conferido direto na Meta: os 4 templates (`confirmacao_consulta`, `lembrete_vespera`, `convite_vaga_aberta`, `cancelamento_consulta`) estão `APPROVED`. Billing também: o usuário conferiu o billing hub da Meta e a WABA ativa (`2046188346288778` — aparece com o nome **"Mkt"** no Business Manager, diferente do nome do WABA em si; o nome que o paciente vê no WhatsApp é outro campo, "DGS Agendamentos", do perfil do número) tem cartão configurado (MasterCard ••••9224). Achado no caminho: o Business Manager tem 5 assets — "Mkt" (a WABA ativa de verdade), "innova agendamentos" (a WABA antiga do número aposentado em 2026-08-16, ainda existe, R$0,11 de cobrança histórica), "innova" e "Test WhatsApp Business Account" (não usados pelo sistema-dgs) e "DGS" (asset separado, não é WABA, sem forma de pagamento — não investigado a fundo, não bloqueia nada).
 
