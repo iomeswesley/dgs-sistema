@@ -94,4 +94,26 @@ describe("parseInboundReplies", () => {
     const reply = parseOne({ type: "unknown_future_type" });
     expect(reply.contentDescription).toBe("[tipo de mensagem não suportado]");
   });
+
+  it("imagem/áudio/documento carregam o id de mídia pra baixar depois", () => {
+    const image = parseOne({ type: "image", image: { id: "media-1", mime_type: "image/jpeg" } });
+    expect(image.mediaId).toBe("media-1");
+    expect(image.mediaMimeType).toBe("image/jpeg");
+    expect(image.mediaFilename).toBeNull();
+
+    const document = parseOne({
+      type: "document",
+      document: { id: "media-2", mime_type: "application/pdf", filename: "exame.pdf" },
+    });
+    expect(document.mediaId).toBe("media-2");
+    expect(document.mediaFilename).toBe("exame.pdf");
+  });
+
+  it("texto, botão, localização, contato e reação não têm mídia pra baixar", () => {
+    const text = parseOne({ type: "text", text: { body: "oi" } });
+    expect(text.mediaId).toBeNull();
+
+    const location = parseOne({ type: "location", location: { name: "Casa" } });
+    expect(location.mediaId).toBeNull();
+  });
 });

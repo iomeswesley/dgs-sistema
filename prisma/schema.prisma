@@ -383,6 +383,17 @@ model MessageJob {
   @@map("message_jobs")
 }
 
+// Linha única (id sempre 1) com configurações do sistema que a equipe pode
+// ajustar em Configurações, sem precisar de deploy — hoje só a retenção da
+// mídia recebida do paciente (ver WhatsappMessage.mediaData).
+model AppSettings {
+  id                 Int      @id @default(1)
+  mediaRetentionDays Int      @default(7)
+  updatedAt          DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
 model WhatsappMessage {
   id            Int            @id @default(autoincrement())
   appointmentId Int?
@@ -395,6 +406,14 @@ model WhatsappMessage {
   body          String?
   // Payload do clique do botão, quando a resposta veio por quick reply.
   buttonPayload String?
+  // Mídia recebida do paciente (imagem, áudio, figurinha, documento) — baixada
+  // da Meta e guardada aqui só enquanto durar a retenção configurável
+  // (AppSettings.mediaRetentionDays, ver purgeExpiredMedia). `null` quando a
+  // mensagem não tem mídia, quando o download falhou (best-effort, não trava
+  // o registro da mensagem) ou depois de expurgada.
+  mediaData     Bytes?
+  mediaMimeType String?
+  mediaFilename String?
   status        DeliveryStatus @default(ENVIADO)
   errorCode     String?
   errorMessage  String?

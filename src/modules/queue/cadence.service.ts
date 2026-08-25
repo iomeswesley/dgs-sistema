@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
+import { getSettings } from "@/modules/settings/settings.service.js";
 
 /*
   Cadência das mensagens:
@@ -179,4 +180,23 @@ export async function purgeExpiredData(): Promise<PurgeResult> {
   });
 
   return { listsPurged: expiredLists.length, messagesPurged: messages.count };
+}
+
+/**
+ * Expurgo da mídia recebida do paciente (imagem, áudio, figurinha,
+ * documento — ver `WhatsappMessage.mediaData`), separado do expurgo geral
+ * acima porque a retenção é bem mais curta e configurável pela equipe
+ * (Configurações → WhatsApp → `AppSettings.mediaRetentionDays`, default 30
+ * dias) em vez de fixa em 12 meses. A descrição textual (`body`, tipo "📷
+ * Imagem: minha receita") continua — só o arquivo em si sai.
+ */
+export async function purgeExpiredMedia(): Promise<number> {
+  const { mediaRetentionDays } = await getSettings();
+  const cutoff = new Date(Date.now() - mediaRetentionDays * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.whatsappMessage.updateMany({
+    where: { createdAt: { lt: cutoff }, mediaData: { not: null } },
+    data: { mediaData: null, mediaMimeType: null, mediaFilename: null },
+  });
+  return result.count;
 }

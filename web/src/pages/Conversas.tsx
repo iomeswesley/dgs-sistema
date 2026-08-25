@@ -37,6 +37,8 @@ interface ThreadMessage {
   buttonPayload: string | null;
   status: string;
   createdAt: string;
+  hasMedia: boolean;
+  mediaMimeType: string | null;
 }
 
 type TemplateKind = "CONFIRMACAO" | "LEMBRETE" | "VAGA_ABERTA" | "CANCELAMENTO";
@@ -69,6 +71,32 @@ function loadSeenMap(): Record<string, string> {
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+/**
+ * Mídia baixada de uma mensagem (ver `hasMedia`/`mediaMimeType` em
+ * `ThreadMessage`) — imagem e áudio tocam direto na bolha; qualquer outra
+ * coisa (documento, figurinha, vídeo) vira um link de abrir/baixar, porque
+ * não dá pra prever o visualizador certo pra cada tipo. `url` já é
+ * protegida por sessão (mesma auth de toda a API) — o navegador manda o
+ * cookie sozinho num `<img>`/`<audio>` same-origin, sem precisar de token.
+ */
+function MediaPreview({ url, mimeType }: { url: string; mimeType: string | null }) {
+  if (mimeType?.startsWith("image/")) {
+    return <img src={url} alt="Imagem enviada pelo paciente" className="mb-1.5 max-h-64 rounded-md object-contain" />;
+  }
+  if (mimeType?.startsWith("audio/")) {
+    return (
+      <audio controls className="mb-1.5 h-10 max-w-full">
+        <source src={url} type={mimeType} />
+      </audio>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="mb-1.5 block font-semibold underline">
+      📎 Abrir arquivo
+    </a>
+  );
 }
 
 export function Conversas() {
@@ -320,6 +348,12 @@ export function Conversas() {
                           : "rounded-tl-none bg-wa-bubble-in"
                       } text-ink`}
                     >
+                      {m.hasMedia && (
+                        <MediaPreview
+                          url={`/api/conversations/${selectedPhone}/messages/${m.id}/media`}
+                          mimeType={m.mediaMimeType}
+                        />
+                      )}
                       <p className="whitespace-pre-wrap">
                         {m.body ?? m.buttonPayload ?? (m.template ? `[modelo: ${m.template}]` : "—")}
                       </p>

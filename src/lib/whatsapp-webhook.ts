@@ -24,6 +24,15 @@ export interface InboundReply {
    * (achado pelo usuário em 2026-08-27).
    */
   contentDescription: string | null;
+  /**
+   * Id da mídia na Meta (imagem, vídeo, áudio, documento ou figurinha) —
+   * `null` pra qualquer outro tipo. Quem baixa de fato é `whatsapp.ts`
+   * (`downloadMedia()`, precisa de credencial/rede); aqui é só extração do
+   * payload, sem I/O nenhum.
+   */
+  mediaId: string | null;
+  mediaMimeType: string | null;
+  mediaFilename: string | null;
   timestamp: Date;
 }
 
@@ -44,10 +53,11 @@ interface WebhookValue {
     text?: { body: string };
     button?: { payload?: string; text?: string };
     interactive?: { type: string; button_reply?: { id: string; title: string } };
-    image?: { caption?: string };
-    video?: { caption?: string };
-    audio?: { voice?: boolean };
-    document?: { caption?: string; filename?: string };
+    image?: { id?: string; mime_type?: string; caption?: string };
+    video?: { id?: string; mime_type?: string; caption?: string };
+    audio?: { id?: string; mime_type?: string; voice?: boolean };
+    document?: { id?: string; mime_type?: string; caption?: string; filename?: string };
+    sticker?: { id?: string; mime_type?: string };
     location?: { name?: string };
     contacts?: { name?: { formatted_name?: string } }[];
     reaction?: { emoji?: string };
@@ -101,6 +111,23 @@ function describeNonTextContent(message: NonNullable<WebhookValue["messages"]>[n
   }
 }
 
+/**
+ * Referência da mídia baixável (não localização/contato/reação, que não têm
+ * arquivo nenhum pra baixar) — `null` quando o tipo não carrega mídia.
+ */
+function extractMediaRef(
+  message: NonNullable<WebhookValue["messages"]>[number]
+): { id: string; mimeType: string | null; filename: string | null } | null {
+  const media = message.image ?? message.video ?? message.audio ?? message.document ?? message.sticker;
+  if (!media?.id) return null;
+  return {
+    id: media.id,
+    mimeType: media.mime_type ?? null,
+    // Só `document` carrega nome de arquivo de verdade na Meta.
+    filename: message.document?.filename ?? null,
+  };
+}
+
 /** Extrai as respostas de pacientes de um payload do webhook. */
 export function parseInboundReplies(payload: unknown): InboundReply[] {
   const replies: InboundReply[] = [];
@@ -112,6 +139,7 @@ export function parseInboundReplies(payload: unknown): InboundReply[] {
       // existem e a Meta escolhe conforme o tipo de mensagem enviada.
       const buttonPayload =
         message.button?.payload ?? message.button?.text ?? message.interactive?.button_reply?.title ?? null;
+      const mediaRef = extractMediaRef(message);
 
       replies.push({
         wamid: message.id,
@@ -119,6 +147,9 @@ export function parseInboundReplies(payload: unknown): InboundReply[] {
         buttonPayload,
         text: message.text?.body ?? null,
         contentDescription: describeNonTextContent(message),
+        mediaId: mediaRef?.id ?? null,
+        mediaMimeType: mediaRef?.mimeType ?? null,
+        mediaFilename: mediaRef?.filename ?? null,
         timestamp: parseTimestamp(message.timestamp),
       });
     }

@@ -134,13 +134,21 @@ export interface ThreadMessage {
   buttonPayload: string | null;
   status: string;
   createdAt: Date;
+  /**
+   * Só indica SE existe mídia baixada (imagem/áudio/figurinha/documento) —
+   * o arquivo em si é servido à parte por `GET /api/conversations/:phone/
+   * messages/:id/media`, nunca inline aqui (evita carregar bytes de mídia
+   * na lista da conversa inteira toda vez que ela é aberta).
+   */
+  hasMedia: boolean;
+  mediaMimeType: string | null;
 }
 
 export async function getThread(rawPhone: string): Promise<{ patientName: string | null; messages: ThreadMessage[] }> {
   const key = normalizePhone(rawPhone)?.e164 ?? rawPhone;
   const candidates = phoneCandidates(key);
 
-  const messages = await prisma.whatsappMessage.findMany({
+  const rows = await prisma.whatsappMessage.findMany({
     where: { phone: { in: candidates } },
     orderBy: { createdAt: "asc" },
     select: {
@@ -151,9 +159,24 @@ export async function getThread(rawPhone: string): Promise<{ patientName: string
       buttonPayload: true,
       status: true,
       createdAt: true,
+      mediaMimeType: true,
+      // Não seleciona `mediaData` aqui — pode ser um arquivo de vários MB, e
+      // a lista de mensagens não precisa do conteúdo, só de saber que existe.
       appointment: { select: { patient: { select: { name: true } } } },
     },
   });
+  // `mediaData` fica de fora do select acima (custo de banda), então
+  // descobre se existe com uma query separada, só de ids — leve mesmo com
+  // muita mensagem, porque não traz bytes nenhum.
+  const idsWithMedia = new Set(
+    (
+      await prisma.whatsappMessage.findMany({
+        where: { phone: { in: candidates }, mediaData: { not: null } },
+        select: { id: true },
+      })
+    ).map((m) => m.id)
+  );
+  const messages = rows.map((m) => ({ ...m, hasMedia: idsWithMedia.has(m.id) }));
 
   let patientName = messages.find((m) => m.appointment?.patient?.name)?.appointment?.patient?.name ?? null;
   if (!patientName) {
@@ -162,6 +185,32 @@ export async function getThread(rawPhone: string): Promise<{ patientName: string
   }
 
   return { patientName, messages: messages.map(({ appointment: _appointment, ...m }) => m) };
+}
+
+export interface MessageMedia {
+  data: Buffer;
+  mimeType: string;
+  filename: string | null;
+}
+
+/**
+ * Busca a mídia de uma mensagem específica pra servir sob demanda (ver rota
+ * `GET /api/conversations/:phone/messages/:messageId/media`). Confere que a
+ * mensagem é mesmo desse telefone (mesmos candidatos de formato usados em
+ * todo o resto do módulo) — não deixa buscar mídia de outro número só
+ * sabendo o id da mensagem.
+ */
+export async function getMessageMedia(rawPhone: string, messageId: number): Promise<MessageMedia | null> {
+  const key = normalizePhone(rawPhone)?.e164 ?? rawPhone;
+  const candidates = phoneCandidates(key);
+
+  const message = await prisma.whatsappMessage.findFirst({
+    where: { id: messageId, phone: { in: candidates } },
+    select: { mediaData: true, mediaMimeType: true, mediaFilename: true },
+  });
+  if (!message?.mediaData || !message.mediaMimeType) return null;
+
+  return { data: Buffer.from(message.mediaData), mimeType: message.mediaMimeType, filename: message.mediaFilename };
 }
 
 /**

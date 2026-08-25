@@ -140,6 +140,60 @@ export async function sendText(to: string, text: string): Promise<SendResult> {
   return { wamid: payload.messages?.[0]?.id ?? null, stubbed: false };
 }
 
+export interface DownloadedMedia {
+  data: Buffer;
+  mimeType: string;
+}
+
+/**
+ * Teto de tamanho pra guardar mídia no Postgres (bytea na mesma linha da
+ * mensagem) — documento pode chegar a 100MB pela Meta, o que não cabe bem
+ * numa função serverless nem no banco. Acima disso, fica só a descrição
+ * textual (ex.: "📄 Documento: exame.pdf"), sem o arquivo.
+ */
+const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Baixa uma mídia recebida do paciente (imagem, áudio, figurinha,
+ * documento) — dois passos, porque a Meta nunca manda o arquivo direto no
+ * webhook: primeiro `GET /{media-id}` devolve uma URL temporária (expira em
+ * minutos), depois um `GET` nessa URL (com o mesmo Bearer token) traz os
+ * bytes de verdade. `null` sem credenciais (dev/stub) ou se qualquer um dos
+ * dois passos falhar — best-effort, nunca derruba o processamento da
+ * mensagem em si (o texto/descrição já foi salvo antes de chamar isso).
+ */
+export async function downloadMedia(mediaId: string): Promise<DownloadedMedia | null> {
+  const credentials = await getActiveCredentials();
+  if (!credentials) {
+    console.log(`[WHATSAPP:STUB] download de mídia ${mediaId} pulado (sem credenciais)`);
+    return null;
+  }
+
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${credentials.accessToken}` },
+    });
+    if (!metaRes.ok) return null;
+    const meta = (await metaRes.json()) as { url?: string; mime_type?: string };
+    if (!meta.url) return null;
+
+    const fileRes = await fetch(meta.url, {
+      headers: { Authorization: `Bearer ${credentials.accessToken}` },
+    });
+    if (!fileRes.ok) return null;
+
+    const declaredSize = Number(fileRes.headers.get("content-length"));
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_MEDIA_BYTES) return null;
+
+    const data = Buffer.from(await fileRes.arrayBuffer());
+    if (data.byteLength > MAX_MEDIA_BYTES) return null;
+    return { data, mimeType: meta.mime_type ?? fileRes.headers.get("content-type") ?? "application/octet-stream" };
+  } catch (err) {
+    console.error(`[WHATSAPP] falha ao baixar mídia ${mediaId}:`, err);
+    return null;
+  }
+}
+
 /**
  * Valida a assinatura HMAC que a Meta manda no header X-Hub-Signature-256.
  *

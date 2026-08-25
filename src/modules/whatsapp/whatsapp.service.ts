@@ -2,7 +2,7 @@ import type { AppointmentStatus, DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
 import { classifyReply } from "@/lib/templates.js";
 import { phoneCandidates } from "@/lib/phone.js";
-import type { InboundReply, StatusUpdate } from "@/lib/whatsapp.js";
+import { downloadMedia, type InboundReply, type StatusUpdate } from "@/lib/whatsapp.js";
 import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
 
 /*
@@ -49,6 +49,13 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
     if (aiResult.intent !== "unknown") intent = aiResult.intent;
   }
 
+  // Baixa a mídia (se houver) antes de gravar, pra já salvar tudo numa linha
+  // só — best-effort: sem credencial, arquivo grande demais ou falha de
+  // rede, a mensagem entra do mesmo jeito, só sem o arquivo (fica só a
+  // descrição em `body`). Pedido do usuário em 2026-08-27: antes disso só
+  // dava pra saber que tipo de mídia chegou, não dava pra ver/ouvir.
+  const media = reply.mediaId ? await downloadMedia(reply.mediaId) : null;
+
   await prisma.whatsappMessage.create({
     data: {
       appointmentId: appointment?.id ?? null,
@@ -63,6 +70,9 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
       // alimenta `classifyReply`/IA, abaixo.
       body: reply.text ?? reply.contentDescription,
       buttonPayload: reply.buttonPayload,
+      mediaData: media ? Uint8Array.from(media.data) : undefined,
+      mediaMimeType: media?.mimeType ?? reply.mediaMimeType,
+      mediaFilename: reply.mediaFilename,
       status: "ENTREGUE",
       raw: {
         intent,

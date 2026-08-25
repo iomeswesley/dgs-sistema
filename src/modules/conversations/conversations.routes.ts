@@ -2,9 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
-import { parseBody } from "@/lib/http.js";
+import { parseBody, routeId } from "@/lib/http.js";
 import { TEMPLATE_FIELDS } from "@/lib/templates.js";
-import { getThread, listConversations, sendReply, sendTemplateReply } from "./conversations.service.js";
+import { getMessageMedia, getThread, listConversations, sendReply, sendTemplateReply } from "./conversations.service.js";
 
 export const conversationsRouter = Router();
 conversationsRouter.use("/api/conversations", requireAuth);
@@ -27,6 +27,24 @@ conversationsRouter.get(
   asyncHandler(async (req, res) => {
     const thread = await getThread(routePhone(req));
     res.json(thread);
+  })
+);
+
+/**
+ * Serve a mídia baixada de uma mensagem (imagem, áudio, figurinha,
+ * documento) — nunca inline na lista de mensagens (custo de banda), só sob
+ * demanda quando a tela pede. 404 quando nunca teve mídia, o download
+ * falhou na hora (best-effort, ver `whatsapp.service.ts`) ou já passou da
+ * retenção configurável e foi expurgada (`purgeExpiredMedia`).
+ */
+conversationsRouter.get(
+  "/api/conversations/:phone/messages/:messageId/media",
+  asyncHandler(async (req, res) => {
+    const media = await getMessageMedia(routePhone(req), routeId(req, "messageId"));
+    if (!media) throw new AppError("Mídia não encontrada (ou já expurgada).", 404);
+    res.setHeader("Content-Type", media.mimeType);
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(media.filename ?? "arquivo")}"`);
+    res.send(media.data);
   })
 );
 

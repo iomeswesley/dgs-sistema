@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { processQueue, queueCapacity } from "./queue.service.js";
-import { enqueueReminders, enqueueRetries, purgeExpiredData } from "./cadence.service.js";
+import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia } from "./cadence.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { isWhatsappConfigured } from "@/modules/whatsapp/whatsapp-account.service.js";
 
@@ -65,12 +65,14 @@ queueRouter.post(
     const processed = await processQueue();
     const closed = await closeExpiredAppointments();
     const purged = await purgeExpiredData();
+    const mediaPurged = await purgeExpiredMedia();
     res.json({
       ...processed,
       remindersQueued: reminders.queued,
       retriesQueued: retries.queued,
       closedAsNoAnswer: closed,
       purged,
+      mediaPurged,
     });
   })
 );

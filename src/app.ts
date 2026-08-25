@@ -23,9 +23,10 @@ import { teamRouter } from "@/modules/team/team.routes.js";
 import { suggestionsRouter } from "@/modules/suggestions/suggestions.routes.js";
 import { conversationsRouter } from "@/modules/conversations/conversations.routes.js";
 import { cancellationsRouter } from "@/modules/cancellations/cancellations.routes.js";
+import { settingsRouter } from "@/modules/settings/settings.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
-import { enqueueReminders, enqueueRetries, purgeExpiredData } from "@/modules/queue/cadence.service.js";
+import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia } from "@/modules/queue/cadence.service.js";
 import { PRIVACY_POLICY_HTML } from "@/legal/privacy.js";
 import { prisma } from "@/lib/prisma.js";
 
@@ -163,12 +164,14 @@ export function createApp() {
         const processed = await processQueue();
         const closed = await closeExpiredAppointments();
         const purged = await purgeExpiredData();
+        const mediaPurged = await purgeExpiredMedia();
         res.json({
           ...processed,
           remindersQueued: reminders.queued,
           retriesQueued: retries.queued,
           closedAsNoAnswer: closed,
           purged,
+          mediaPurged,
         });
       } catch (err) {
         next(err);
@@ -190,6 +193,7 @@ export function createApp() {
   app.use(suggestionsRouter);
   app.use(conversationsRouter);
   app.use(cancellationsRouter);
+  app.use(settingsRouter);
 
   app.use("/api", notFoundHandler);
 

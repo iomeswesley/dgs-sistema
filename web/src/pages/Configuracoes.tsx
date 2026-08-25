@@ -1831,6 +1831,8 @@ function WhatsappTab() {
 
       {status?.connected && <WhatsappTestSend />}
 
+      <MediaRetentionSettings />
+
       <ConfirmModal
         open={removingId !== null}
         title="Remover este número?"
@@ -1924,6 +1926,81 @@ function WhatsappTestSend() {
       >
         {sending ? "Enviando…" : "Enviar teste"}
       </button>
+
+      {notice && (
+        <div className="mt-3">
+          <Callout>{notice}</Callout>
+        </div>
+      )}
+      {error && (
+        <div className="mt-3">
+          <ErrorNote message={error} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Por quantos dias guardar a mídia (imagem/áudio/figurinha/documento) que o
+ * paciente manda pra tela de Conversas — expurgo automático via cron diário
+ * (`purgeExpiredMedia()`, ver `cadence.service.ts`). Pedido do usuário em
+ * 2026-08-27: configurável, sem depender de deploy pra mudar.
+ */
+function MediaRetentionSettings() {
+  const settings = useApi<{ mediaRetentionDays: number }>("/api/settings");
+  const [days, setDays] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settings.data) setDays(String(settings.data.mediaRetentionDays));
+  }, [settings.data]);
+
+  async function save() {
+    const value = Number(days);
+    if (!Number.isInteger(value) || value < 1 || value > 365) {
+      setError("Informe um número inteiro de dias entre 1 e 365.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.patch("/api/settings", { mediaRetentionDays: value });
+      setNotice("Retenção atualizada.");
+      settings.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card mt-3 p-4">
+      <p className="eyebrow">Retenção de mídia recebida</p>
+      <p className="mt-1 text-sm text-ink-muted">
+        Por quantos dias guardar a imagem/áudio/figurinha/documento que o paciente manda em Conversas. Depois
+        desse prazo, o arquivo é apagado sozinho (a descrição em texto, tipo "📷 Imagem", continua).
+      </p>
+
+      <div className="mt-3 flex items-end gap-3">
+        <Field label="Dias">
+          <input
+            className="field w-24"
+            type="number"
+            min={1}
+            max={365}
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
+          />
+        </Field>
+        <button type="button" className="btn btn-primary" disabled={saving || !days.trim()} onClick={() => void save()}>
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
 
       {notice && (
         <div className="mt-3">
