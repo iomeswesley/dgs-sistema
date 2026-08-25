@@ -31,6 +31,14 @@ export function FormModal({
   onCancel,
 }: FormModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Fecha ao clicar fora, mas só quando o clique inteiro (mousedown E o
+  // "click" resultante) começou e terminou no fundo escurecido — não basta
+  // checar `event.target` do clique sozinho. Selecionar texto dentro do
+  // modal com arrastar do mouse (comum ao copiar nome/e-mail em "Novo
+  // acesso") podia terminar o mouseup fora do card; o navegador então
+  // dispara o `click` no ancestral comum, que é o próprio fundo, fechando
+  // o modal no meio da seleção (achado pelo usuário em 2026-08-27).
+  const mouseDownOnBackdrop = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +64,12 @@ export function FormModal({
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-      onClick={() => !busy && onCancel()}
+      onMouseDown={(event) => {
+        mouseDownOnBackdrop.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        if (mouseDownOnBackdrop.current && event.target === event.currentTarget && !busy) onCancel();
+      }}
     >
       <div
         ref={dialogRef}

@@ -38,6 +38,10 @@ export function ConfirmModal({
   onCancel,
 }: ConfirmModalProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  // Ver o mesmo comentário em FormModal.tsx: só fecha ao clicar fora quando
+  // mousedown e click bateram os dois no fundo, senão selecionar texto
+  // arrastando dentro do modal fecha ele sozinho no meio da seleção.
+  const mouseDownOnBackdrop = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +58,12 @@ export function ConfirmModal({
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-      onClick={onCancel}
+      onMouseDown={(event) => {
+        mouseDownOnBackdrop.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        if (mouseDownOnBackdrop.current && event.target === event.currentTarget) onCancel();
+      }}
     >
       <div
         role="dialog"

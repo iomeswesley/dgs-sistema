@@ -298,6 +298,7 @@ const manualAppointmentSchema = z.object({
   doctorId: z.number().int().positive(),
   procedureId: z.number().int().positive(),
   isFirstVisit: z.boolean().nullish(),
+  sourceRawText: z.string().nullish(),
 });
 
 /**

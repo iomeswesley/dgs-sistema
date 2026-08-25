@@ -439,6 +439,15 @@ export interface ManualAppointmentInput {
   doctorId: number;
   procedureId: number;
   isFirstVisit?: boolean | null;
+  /**
+   * `rawText` do "Registro não reconhecido" que originou esse formulário
+   * (quando veio do botão "+ Adicionar 'NOME'"). Usado só pra tirar esse
+   * registro da lista de avisos depois de adicionado — sem isso o aviso
+   * ficava preso pra sempre, mostrando o botão de novo mesmo já resolvido
+   * (achado pelo usuário em 2026-08-27, `list.extractionRaw.unrecognized`
+   * é um retrato de quando a extração rodou, nunca era atualizado).
+   */
+  sourceRawText?: string | null;
 }
 
 /**
@@ -520,6 +529,10 @@ export async function addManualAppointment(
     return { appointment: created, patientOptedOut: patient.optedOut };
   });
 
+  if (input.sourceRawText) {
+    await removeUnrecognizedEntry(listId, input.sourceRawText);
+  }
+
   await recordAudit({
     userId,
     action: "add_manual",
@@ -529,6 +542,31 @@ export async function addManualAppointment(
   });
 
   return { appointmentId: appointment.id, queued: dispatchNow && !patientOptedOut };
+}
+
+/**
+ * Tira um "Registro não reconhecido" de `list.extractionRaw.unrecognized`
+ * depois que ele foi adicionado à mão — casado por `rawText` (o texto bruto
+ * inteiro do registro, único o bastante na prática). Se não achar nada pra
+ * tirar (lista sem esse campo, ou texto que não bate mais por algum
+ * motivo), não falha — é só um retrato que deixa de ser atualizado, não
+ * quebra o cadastro do paciente que já foi criado.
+ */
+async function removeUnrecognizedEntry(listId: number, rawText: string): Promise<void> {
+  const list = await prisma.list.findUnique({ where: { id: listId }, select: { extractionRaw: true } });
+  const raw = list?.extractionRaw;
+  if (!raw || typeof raw !== "object" || !("unrecognized" in raw)) return;
+
+  const unrecognized = (raw as { unrecognized?: { rawText?: string }[] }).unrecognized;
+  if (!Array.isArray(unrecognized)) return;
+
+  const filtered = unrecognized.filter((entry) => entry.rawText !== rawText);
+  if (filtered.length === unrecognized.length) return; // nada foi removido
+
+  await prisma.list.update({
+    where: { id: listId },
+    data: { extractionRaw: { ...raw, unrecognized: filtered } as unknown as Prisma.InputJsonValue },
+  });
 }
 
 export interface RetryFailedUpdate {

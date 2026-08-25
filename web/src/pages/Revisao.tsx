@@ -345,6 +345,7 @@ export function Revisao() {
         doctorId: Number(addForm.doctorId),
         procedureId: Number(addForm.procedureId),
         isFirstVisit: addForm.isFirstVisit,
+        sourceRawText: addRawText,
       });
       setAddOpen(false);
       detail.reload();
