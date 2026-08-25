@@ -168,4 +168,33 @@ I70
     const [first] = parseSisreg(text).rows;
     expect(first?.name).toBe("MARIA EXEMPLO");
   });
+
+  it("reconhece o registro mesmo sem horário (achado real em 2026-08-26, lista 12) em vez de rejeitar a linha inteira", () => {
+    // Duas linhas de uma lista real vinham sem hora nenhuma entre a data e
+    // o CNS — a exigência de \d{2}:\d{2} rejeitava o registro inteiro, e o
+    // paciente sumia da lista sem deixar rastro nenhum (só um aviso genérico
+    // "Registro não reconhecido"). Agora entra com scheduledAt null,
+    // marcado "sem_data" pra revisão completar, em vez de desaparecer.
+    const text = `PROPRIEDADES DA AGENDA
+Unidade Executante: 	POLICLINICA MUNICIPAL EXEMPLO (0000000)
+Profissional Executante: FULANO EXEMPLO DA SILVA (00000000000)
+Procedimento Ambulatorial: GRUPO - EXAMES EXEMPLO (0000000)
+680608520
+SEG
+31/08/2026
+701406654876236 MIRCEA ADRIANA DA
+--- 	10/01/1977 	49 BLUMENAU
+- SC
+(47) 99220-9136
+ESF LEO DE CARVALHO
+1ª VEZ
+01 - ULTRA-SONOGRAFIA
+N93
+`;
+    const result = parseSisreg(text);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.scheduledAt).toBeNull();
+    expect(result.rows[0]?.name).toBe("MIRCEA ADRIANA DA");
+    expect(result.warnings).toHaveLength(0);
+  });
 });

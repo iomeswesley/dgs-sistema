@@ -172,7 +172,16 @@ async function resolveCatalog(
 }
 
 /** Encontra ou cria o paciente, deduplicando por CNS e depois por telefone. */
-async function resolvePatient(tx: TxClient, draft: AppointmentDraft) {
+/** Só o que `resolvePatient` de fato usa — permite reaproveitar tanto pra
+ *  rascunho extraído (`AppointmentDraft`) quanto pra entrada manual. */
+interface PatientIdentity {
+  name: string;
+  cns: string | null;
+  phones: string[];
+  birthDate?: string | null;
+}
+
+async function resolvePatient(tx: TxClient, draft: PatientIdentity) {
   // Se o CNS bateu num paciente de nome bem diferente, não é seguro nem
   // reaproveitar (pode ser gente diferente) nem levar esse CNS pro paciente
   // novo (violaria o @unique — o CNS já pertence ao outro registro). Some
@@ -420,6 +429,87 @@ export async function removeAppointment(appointmentId: number, userId: number): 
     entityId: appointmentId,
     oldValue: appointment.patientId,
   });
+}
+
+export interface ManualAppointmentInput {
+  patientName: string;
+  cns?: string | null;
+  phone: string;
+  scheduledAt: string;
+  doctorId: number;
+  procedureId: number;
+  isFirstVisit?: boolean | null;
+}
+
+/**
+ * Adiciona um paciente à mão na revisão — pro caso de "Registro não
+ * reconhecido" (a extração não conseguiu ler aquela linha do PDF de jeito
+ * nenhum, então a pessoa simplesmente não aparece na lista). Pedido do
+ * usuário em 2026-08-26: antes disso não existia nenhum jeito de completar
+ * a lista com quem ficou de fora, só reprocessar do zero (o que perderia
+ * qualquer correção manual já feita nas outras linhas).
+ *
+ * Reaproveita `resolvePatient()` — mesma proteção de identidade (CNS/nome/
+ * telefone) da extração normal, pra não criar um paciente duplicado se
+ * essa pessoa já está cadastrada.
+ */
+export async function addManualAppointment(
+  listId: number,
+  input: ManualAppointmentInput,
+  userId: number
+): Promise<{ appointmentId: number }> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+  if (list.status !== "EM_REVISAO") {
+    throw new AppError("Só dá pra adicionar paciente com a lista em revisão.", 409);
+  }
+
+  const [normalized] = normalizePhoneList([input.phone]);
+  if (!normalized) throw new AppError("Telefone inválido.", 400);
+  if (normalized.kind !== "mobile") throw new AppError("Só celular recebe confirmação por WhatsApp.", 400);
+
+  const appointment = await prisma.$transaction(async (tx) => {
+    const patient = await resolvePatient(tx, {
+      name: input.patientName,
+      cns: input.cns?.trim() || null,
+      phones: [normalized.e164],
+    });
+
+    return tx.appointment.create({
+      data: {
+        listId,
+        agendaId: list.agendaId,
+        patientId: patient.id,
+        municipalityId: list.municipalityId,
+        doctorId: input.doctorId,
+        procedureId: input.procedureId,
+        requestingUnitId: null,
+        scheduledAt: parseBrasiliaDateTime(input.scheduledAt),
+        isFirstVisit: input.isFirstVisit ?? null,
+        phones: [normalized.e164],
+        selectedPhone: normalized.e164,
+        status: "PENDENTE",
+        extractionConfidence: 1,
+        manuallyEdited: true,
+        rawLine: {
+          issues: [],
+          invalidPhones: [],
+          notes: "Adicionado manualmente na revisão (não veio da leitura automática).",
+          executingUnit: null,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  await recordAudit({
+    userId,
+    action: "add_manual",
+    entity: "Appointment",
+    entityId: appointment.id,
+    newValue: input.patientName,
+  });
+
+  return { appointmentId: appointment.id };
 }
 
 export interface RetryFailedUpdate {

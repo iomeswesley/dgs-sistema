@@ -39,13 +39,22 @@ export function ErrorNote({ message }: { message: string }) {
 }
 
 /** Aviso persistente que precisa de atenção, não de cor de status. */
-export function Callout({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "warn" }) {
+export function Callout({
+  children,
+  tone = "info",
+}: {
+  children: ReactNode;
+  tone?: "info" | "warn" | "danger";
+}) {
   const style =
-    tone === "warn"
-      ? { background: "var(--mark-yellow-soft)", borderColor: "var(--mark-yellow)" }
-      : { background: "var(--accent-soft)", borderColor: "var(--accent)" };
+    tone === "danger"
+      ? { background: "var(--mark-red-soft)", borderColor: "var(--mark-red)" }
+      : tone === "warn"
+        ? { background: "var(--mark-yellow-soft)", borderColor: "var(--mark-yellow)" }
+        : { background: "var(--accent-soft)", borderColor: "var(--accent)" };
   return (
     <div className="rounded-lg border-l-4 px-4 py-3 text-sm text-ink" style={style}>
+      {tone === "danger" && <span aria-hidden className="mr-1.5">⚠️</span>}
       {children}
     </div>
   );

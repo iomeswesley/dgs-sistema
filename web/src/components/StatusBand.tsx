@@ -35,7 +35,22 @@ const SEGMENTS = [
   },
 ] as const;
 
-export function StatusBand({ counts, showLegend = true }: { counts: StatusCounts; showLegend?: boolean }) {
+export function StatusBand({
+  counts,
+  showLegend = true,
+  unrecognizedCount = 0,
+}: {
+  counts: StatusCounts;
+  showLegend?: boolean;
+  /**
+   * Linhas que a leitura nem conseguiu transformar em agendamento nenhum
+   * ("Registro não reconhecido") — não são `Appointment`, não entram na
+   * proporção da barra, mas também "precisam de ação" tanto quanto o resto
+   * dessa faixa. Mostrado à parte ("25 + 2") pra não sumir do resumo
+   * (achado em 2026-08-26).
+   */
+  unrecognizedCount?: number;
+}) {
   const total = SEGMENTS.reduce((sum, segment) => sum + counts[segment.key], 0);
 
   return (
@@ -71,11 +86,26 @@ export function StatusBand({ counts, showLegend = true }: { counts: StatusCounts
             <div
               key={segment.key}
               className="flex items-center gap-1.5 text-xs"
-              title={"title" in segment ? segment.title : undefined}
+              title={
+                "title" in segment
+                  ? segment.title +
+                    (segment.key === "semTelefone" && unrecognizedCount > 0
+                      ? " + registro não reconhecido pela leitura (nem virou agendamento)"
+                      : "")
+                  : undefined
+              }
             >
               <span className="h-2 w-2 rounded-full" style={{ background: segment.color }} aria-hidden />
               <span className="text-ink-muted">{segment.label}</span>
-              <span className="tabular font-semibold text-ink">{counts[segment.key]}</span>
+              <span className="tabular font-semibold text-ink">
+                {counts[segment.key]}
+                {segment.key === "semTelefone" && unrecognizedCount > 0 && (
+                  <>
+                    {" "}
+                    + <span className="text-mark-red">{unrecognizedCount}</span>
+                  </>
+                )}
+              </span>
             </div>
           ))}
         </div>

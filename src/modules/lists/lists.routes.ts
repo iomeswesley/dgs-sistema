@@ -7,6 +7,7 @@ import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
 import { pickAlternatePhone } from "@/lib/phone.js";
 import {
+  addManualAppointment,
   approveList,
   checkUnit,
   deleteList,
@@ -277,6 +278,26 @@ listsRouter.delete(
   asyncHandler(async (req, res) => {
     await removeAppointment(routeId(req), currentUserId(req));
     res.status(204).end();
+  })
+);
+
+const manualAppointmentSchema = z.object({
+  patientName: z.string().trim().min(1, "Nome obrigatório"),
+  cns: z.string().trim().nullish(),
+  phone: z.string().trim().min(1, "Telefone obrigatório"),
+  scheduledAt: z.string().min(16),
+  doctorId: z.number().int().positive(),
+  procedureId: z.number().int().positive(),
+  isFirstVisit: z.boolean().nullish(),
+});
+
+/** Adiciona um paciente à mão na revisão — pra "Registro não reconhecido". */
+listsRouter.post(
+  "/api/lists/:id/appointments",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, manualAppointmentSchema);
+    const result = await addManualAppointment(routeId(req), data, currentUserId(req));
+    res.status(201).json(result);
   })
 );
 

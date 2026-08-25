@@ -50,6 +50,17 @@ const STATUS_FILTER_OPTIONS = [
   "FALHA",
 ] as const;
 
+interface CatalogDoctor {
+  id: number;
+  name: string;
+  active: boolean;
+}
+interface CatalogProcedure {
+  id: number;
+  name: string;
+  active: boolean;
+}
+
 interface ListSuggestion {
   stillNeeded: number;
   confirmationsNeeded: number;
@@ -115,9 +126,24 @@ export function Revisao() {
     [id]
   );
 
+  const doctorsData = useApi<{ doctors: CatalogDoctor[] }>("/api/catalog/doctors");
+  const proceduresData = useApi<{ procedures: CatalogProcedure[] }>("/api/catalog/procedures");
+
   const [search, setSearch] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    patientName: "",
+    cns: "",
+    phone: "",
+    scheduledAt: "",
+    doctorId: "",
+    procedureId: "",
+    isFirstVisit: false,
+  });
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const [retryOpen, setRetryOpen] = useState(false);
   const [retryPhones, setRetryPhones] = useState<Record<number, string>>({});
   const [retryBusy, setRetryBusy] = useState(false);
@@ -166,6 +192,10 @@ export function Revisao() {
   const otherWarnings = warnings.filter(
     (warning) => !warning.includes("nidade") && !warning.includes("endereço") && !warning.includes("agenda vinculada")
   );
+  // Linhas que a leitura nem conseguiu transformar em agendamento — não
+  // contam em `counts` (não são Appointment), mas também "precisam de
+  // ação": aparecem somadas à faixa "Precisa de ação" do StatusBand.
+  const unrecognizedCount = otherWarnings.filter((w) => w.includes("Registro não reconhecido")).length;
 
   // Busca por nome (parcial, sem acento/caixa) ou telefone (só os dígitos,
   // compara contra qualquer telefone conhecido do paciente, não só o
@@ -261,6 +291,52 @@ export function Revisao() {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function openAddModal() {
+    // Pré-preenche médico/procedimento/data com o que o resto da lista já
+    // usa — é a mesma agenda pra todo mundo, só a leitura que não conseguiu
+    // ler essa linha específica. A equipe só troca se for mesmo diferente.
+    const first = appointments[0];
+    setAddForm({
+      patientName: "",
+      cns: "",
+      phone: "",
+      scheduledAt: first
+        ? new Date(first.scheduledAt).toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).slice(0, 16).replace(" ", "T")
+        : "",
+      doctorId: first ? String(first.doctor.id) : "",
+      procedureId: first ? String(first.procedure.id) : "",
+      isFirstVisit: false,
+    });
+    setAddError(null);
+    setAddOpen(true);
+  }
+
+  async function submitAdd() {
+    if (!addForm.patientName.trim() || !addForm.phone.trim() || !addForm.scheduledAt || !addForm.doctorId || !addForm.procedureId) {
+      setAddError("Preencha nome, telefone, data/hora, médico e procedimento.");
+      return;
+    }
+    setAddBusy(true);
+    setAddError(null);
+    try {
+      await api.post(`/api/lists/${list.id}/appointments`, {
+        patientName: addForm.patientName.trim(),
+        cns: addForm.cns.trim() || null,
+        phone: addForm.phone.trim(),
+        scheduledAt: addForm.scheduledAt,
+        doctorId: Number(addForm.doctorId),
+        procedureId: Number(addForm.procedureId),
+        isFirstVisit: addForm.isFirstVisit,
+      });
+      setAddOpen(false);
+      detail.reload();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Falha ao adicionar paciente.");
+    } finally {
+      setAddBusy(false);
     }
   }
 
@@ -491,13 +567,20 @@ export function Revisao() {
 
       {otherWarnings.length > 0 && (
         <div className="mb-4">
-          <Callout tone="warn">
+          <Callout tone="danger">
             <p className="font-semibold">A leitura deixou avisos:</p>
             <ul className="mt-1 list-inside list-disc">
               {otherWarnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
+            {isReviewing && (
+              <p className="mt-3">
+                <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openAddModal}>
+                  + Adicionar paciente manualmente
+                </button>
+              </p>
+            )}
           </Callout>
         </div>
       )}
@@ -509,7 +592,7 @@ export function Revisao() {
       )}
 
       <div className="card mb-5 p-5">
-        <StatusBand counts={toBandCounts(counts)} />
+        <StatusBand counts={toBandCounts(counts)} unrecognizedCount={unrecognizedCount} />
         {pending > 0 && isReviewing && (
           <p className="mt-3 text-sm text-ink-muted">
             <span className="font-semibold text-ink">{pending}</span> de {appointments.length} linhas
@@ -833,6 +916,94 @@ export function Revisao() {
             />
           </Field>
         ))}
+      </FormModal>
+
+      <FormModal
+        open={addOpen}
+        title="Adicionar paciente manualmente"
+        description="Pra quem a leitura automática não conseguiu reconhecer no PDF."
+        submitLabel="Adicionar"
+        busy={addBusy}
+        error={addError}
+        onSubmit={submitAdd}
+        onCancel={() => setAddOpen(false)}
+      >
+        <Field label="Nome do paciente">
+          <input
+            className="field"
+            value={addForm.patientName}
+            onChange={(e) => setAddForm({ ...addForm, patientName: e.target.value })}
+            required
+          />
+        </Field>
+        <Field label="CNS" hint="Opcional">
+          <input
+            className="field"
+            value={addForm.cns}
+            onChange={(e) => setAddForm({ ...addForm, cns: e.target.value })}
+          />
+        </Field>
+        <Field label="Telefone">
+          <input
+            className="field"
+            type="tel"
+            placeholder="(47) 99999-9999"
+            value={addForm.phone}
+            onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+            required
+          />
+        </Field>
+        <Field label="Data e hora">
+          <input
+            type="datetime-local"
+            className="field"
+            value={addForm.scheduledAt}
+            onChange={(e) => setAddForm({ ...addForm, scheduledAt: e.target.value })}
+            required
+          />
+        </Field>
+        <Field label="Médico">
+          <select
+            className="field"
+            value={addForm.doctorId}
+            onChange={(e) => setAddForm({ ...addForm, doctorId: e.target.value })}
+            required
+          >
+            <option value="">Selecione…</option>
+            {doctorsData.data?.doctors
+              .filter((d) => d.active || String(d.id) === addForm.doctorId)
+              .map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Procedimento">
+          <select
+            className="field"
+            value={addForm.procedureId}
+            onChange={(e) => setAddForm({ ...addForm, procedureId: e.target.value })}
+            required
+          >
+            <option value="">Selecione…</option>
+            {proceduresData.data?.procedures
+              .filter((p) => p.active || String(p.id) === addForm.procedureId)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={addForm.isFirstVisit}
+            onChange={(e) => setAddForm({ ...addForm, isFirstVisit: e.target.checked })}
+          />
+          Primeira vez
+        </label>
       </FormModal>
     </>
   );

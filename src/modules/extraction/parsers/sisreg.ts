@@ -107,11 +107,17 @@ function parseRecord(chunk: string[]): ExtractedRow | null {
     .trim();
   text = text.replace(/(\d)-\s+(\d{4})\b/g, "$1-$2");
 
-  // codSolic + dia da semana + data + hora, sempre nessa ordem no início.
-  const headMatch = text.match(/^\d{6,10}\s+[A-ZÇ]{3}\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+(.*)$/i);
+  // codSolic + dia da semana + data + hora, sempre nessa ordem no início —
+  // mas a hora às vezes falta de verdade no PDF (achado em 2026-08-26: duas
+  // linhas de uma lista real não tinham hora nenhuma entre a data e o CNS,
+  // rejeitava o registro inteiro e o paciente sumia da lista sem deixar
+  // rastro). Hora agora é opcional aqui — sem ela, `scheduledAt` sai `null`
+  // e a linha entra na revisão marcada "sem_data" (mesmo tratamento que
+  // outros campos ausentes já recebem), em vez de desaparecer.
+  const headMatch = text.match(/^\d{6,10}\s+[A-ZÇ]{3}\s+(\d{2}\/\d{2}\/\d{4})\s+(?:(\d{2}:\d{2})\s+)?(.*)$/i);
   if (!headMatch) return null;
   const [, dateBr, time, rest] = headMatch;
-  if (!dateBr || !time) return null;
+  if (!dateBr) return null;
   let remainder = rest ?? "";
 
   // CNS: 15 dígitos, tolerando um espaço perdido no meio (quando a quebra
@@ -162,10 +168,15 @@ function parseRecord(chunk: string[]): ExtractedRow | null {
     phones,
     procedure: null,
     doctor: null,
-    scheduledAt: toIsoDateTime(dateBr, time),
+    scheduledAt: time ? toIsoDateTime(dateBr, time) : null,
     requestingUnit,
     isFirstVisit,
-    confidence: cns && birthDate ? 1 : 0.6,
-    notes: !cns || !birthDate ? "CNS ou nascimento não reconhecidos com segurança — confira no arquivo." : null,
+    confidence: cns && birthDate && time ? 1 : 0.6,
+    notes:
+      !cns || !birthDate
+        ? "CNS ou nascimento não reconhecidos com segurança — confira no arquivo."
+        : !time
+          ? "O PDF não trazia horário pra esse paciente — preencha antes de aprovar."
+          : null,
   };
 }
