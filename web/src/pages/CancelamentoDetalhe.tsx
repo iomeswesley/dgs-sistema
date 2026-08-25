@@ -191,6 +191,17 @@ export function CancelamentoDetalhe() {
         description={
           detail.data ? `${detail.data.source.municipalityName} · disparado por ${detail.data.createdByName}` : ""
         }
+        actions={
+          detail.data && (
+            <a
+              className="btn btn-quiet"
+              href={`/api/cancellations/${detail.data.id}/export`}
+              title="PDF pronto pra enviar à secretaria — agrupado por situação da mensagem"
+            >
+              Exportar PDF
+            </a>
+          )
+        }
       />
 
       {detail.loading && <Spinner />}

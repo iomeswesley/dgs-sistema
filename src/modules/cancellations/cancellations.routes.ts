@@ -11,6 +11,7 @@ import {
   retryFailedMessages,
   type CancellationSource,
 } from "./cancellations.service.js";
+import { generateCancellationPdf } from "./cancellations.pdf.js";
 
 export const cancellationsRouter = Router();
 cancellationsRouter.use("/api/cancellations", requireAuth);
@@ -43,6 +44,24 @@ cancellationsRouter.get(
   "/api/cancellations/:id",
   asyncHandler(async (req, res) => {
     res.json(await getCancellationBatch(routeId(req)));
+  })
+);
+
+/**
+ * PDF pronto pra devolver à secretaria — agrupado por situação da mensagem
+ * (Lido/Entregue/Enviado/Falhou/Sem envio), mesma classificação da tela
+ * (`effectiveStatus`, ver cancellations.pdf.ts). Pedido do usuário em
+ * 2026-08-27.
+ */
+cancellationsRouter.get(
+  "/api/cancellations/:id/export",
+  asyncHandler(async (req, res) => {
+    const detail = await getCancellationBatch(routeId(req));
+    const pdf = await generateCancellationPdf(detail);
+    const filename = `cancelamento-${detail.id}-${detail.source.date}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdf);
   })
 );
 
