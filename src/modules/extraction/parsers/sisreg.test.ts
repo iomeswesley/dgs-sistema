@@ -169,6 +169,53 @@ I70
     expect(first?.name).toBe("MARIA EXEMPLO");
   });
 
+  it("filtra o rodapé de quebra de página e nunca deixa o CID-10 vazar quando o registro atravessa duas páginas", () => {
+    // Achado real em 2026-08-26 (lista 12): registro com 2 telefones tem a
+    // linha da tabela cortada pela quebra de página do PDF — o segundo
+    // telefone sobra pra próxima página, com o rodapé/cabeçalho de página
+    // (data/hora + "SISREG III..." + URL + "-- N of M --") no meio. Sem
+    // filtrar isso, o corte do CID-10 (ancorado no fim do texto) parava de
+    // funcionar porque sobrava texto depois dele — risco de vazar CID-10
+    // (dado sensível) pro resultado.
+    const text = `PROPRIEDADES DA AGENDA
+Unidade Executante: 	POLICLINICA MUNICIPAL EXEMPLO (0000000)
+Profissional Executante: FULANO EXEMPLO DA SILVA (00000000000)
+Procedimento Ambulatorial: GRUPO - EXAMES EXEMPLO (0000000)
+680608520
+SEG
+31/08/2026
+701406654876236 	MIRCEA
+ADRIANA DA
+--- 	10/01/1977 	49 BLUMENAU
+- SC
+(47) 99220-
+9136
+ESF LEO DE
+CARVALHO
+1ª VEZ 01 - ULTRA-
+SONOGRAFIA
+N93
+24/08/2026, 17:36 	SISREG III - Servidor de Producao
+https://sisregiii.saude.gov.br/cgi-bin/index 	3/5
+
+-- 3 of 5 --
+
+14:00 	SILVA 	(47) 99221-
+1198
+TRANSVAGINAL
+680644085
+SEG
+`;
+    const result = parseSisreg(text);
+    const [first] = result.rows;
+    expect(first?.name).toBe("MIRCEA ADRIANA DA");
+    expect(first?.phones).toEqual(["(47) 99220-9136", "(47) 99221-1198"]);
+    expect(first?.requestingUnit).toBe("ESF LEO DE CARVALHO");
+    // O mais importante: CID-10 nunca aparece em campo nenhum do resultado.
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toMatch(/\bN93\b/);
+  });
+
   it("reconhece o registro mesmo sem horário (achado real em 2026-08-26, lista 12) em vez de rejeitar a linha inteira", () => {
     // Duas linhas de uma lista real vinham sem hora nenhuma entre a data e
     // o CNS — a exigência de \d{2}:\d{2} rejeitava o registro inteiro, e o

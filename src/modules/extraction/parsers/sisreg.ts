@@ -23,8 +23,24 @@ import { extractPhones, parseVaga, toIsoDate, toIsoDateTime } from "./shared.js"
 // — por isso o fim da linha não é exigido, só que ela comece com os dígitos.
 const RECORD_START = /^\d{6,10}(\s|$)/;
 
+// Rodapé/cabeçalho de quebra de página do SISREG — some no meio de um
+// registro sempre que a linha da tabela desse paciente atravessa duas
+// páginas (acontece quando o registro tem 2 telefones ou nome longo,
+// empurrando o resto pra página seguinte). Achado em 2026-08-26: sem
+// filtrar essas linhas, elas entravam no meio do texto do registro e
+// atrapalhavam tanto o corte do CID-10 (risco de vazar CID-10 pro
+// resultado, dado sensível) quanto os campos seguintes.
+const PAGE_BREAK_NOISE = [
+  /SISREG III - Servidor de Producao/i,
+  /^https:\/\/sisregiii\.saude\.gov\.br/i,
+  /^-- \d+ of \d+ --$/,
+];
+
 export function parseSisreg(text: string): ExtractionResult {
-  const rawLines = text.split("\n").map((line) => line.trim());
+  const rawLines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !PAGE_BREAK_NOISE.some((pattern) => pattern.test(line)));
   const warnings: string[] = [];
 
   // O SISREG não tem um campo "Município" no cabeçalho — só aparece na
@@ -153,9 +169,18 @@ function parseRecord(chunk: string[]): ExtractedRow | null {
   for (const phone of phones) remainder = remainder.replace(phone, " ");
   remainder = remainder.replace(/\s+/g, " ").trim();
 
-  // CID-10 sempre no fim: uma letra seguida de 2 a 4 dígitos. Lido só pra
-  // saber onde o registro acaba — nunca entra no resultado (LGPD).
-  remainder = remainder.replace(/\s+[A-Z]\d{2,4}\s*$/, "").trim();
+  // CID-10: uma letra seguida de 2 a 4 dígitos. Normalmente cai bem no fim
+  // do registro, mas não é garantido — quando a linha da tabela atravessa
+  // uma quebra de página do PDF (registro com 2 telefones ou nome longo
+  // empurra o resto pra página seguinte), sobra texto depois do CID-10
+  // (achado real em 2026-08-26). Por isso tira em qualquer posição, não só
+  // ancorado no fim — é dado sensível (LGPD), não pode vazar pro resultado
+  // de jeito nenhum, mesmo à custa de eventualmente cortar algo que só
+  // parece CID-10 por coincidência.
+  remainder = remainder
+    .replace(/\b[A-Z]\d{2,4}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   const isFirstVisit = parseVaga(remainder);
   const vagaMatch = remainder.match(/1\s*[ªa]\s*VEZ|RETOR\s*NO/i);
