@@ -26,6 +26,7 @@ interface ConversationSummary {
   lastDirection: "ENVIADA" | "RECEBIDA";
   lastAt: string;
   withinWindow: boolean;
+  everReplied: boolean;
 }
 
 interface ThreadMessage {
@@ -343,8 +344,18 @@ export function Conversas() {
                 {!selected?.withinWindow && (
                   <div className="mb-2">
                     <Callout tone="warn">
-                      Fora da janela de 24h desde a última mensagem do paciente — a Meta só aceita template pra
-                      reabrir a conversa.{" "}
+                      {selected?.everReplied === false ? (
+                        <>
+                          O paciente ainda não respondeu nenhuma mensagem — a Meta só libera texto livre depois da
+                          primeira resposta dele (template não abre a conversa sozinho, mesmo enviado há pouco
+                          tempo).{" "}
+                        </>
+                      ) : (
+                        <>
+                          Fora da janela de 24h desde a última mensagem do paciente — a Meta só aceita template pra
+                          reabrir a conversa.{" "}
+                        </>
+                      )}
                       <button type="button" className="font-semibold underline" onClick={openTemplateModal}>
                         Enviar template
                       </button>

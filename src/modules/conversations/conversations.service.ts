@@ -28,6 +28,19 @@ export interface ConversationSummary {
   lastDirection: "ENVIADA" | "RECEBIDA";
   lastAt: Date;
   withinWindow: boolean;
+  /**
+   * Se o paciente já mandou alguma mensagem alguma vez (não só se está
+   * dentro da janela agora). Distingue duas situações que a tela precisa
+   * explicar diferente: "o paciente já respondeu antes, mas já passou de
+   * 24h" (`withinWindow: false`, `everReplied: true`) vs "o paciente nunca
+   * respondeu nada" (`everReplied: false`) — nesse segundo caso a Meta
+   * bloqueia texto livre mesmo que a gente tenha mandado um template há
+   * pouco tempo (mensagem de utilidade não abre a janela sozinha, só
+   * resposta do paciente abre). Pedido do usuário em 2026-08-27: o aviso
+   * "Fora da janela de 24h desde a última mensagem do paciente" é enganoso
+   * quando não existe "última mensagem do paciente" nenhuma.
+   */
+  everReplied: boolean;
 }
 
 function previewBody(message: { body: string | null; template: string | null; buttonPayload: string | null }): string | null {
@@ -84,11 +97,13 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
       lastDirection: message.direction,
       lastAt: message.createdAt,
       withinWindow: false, // recalculado abaixo, depois de varrer tudo
+      everReplied: false, // idem
     });
   }
 
   for (const conversation of byPhone.values()) {
     const lastInbound = lastInboundAt.get(conversation.phone);
+    conversation.everReplied = !!lastInbound;
     conversation.withinWindow = !!lastInbound && Date.now() - lastInbound.getTime() < WINDOW_24H_MS;
   }
 
@@ -165,7 +180,9 @@ export async function sendReply(rawPhone: string, text: string): Promise<void> {
   const withinWindow = lastInbound && Date.now() - lastInbound.createdAt.getTime() < WINDOW_24H_MS;
   if (!withinWindow) {
     throw new AppError(
-      "Fora da janela de 24h desde a última mensagem do paciente — a Meta só aceita template pra reabrir a conversa.",
+      lastInbound
+        ? "Fora da janela de 24h desde a última mensagem do paciente — a Meta só aceita template pra reabrir a conversa."
+        : "O paciente ainda não respondeu nenhuma mensagem — a Meta só libera texto livre depois da primeira resposta dele (template não abre a conversa sozinho, mesmo enviado há pouco tempo).",
       409
     );
   }
