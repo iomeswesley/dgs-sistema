@@ -2,6 +2,16 @@ import crypto from "node:crypto";
 import { env, isProduction } from "@/config/env.js";
 import { getActiveCredentials } from "@/modules/whatsapp/whatsapp-account.service.js";
 
+// Leitura do webhook (lógica pura, testada sem precisar de banco/env) mora
+// em `whatsapp-webhook.ts` — reexportado aqui pra quem já importa daqui não
+// precisar mudar nada.
+export {
+  parseInboundReplies,
+  parseStatusUpdates,
+  type InboundReply,
+  type StatusUpdate,
+} from "@/lib/whatsapp-webhook.js";
+
 const GRAPH_API_VERSION = "v21.0";
 
 export interface TemplateComponentParams {
@@ -147,109 +157,3 @@ export function verifyWebhookSignature(rawBody: Buffer | undefined, signatureHea
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
 }
 
-/* ------------------------------------------------------------------ */
-/* Leitura do webhook                                                  */
-/* ------------------------------------------------------------------ */
-
-export interface InboundReply {
-  wamid: string;
-  from: string;
-  /** Payload do botão de resposta rápida, quando o paciente clicou. */
-  buttonPayload: string | null;
-  /** Texto, quando o paciente escreveu em vez de clicar. */
-  text: string | null;
-  timestamp: Date;
-}
-
-export interface StatusUpdate {
-  wamid: string;
-  status: "sent" | "delivered" | "read" | "failed";
-  timestamp: Date;
-  errorCode: string | null;
-  errorMessage: string | null;
-}
-
-interface WebhookValue {
-  messages?: {
-    id: string;
-    from: string;
-    timestamp: string;
-    type: string;
-    text?: { body: string };
-    button?: { payload?: string; text?: string };
-    interactive?: { type: string; button_reply?: { id: string; title: string } };
-  }[];
-  statuses?: {
-    id: string;
-    status: string;
-    timestamp: string;
-    errors?: { code?: number; title?: string; message?: string }[];
-  }[];
-}
-
-function parseTimestamp(value: string): Date {
-  const seconds = Number(value);
-  return Number.isFinite(seconds) ? new Date(seconds * 1000) : new Date();
-}
-
-/** Extrai as respostas de pacientes de um payload do webhook. */
-export function parseInboundReplies(payload: unknown): InboundReply[] {
-  const replies: InboundReply[] = [];
-
-  for (const value of extractValues(payload)) {
-    for (const message of value.messages ?? []) {
-      // Template com quick reply chega como `button` (templates) ou
-      // `interactive.button_reply` (mensagens interativas) — os dois formatos
-      // existem e a Meta escolhe conforme o tipo de mensagem enviada.
-      const buttonPayload =
-        message.button?.payload ?? message.button?.text ?? message.interactive?.button_reply?.title ?? null;
-
-      replies.push({
-        wamid: message.id,
-        from: message.from,
-        buttonPayload,
-        text: message.text?.body ?? null,
-        timestamp: parseTimestamp(message.timestamp),
-      });
-    }
-  }
-
-  return replies;
-}
-
-/**
- * Extrai as atualizações de entrega. Diferente da barbearia-saas (que ignora
- * `statuses`), aqui isso é parte do produto: telefone errado na lista da
- * prefeitura é rotina, e saber que a mensagem não chegou é o que vira o
- * indicador de qualidade da lista devolvido à secretaria.
- */
-export function parseStatusUpdates(payload: unknown): StatusUpdate[] {
-  const updates: StatusUpdate[] = [];
-
-  for (const value of extractValues(payload)) {
-    for (const status of value.statuses ?? []) {
-      if (!["sent", "delivered", "read", "failed"].includes(status.status)) continue;
-      const error = status.errors?.[0];
-      updates.push({
-        wamid: status.id,
-        status: status.status as StatusUpdate["status"],
-        timestamp: parseTimestamp(status.timestamp),
-        errorCode: error?.code != null ? String(error.code) : null,
-        errorMessage: error?.message ?? error?.title ?? null,
-      });
-    }
-  }
-
-  return updates;
-}
-
-function extractValues(payload: unknown): WebhookValue[] {
-  const body = payload as { entry?: { changes?: { value?: WebhookValue }[] }[] } | null;
-  const values: WebhookValue[] = [];
-  for (const entry of body?.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      if (change.value) values.push(change.value);
-    }
-  }
-  return values;
-}

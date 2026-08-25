@@ -55,7 +55,13 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
       wamid: reply.wamid,
       direction: "RECEBIDA",
       phone: reply.from,
-      body: reply.text,
+      // Sem texto/clique de botão (imagem, áudio, figurinha, localização,
+      // reação…), guarda uma descrição legível em vez de deixar `body` nulo
+      // — sem isso a mensagem aparecia como "—" em Conversas, sem indicar o
+      // que o paciente mandou de verdade (achado pelo usuário em
+      // 2026-08-27). Nunca entra na classificação de intenção — só `text`
+      // alimenta `classifyReply`/IA, abaixo.
+      body: reply.text ?? reply.contentDescription,
       buttonPayload: reply.buttonPayload,
       status: "ENTREGUE",
       raw: {
