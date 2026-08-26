@@ -206,7 +206,10 @@ function drawHeader(doc: PDFKit.PDFDocument, detail: CancellationBatchDetail): v
     ["Município", detail.source.municipalityName],
   ];
   if (detail.source.unitName) rows.push(["Unidade", detail.source.unitName]);
-  rows.push(["Disparado em", `${formatDateTime(detail.createdAt)} por ${detail.createdByName}`]);
+  // Só a data/hora, sem "por Fulano" — quem disparou é informação interna
+  // da equipe, não faz sentido num documento que sai pra secretaria
+  // (pedido do usuário em 2026-08-27).
+  rows.push(["Disparado em", formatDateTime(detail.createdAt)]);
 
   const labelWidth = 120;
   for (const [label, value] of rows) {
