@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import PDFDocument from "pdfkit";
 import { formatPhone } from "@/lib/phone.js";
 import type { CancellationBatchDetail } from "./cancellations.service.js";
@@ -11,8 +13,8 @@ import type { CancellationBatchDetail } from "./cancellations.service.js";
   — mantidas em sincronia manualmente, são poucas linhas dos dois lados).
 
   pdfkit é puro JS (sem binário nativo, sem canvas) — mesma categoria de
-  cuidado que already mordeu o projeto com `pdfjs-dist` na extração
-  (ver CLAUDE.md, "Extração de PDF na Vercel"), mas aqui os fonts padrão são
+  cuidado que já mordeu o projeto com `pdfjs-dist` na extração (ver
+  CLAUDE.md, "Extração de PDF na Vercel"), mas aqui os fonts padrão são
   `require()`ados por caminho literal (`#standard-fonts/...`, subpath import
   do próprio pacote), não carregados dinamicamente — não é a mesma classe de
   risco, mas vale testar contra produção depois do primeiro deploy.
@@ -24,9 +26,28 @@ const CONTENT_WIDTH = 595.28 - PAGE_MARGIN * 2;
 const INK = "#1f2430";
 const MUTED = "#6b7280";
 const RULE = "#e2e4e9";
-const HEADER_BG = "#15181d";
-const GOLD = "#b08d2b";
+// Azul-marinho da marca (pedido do usuário em 2026-08-27, mesma cor do
+// menu lateral no modo escuro — ver --board em index.css) — antes era um
+// cinza quase preto.
+const HEADER_BG = "#042951";
 const ROW_ALT_BG = "#f7f7f8";
+
+/**
+ * Logo oficial (fundo branco, letras em azul-marinho) — vive num chip
+ * branco no cabeçalho, porque o fundo dele não é transparente e o
+ * cabeçalho agora é escuro. Resolve tanto em produção (`dist-web/`, gerado
+ * pelo build do Vite, já incluso em `includeFiles` no vercel.json) quanto
+ * em dev local (`web/public/`, antes do build existir). `null` se nenhum
+ * dos dois existir — nesse caso o cabeçalho cai pra um texto "DGS" simples,
+ * nunca quebra a geração do PDF por causa de um arquivo faltando.
+ */
+function resolveLogoPath(): string | null {
+  const candidates = [
+    path.join(process.cwd(), "dist-web", "dgs-logo.png"),
+    path.join(process.cwd(), "web", "public", "dgs-logo.png"),
+  ];
+  return candidates.find((p) => fs.existsSync(p)) ?? null;
+}
 
 interface StatusGroup {
   key: string;
@@ -143,20 +164,24 @@ function ensureSpace(doc: PDFKit.PDFDocument, needed: number): void {
 }
 
 function drawHeader(doc: PDFKit.PDFDocument, detail: CancellationBatchDetail): void {
-  // Faixa escura no topo, imitando o tom do logo real (fundo escuro,
-  // lettering claro) sem embutir a imagem em si — mais previsível pra
-  // impressão/PDF e funciona bem em preto-e-branco também.
+  // Faixa azul-marinho no topo (mesma cor do menu lateral no modo escuro).
   doc.rect(0, 0, doc.page.width, 84).fill(HEADER_BG);
-  doc
-    .fillColor(GOLD)
-    .font("Helvetica-Bold")
-    .fontSize(26)
-    .text("DGS", PAGE_MARGIN, 22, { characterSpacing: 1 });
-  doc
-    .fillColor("#c7c9cf")
-    .font("Helvetica")
-    .fontSize(9)
-    .text("D'Artibale Gestão em Saúde", PAGE_MARGIN, 52);
+
+  // Logo oficial num chip branco — o arquivo já tem "D'ARTIBALE GESTÃO EM
+  // SAÚDE" desenhado dentro dele, não precisa de tagline separada do lado.
+  const logoPath = resolveLogoPath();
+  if (logoPath) {
+    const chipW = 78;
+    const chipH = 46;
+    const chipX = PAGE_MARGIN;
+    const chipY = (84 - chipH) / 2;
+    doc.roundedRect(chipX, chipY, chipW, chipH, 4).fill("#ffffff");
+    doc.image(logoPath, chipX + 8, chipY + 7, { fit: [chipW - 16, chipH - 14], align: "center", valign: "center" });
+  } else {
+    // Nunca deveria faltar (o arquivo vai junto do deploy), mas se faltar
+    // não trava a geração do PDF — cai num texto simples.
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(22).text("DGS", PAGE_MARGIN, 30);
+  }
 
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(13).text("Cancelamento de Agenda", PAGE_MARGIN, 22, {
     width: CONTENT_WIDTH,
@@ -332,10 +357,26 @@ function drawStatusSection(
   doc.moveDown(0.7);
 }
 
+/**
+ * Rodapé com numeração — desenhado por último, depois de todo o conteúdo,
+ * revisitando cada página já criada (`switchToPage`).
+ *
+ * Bug corrigido em 2026-08-27: escrever perto do fim físico da página
+ * (`page.height - 30`) fica DENTRO da margem inferior do documento
+ * (`PAGE_MARGIN = 48`) — o pdfkit acha que o texto está estourando a área
+ * de conteúdo e insere uma página nova sozinho pra "continuar" o texto,
+ * mesmo sem sobrar linha nenhuma pra continuar. Como isso acontecia pra
+ * cada uma das páginas já existentes, o PDF de um cancelamento de 4
+ * páginas saía com 4 páginas em branco extras no final. Zerar a margem
+ * inferior só durante esse desenho evita o gatilho, sem afetar o layout
+ * do resto do conteúdo (já desenhado antes disso).
+ */
 function drawPageNumbers(doc: PDFKit.PDFDocument, detail: CancellationBatchDetail): void {
   const range = doc.bufferedPageRange();
+  const originalBottomMargin = doc.page.margins.bottom;
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(range.start + i);
+    doc.page.margins.bottom = 0;
     doc
       .fillColor(MUTED)
       .font("Helvetica")
@@ -344,7 +385,8 @@ function drawPageNumbers(doc: PDFKit.PDFDocument, detail: CancellationBatchDetai
         `DGS — D'Artibale Gestão em Saúde · Cancelamento #${detail.id} · página ${i + 1} de ${range.count}`,
         PAGE_MARGIN,
         doc.page.height - 30,
-        { width: CONTENT_WIDTH, align: "center" }
+        { width: CONTENT_WIDTH, align: "center", lineBreak: false }
       );
+    doc.page.margins.bottom = originalBottomMargin;
   }
 }

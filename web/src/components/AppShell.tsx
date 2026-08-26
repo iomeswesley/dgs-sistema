@@ -77,7 +77,16 @@ export function AppShell() {
 
         <div className="flex items-center justify-between px-5 py-4 md:block md:py-6">
           <div>
-            <div className="text-lg font-bold tracking-tight">{collapsed ? "D" : "DGS"}</div>
+            {collapsed ? (
+              <div className="text-lg font-bold tracking-tight">D</div>
+            ) : (
+              // O logo é desenhado pra fundo claro (letras em azul-marinho)
+              // — a prancheta é sempre escura, então ele vive num chip
+              // branco, não solto por cima da cor escura.
+              <div className="inline-block rounded-md bg-white px-2.5 py-1.5">
+                <img src="/dgs-logo.png" alt="DGS" className="h-7 w-auto" />
+              </div>
+            )}
             {!collapsed && (
               <div className="mt-1 flex gap-0.5" aria-hidden>
                 <span className="h-1 w-6 rounded-full bg-mark-green" />

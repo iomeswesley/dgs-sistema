@@ -24,7 +24,11 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-board px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="text-2xl font-bold tracking-tight text-board-ink">DGS</div>
+          {/* Mesmo chip branco do menu lateral — o logo é pra fundo claro,
+              e o fundo aqui é sempre escuro (bg-board). */}
+          <div className="inline-block rounded-lg bg-white px-4 py-2.5">
+            <img src="/dgs-logo.png" alt="DGS" className="h-9 w-auto" />
+          </div>
           <div className="mt-2 flex justify-center gap-0.5" aria-hidden>
             <span className="h-1 w-10 rounded-full bg-mark-green" />
             <span className="h-1 w-5 rounded-full bg-mark-yellow" />

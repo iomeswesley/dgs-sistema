@@ -64,16 +64,23 @@
 .dark {
   color-scheme: dark;
 
-  --board: #0e151d;
-  --board-raised: #16202c;
-  --board-line: #24313f;
+  /* Azul-marinho da marca (pedido do usuário em 2026-08-27, "dark blue 3",
+     #042951) — base de todo o tema escuro, mais visível no menu lateral
+     (--board, cor sólida) e no PDF de Cancelamento (mesma cor na faixa de
+     cabeçalho, ver cancellations.pdf.ts). As demais variáveis são tons
+     derivados dessa base, misturando com branco/preto pra manter a mesma
+     hierarquia de contraste que já existia (board mais escuro que sheet,
+     board-raised/sheet-alt um degrau acima, sheet-sunken o mais escuro). */
+  --board: #042951;
+  --board-raised: #2c4b6d;
+  --board-line: #4f6985;
   --board-ink: #e8edf2;
   --board-ink-muted: #8fa1b3;
 
-  --sheet: #131a22;
-  --sheet-alt: #19222c;
-  --sheet-sunken: #0f161d;
-  --rule: #263241;
+  --sheet: #13365b;
+  --sheet-alt: #254568;
+  --sheet-sunken: #032141;
+  --rule: #345272;
 
   --ink: #e6ecf2;
   --ink-muted: #9aa8b6;
