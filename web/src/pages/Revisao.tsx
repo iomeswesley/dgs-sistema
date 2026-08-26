@@ -431,7 +431,7 @@ export function Revisao() {
         );
       } else {
         await api.post(`/api/lists/${list.id}/conclude`);
-        setNotice("Lista concluída. Baixe o relatório em \"Exportar\" para enviar à secretaria.");
+        setNotice("Lista concluída. Baixe o relatório em \"Exportar CSV\" ou \"Exportar PDF\" para enviar à secretaria.");
       }
       setConfirmAction(null);
       detail.reload();
@@ -488,7 +488,14 @@ export function Revisao() {
               {refreshing ? "Atualizando…" : "Atualizar"}
             </button>
             <a className="btn btn-quiet" href={`/api/indicators/list-report?listId=${list.id}`}>
-              Exportar
+              Exportar CSV
+            </a>
+            <a
+              className="btn btn-quiet"
+              href={`/api/indicators/list-report-pdf?listId=${list.id}`}
+              title="PDF pronto pra enviar à secretaria — agrupado por situação, mesmo modelo do Cancelamento"
+            >
+              Exportar PDF
             </a>
             {list.status !== "DISPARADA" && list.status !== "CONCLUIDA" && (
               <button
@@ -924,7 +931,7 @@ export function Revisao() {
                   ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
                       pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
                     }`
-                  : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar\" para enviar à secretaria manualmente."
+                  : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar CSV\"/\"Exportar PDF\" para enviar à secretaria manualmente."
         }
         confirmLabel={
           confirmAction === "delete"

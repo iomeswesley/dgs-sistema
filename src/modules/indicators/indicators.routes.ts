@@ -6,6 +6,7 @@ import { dateOnlySchema, parseDateOnly, parseQuery } from "@/lib/http.js";
 import { buildIndicators, type GroupBy } from "./indicators.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { buildListReportCsv } from "@/modules/lists/list-report.js";
+import { generateListReportPdf } from "@/modules/lists/lists.pdf.js";
 
 export const indicatorsRouter = Router();
 indicatorsRouter.use("/api/indicators", requireAuth);
@@ -112,5 +113,22 @@ indicatorsRouter.get(
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
+  })
+);
+
+/**
+ * Mesmo relatório, em PDF — agrupado por situação, com legenda e cabeçalho
+ * profissional (pedido do usuário em 2026-08-27, mesmo "tempero" do PDF de
+ * Cancelamento). Botão "Exportar PDF" na Revisão, ao lado do "Exportar CSV".
+ */
+indicatorsRouter.get(
+  "/api/indicators/list-report-pdf",
+  asyncHandler(async (req, res) => {
+    const query = parseQuery(req, z.object({ listId: z.coerce.number().int().positive() }));
+    const pdf = await generateListReportPdf(query.listId);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="lista-${query.listId}.pdf"`);
+    res.send(pdf);
   })
 );

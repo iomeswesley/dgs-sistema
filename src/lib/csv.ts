@@ -13,7 +13,18 @@ function escapeCell(value: Cell): string {
  * que aparece quando alguém abre o relatório.
  */
 export function toCsv(headers: string[], rows: Cell[][]): string {
-  const lines = [headers.map(escapeCell).join(";")];
-  for (const row of rows) lines.push(row.map(escapeCell).join(";"));
+  return buildCsv([headers, ...rows]);
+}
+
+/**
+ * Igual `toCsv`, mas sem forçar uma única linha de cabeçalho fixa — cada
+ * item de `rows` já é uma linha pronta (célula por célula). Usado pelos
+ * relatórios "profissionais" que têm um bloco de metadados no topo e
+ * seções por situação no meio, cada uma com seu próprio cabeçalho de
+ * coluna (ver `list-report.ts`) — o Excel abre isso normalmente, cada
+ * linha só usa as colunas que tem.
+ */
+export function buildCsv(rows: Cell[][]): string {
+  const lines = rows.map((row) => row.map(escapeCell).join(";"));
   return `﻿${lines.join("\r\n")}`;
 }
