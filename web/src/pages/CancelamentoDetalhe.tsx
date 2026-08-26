@@ -127,6 +127,15 @@ export function CancelamentoDetalhe() {
   const [retryBusy, setRetryBusy] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  // Corrigir telefone de UM paciente, em qualquer situação — não só quem
+  // falhou (mesmo pedido do usuário em 2026-08-27 já resolvido em Revisão):
+  // o aviso pode ter sido entregue certinho pro número errado (não era do
+  // paciente), sem nenhuma "falha" registrada — precisa de um jeito de
+  // corrigir mesmo assim.
+  const [quickFixTarget, setQuickFixTarget] = useState<CancellationAppointment | null>(null);
+  const [quickFixPhone, setQuickFixPhone] = useState("");
+  const [quickFixBusy, setQuickFixBusy] = useState(false);
+  const [quickFixError, setQuickFixError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const appointments = detail.data?.appointments ?? [];
@@ -178,6 +187,45 @@ export function CancelamentoDetalhe() {
       setRetryError(err instanceof Error ? err.message : "Falha ao reenviar.");
     } finally {
       setRetryBusy(false);
+    }
+  }
+
+  function openQuickFix(appointment: CancellationAppointment) {
+    setQuickFixTarget(appointment);
+    setQuickFixPhone(appointment.alternatePhone ?? "");
+    setQuickFixError(null);
+  }
+
+  /**
+   * Corrige o telefone de UM paciente e reenvia o aviso de cancelamento —
+   * mesma rota de "Reenviar pra quem falhou", só que pra um paciente só e
+   * disponível pra qualquer situação, não só falha/sem envio.
+   */
+  async function submitQuickFix() {
+    if (!quickFixTarget) return;
+    if (!quickFixPhone.trim()) {
+      setQuickFixError("Informe o telefone novo.");
+      return;
+    }
+    setQuickFixBusy(true);
+    setQuickFixError(null);
+    try {
+      const result = await api.post<{ queued: number }>(`/api/cancellations/${id}/retry-failed`, {
+        updates: [{ appointmentId: quickFixTarget.id, phone: quickFixPhone.trim() }],
+      });
+      setQuickFixTarget(null);
+      setRetryNotice(`Telefone corrigido — reenviando pra ${result.queued} paciente(s)...`);
+      const finished = await runQueueUntilDone(({ sent, failed }) => {
+        setRetryNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.`);
+      });
+      setRetryNotice(
+        `Reenvio concluído — ${finished.sent} enviada(s)` + (finished.failed > 0 ? `, ${finished.failed} falharam` : "") + "."
+      );
+      detail.reload();
+    } catch (err) {
+      setQuickFixError(err instanceof Error ? err.message : "Falha ao corrigir e reenviar.");
+    } finally {
+      setQuickFixBusy(false);
     }
   }
 
@@ -289,11 +337,12 @@ export function CancelamentoDetalhe() {
           <Table
             colgroup={
               <colgroup>
-                <col className="w-[22%]" />
+                <col className="w-[19%]" />
+                <col className="w-[13%]" />
+                <col className="w-[16%]" />
+                <col className="w-[13%]" />
+                <col className="w-[24%]" />
                 <col className="w-[15%]" />
-                <col className="w-[18%]" />
-                <col className="w-[15%]" />
-                <col className="w-[30%]" />
               </colgroup>
             }
             head={
@@ -303,6 +352,7 @@ export function CancelamentoDetalhe() {
                 <Th>Procedimento</Th>
                 <Th>Horário original</Th>
                 <Th align="right">Situação</Th>
+                <Th align="right">Ações</Th>
               </tr>
             }
           >
@@ -325,6 +375,18 @@ export function CancelamentoDetalhe() {
                         </span>
                       )}
                     </div>
+                  </Td>
+                  <Td align="right">
+                    {/* Não só quem falhou — telefone pode estar errado mesmo
+                        com entrega/leitura confirmada (não era o número do
+                        paciente). Corrige e reenvia na hora, qualquer situação. */}
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => openQuickFix(a)}
+                    >
+                      Corrigir telefone
+                    </button>
                   </Td>
                 </tr>
               );
@@ -359,6 +421,33 @@ export function CancelamentoDetalhe() {
                 />
               </Field>
             ))}
+          </FormModal>
+
+          <FormModal
+            open={quickFixTarget !== null}
+            title="Corrigir telefone e reenviar"
+            description={
+              quickFixTarget
+                ? `${quickFixTarget.patientName} — número atual: ${
+                    quickFixTarget.phone ? formatPhone(quickFixTarget.phone) : "sem telefone"
+                  }. O aviso de cancelamento sai de novo pro número certo, agora mesmo.`
+                : ""
+            }
+            submitLabel="Corrigir e reenviar"
+            busy={quickFixBusy}
+            error={quickFixError}
+            onSubmit={submitQuickFix}
+            onCancel={() => setQuickFixTarget(null)}
+          >
+            <Field label="Telefone certo">
+              <input
+                className="field"
+                type="tel"
+                placeholder="(47) 99999-9999"
+                value={quickFixPhone}
+                onChange={(e) => setQuickFixPhone(e.target.value)}
+              />
+            </Field>
           </FormModal>
         </>
       )}

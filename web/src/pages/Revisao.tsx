@@ -159,6 +159,16 @@ export function Revisao() {
   const [retryBusy, setRetryBusy] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  // Corrigir telefone de UM paciente, em qualquer situação — não só quem
+  // falhou. Caso real (2026-08-27): mensagem foi entregue certinho, só que
+  // pro número errado (não era do paciente); a pessoa que atendeu respondeu
+  // avisando o número certo, mas como o status não era FALHA/SEM_TELEFONE,
+  // não tinha jeito nenhum de corrigir e reenviar depois do disparo — só
+  // "Reenviar pra quem falhou" (restrito) e "Corrigir" (só em EM_REVISAO).
+  const [quickFixTarget, setQuickFixTarget] = useState<Appointment | null>(null);
+  const [quickFixPhone, setQuickFixPhone] = useState("");
+  const [quickFixBusy, setQuickFixBusy] = useState(false);
+  const [quickFixError, setQuickFixError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -267,6 +277,45 @@ export function Revisao() {
       setRetryError(err instanceof Error ? err.message : "Falha ao reenviar.");
     } finally {
       setRetryBusy(false);
+    }
+  }
+
+  function openQuickFix(appointment: Appointment) {
+    setQuickFixTarget(appointment);
+    setQuickFixPhone(appointment.alternatePhone ?? "");
+    setQuickFixError(null);
+  }
+
+  /**
+   * Corrige o telefone de UM paciente e reenvia — mesma rota de "Reenviar
+   * pra quem falhou" (`retry-failed`), só que pra um paciente só e
+   * disponível pra qualquer situação, não só falha/sem telefone.
+   */
+  async function submitQuickFix() {
+    if (!quickFixTarget) return;
+    if (!quickFixPhone.trim()) {
+      setQuickFixError("Informe o telefone novo.");
+      return;
+    }
+    setQuickFixBusy(true);
+    setQuickFixError(null);
+    try {
+      const result = await api.post<{ queued: number }>(`/api/lists/${list.id}/retry-failed`, {
+        updates: [{ appointmentId: quickFixTarget.id, phone: quickFixPhone.trim() }],
+      });
+      setQuickFixTarget(null);
+      setRetryNotice(`Telefone corrigido — reenviando pra ${result.queued} paciente(s)...`);
+      const finished = await runQueueUntilDone(({ sent, failed }) => {
+        setRetryNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.`);
+      });
+      setRetryNotice(
+        `Reenvio concluído — ${finished.sent} enviada(s)` + (finished.failed > 0 ? `, ${finished.failed} falharam` : "") + "."
+      );
+      detail.reload();
+    } catch (err) {
+      setQuickFixError(err instanceof Error ? err.message : "Falha ao corrigir e reenviar.");
+    } finally {
+      setQuickFixBusy(false);
     }
   }
 
@@ -742,7 +791,7 @@ export function Revisao() {
                 <Th>Data e hora</Th>
                 <Th>Procedimento</Th>
                 <Th>Situação</Th>
-                {isReviewing && <Th align="right">Ações</Th>}
+                <Th align="right">Ações</Th>
               </tr>
             }
           >
@@ -830,9 +879,9 @@ export function Revisao() {
                         </p>
                       )}
                   </Td>
-                  {isReviewing && (
-                    <Td align="right">
-                      {isEditing ? (
+                  <Td align="right">
+                    {isReviewing ? (
+                      isEditing ? (
                         <div className="flex justify-end gap-1.5">
                           <button
                             type="button"
@@ -867,9 +916,28 @@ export function Revisao() {
                             Remover
                           </button>
                         </div>
-                      )}
-                    </Td>
-                  )}
+                      )
+                    ) : appointment.status === "CANCELADO" ? (
+                      // Agenda cancelada pela equipe (módulo de
+                      // Cancelamento) — reenviar confirmação não faz
+                      // sentido aqui, o agendamento nem vale mais.
+                      <span className="text-xs text-ink-faint" title="Agenda cancelada — não recebe confirmação">
+                        —
+                      </span>
+                    ) : (
+                      // Lista já disparada: a edição completa não vale mais
+                      // (mensagem já saiu), mas o telefone pode estar
+                      // errado mesmo assim — corrige e reenvia na hora,
+                      // pra qualquer situação (não só falha/sem telefone).
+                      <button
+                        type="button"
+                        className="btn btn-quiet px-2 py-1 text-xs"
+                        onClick={() => openQuickFix(appointment)}
+                      >
+                        Corrigir telefone
+                      </button>
+                    )}
+                  </Td>
                 </tr>
               );
             })}
@@ -975,6 +1043,33 @@ export function Revisao() {
             />
           </Field>
         ))}
+      </FormModal>
+
+      <FormModal
+        open={quickFixTarget !== null}
+        title="Corrigir telefone e reenviar"
+        description={
+          quickFixTarget
+            ? `${quickFixTarget.patient.name} — número atual: ${
+                quickFixTarget.selectedPhone ? formatPhone(quickFixTarget.selectedPhone) : "sem telefone"
+              }. A confirmação sai de novo pro número certo, agora mesmo.`
+            : ""
+        }
+        submitLabel="Corrigir e reenviar"
+        busy={quickFixBusy}
+        error={quickFixError}
+        onSubmit={submitQuickFix}
+        onCancel={() => setQuickFixTarget(null)}
+      >
+        <Field label="Telefone certo">
+          <input
+            className="field"
+            type="tel"
+            placeholder="(47) 99999-9999"
+            value={quickFixPhone}
+            onChange={(e) => setQuickFixPhone(e.target.value)}
+          />
+        </Field>
       </FormModal>
 
       <FormModal
