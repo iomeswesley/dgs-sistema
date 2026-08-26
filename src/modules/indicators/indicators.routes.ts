@@ -125,10 +125,10 @@ indicatorsRouter.get(
   "/api/indicators/list-report-pdf",
   asyncHandler(async (req, res) => {
     const query = parseQuery(req, z.object({ listId: z.coerce.number().int().positive() }));
-    const pdf = await generateListReportPdf(query.listId);
+    const { pdf, filename } = await generateListReportPdf(query.listId);
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="lista-${query.listId}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(pdf);
   })
 );

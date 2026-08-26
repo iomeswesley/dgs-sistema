@@ -2,8 +2,9 @@ import { prisma } from "@/lib/prisma.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { buildCsv } from "@/lib/csv.js";
 import { formatPhone } from "@/lib/phone.js";
-import { REFUSAL_REASON_LABEL, STATUS_EXPLANATION, STATUS_LABEL, STATUS_ORDER } from "@/lib/labels.js";
+import { REFUSAL_REASON_LABEL, STATUS_LABEL, STATUS_ORDER } from "@/lib/labels.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
+import { slugify } from "@/lib/slug.js";
 
 /*
   Relatório de uma lista pra devolver à secretaria — hoje em dois formatos
@@ -101,6 +102,16 @@ function formatDdMm(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
+/**
+ * Nome de arquivo com referência ao que tem dentro (cidade, data, médico)
+ * — pedido do usuário em 2026-08-27, no lugar de "lista-<id>", que não diz
+ * nada pra quem recebe o arquivo por fora do sistema.
+ */
+export function buildListReportFilename(data: ListReportData, ext: "csv" | "pdf"): string {
+  const parts = [data.municipalityName, data.dateLabel, data.doctorName].map(slugify).filter(Boolean);
+  return `confirmacoes-${parts.join("-")}.${ext}`;
+}
+
 export function formatDateTimeBrasilia(date: Date): string {
   return date.toLocaleString("pt-BR", {
     day: "2-digit",
@@ -166,7 +177,7 @@ export async function buildListReportCsv(listId: number): Promise<{ csv: string;
 
   return {
     csv: buildCsv(lines),
-    filename: `lista-${listId}.csv`,
+    filename: buildListReportFilename(data, "csv"),
     municipalityName: data.municipalityName,
   };
 }
