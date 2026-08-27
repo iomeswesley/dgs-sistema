@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useSession } from "../lib/session";
+import { useEffect, useState } from "react";
+import { Callout } from "../components/ui";
+import { SESSION_EXPIRED_KEY, useSession } from "../lib/session";
 
 export function Login() {
   const { signIn } = useSession();
@@ -7,6 +8,22 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Setado pelo `SessionProvider` quando uma chamada em qualquer tela volta
+  // 401 no meio do uso (sessão dura 8h) — sem isso a pessoa só via um erro
+  // técnico solto na tela onde estava ("Não autenticado"), sem entender
+  // que bastava entrar de novo (achado pelo usuário em 2026-08-27).
+  const [expiredNotice, setExpiredNotice] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+        setExpiredNotice(true);
+      }
+    } catch {
+      // sessionStorage indisponível — só perde o aviso, tela de login continua funcionando normalmente.
+    }
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -36,6 +53,12 @@ export function Login() {
           </div>
           <p className="mt-3 text-sm text-board-ink-muted">Confirmação de consultas e conciliação de atendimentos</p>
         </div>
+
+        {expiredNotice && (
+          <div className="mb-4">
+            <Callout>Sua sessão expirou. Entre novamente.</Callout>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="card p-6">
           <label className="block">

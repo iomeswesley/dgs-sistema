@@ -7,6 +7,18 @@ export class ApiError extends Error {
   }
 }
 
+// Sessão dura 8h (`cookie.maxAge` em app.ts) — quando expira no meio do
+// uso, cada chamada passava a devolver o erro cru do backend ("Não
+// autenticado") direto pra tela onde a pessoa estava (ex.: achado pelo
+// usuário em 2026-08-27, "Não consegui pré-ler o PDF (Não autenticado)"
+// em Listas — confuso, e nem avisava que era só entrar de novo). Um único
+// ponto aqui detecta qualquer 401 e avisa o `SessionProvider`, que desloga
+// no cliente e deixa o roteador levar pra `/entrar` sozinho (ver App.tsx).
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -15,6 +27,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     credentials: "same-origin",
   });
 
+  if (res.status === 401) onUnauthorized?.();
   if (res.status === 204) return undefined as T;
 
   const payload = (await res.json().catch(() => ({}))) as { error?: string };
