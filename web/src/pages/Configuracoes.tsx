@@ -1416,20 +1416,62 @@ const FB_SDK_ID = "facebook-jssdk";
 // cancelado nada.
 const SIGNUP_FINISH_EVENTS = new Set(["FINISH", "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"]);
 
+// Compartilhada entre chamadas concorrentes — evita anexar o script duas
+// vezes se o clique disparar `connect()` de novo enquanto o SDK ainda está
+// carregando. Reiniciada em `null` sempre que a carga falha, pra próxima
+// tentativa começar do zero (ver comentário dentro da função — sem isso,
+// depois de uma falha o botão ficava travado pra sempre, mesmo clicando
+// de novo).
+let fbSdkPromise: Promise<void> | null = null;
+
+/**
+ * Carrega o SDK da Meta, com timeout e tratamento de erro — sem isso, uma
+ * falha de rede (bloqueio de firewall corporativo, extensão de
+ * ad-block/privacidade, instabilidade momentânea) deixava a Promise
+ * pendurada pra sempre: `connect()` nunca chegava a chamar `FB.login()`,
+ * o botão ficava preso em "Conectando…" (disabled, cursor "não permitido")
+ * sem popup nenhum abrir e sem erro nenhum aparecer — exatamente o que o
+ * usuário relatou em 2026-08-27, sem jeito de tentar de novo a não ser
+ * recarregando a página inteira (o script já injetado no DOM nunca
+ * disparava `onload`/`onerror` de novo sozinho).
+ */
 function loadFacebookSdk(appId: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (window.FB) return resolve();
+  if (window.FB) return Promise.resolve();
+  if (fbSdkPromise) return fbSdkPromise;
+
+  fbSdkPromise = new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error("Tempo esgotado carregando o SDK da Meta — confira sua conexão."));
+    }, 10_000);
+
+    function settle(fn: () => void) {
+      window.clearTimeout(timeout);
+      fn();
+    }
+
     window.fbAsyncInit = () => {
       window.FB?.init({ appId, version: "v21.0" });
-      resolve();
+      settle(resolve);
     };
-    if (document.getElementById(FB_SDK_ID)) return;
+
+    const existing = document.getElementById(FB_SDK_ID);
+    if (existing) return; // outra chamada já está carregando — só espera o mesmo fbAsyncInit acima.
+
     const script = document.createElement("script");
     script.id = FB_SDK_ID;
     script.src = "https://connect.facebook.net/pt_BR/sdk.js";
     script.async = true;
+    script.onerror = () => {
+      script.remove(); // sem isso, a checagem "já existe" acima trava a próxima tentativa pra sempre.
+      settle(() => reject(new Error("Não consegui carregar o SDK da Meta — confira sua conexão.")));
+    };
     document.body.appendChild(script);
+  }).catch((err) => {
+    fbSdkPromise = null; // libera a próxima tentativa em vez de ficar presa nessa falha.
+    throw err;
   });
+
+  return fbSdkPromise;
 }
 
 function WhatsappTab() {
@@ -1494,7 +1536,14 @@ function WhatsappTab() {
     setConnecting(true);
     try {
       await loadFacebookSdk(data.data.appId);
-      window.FB?.login(
+      if (!window.FB) {
+        // Não deveria acontecer (a Promise só resolve depois de `FB.init`),
+        // mas evita o mesmo travamento em silêncio se acontecer mesmo assim.
+        setConnecting(false);
+        setError("SDK da Meta carregou de forma inesperada — recarregue a página e tente de novo.");
+        return;
+      }
+      window.FB.login(
         (response) => {
           void (async () => {
             const code = response.authResponse?.code;
@@ -1520,9 +1569,9 @@ function WhatsappTab() {
           extras: coexistence ? { setup: {}, featureType: "whatsapp_business_app_onboarding" } : { setup: {} },
         }
       );
-    } catch {
+    } catch (err) {
       setConnecting(false);
-      setError("Falha ao carregar o SDK da Meta.");
+      setError(err instanceof Error ? err.message : "Falha ao carregar o SDK da Meta.");
     }
   }
 
