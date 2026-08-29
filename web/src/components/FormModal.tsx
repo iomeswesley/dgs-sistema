@@ -17,6 +17,10 @@ interface FormModalProps {
   children: ReactNode;
   onSubmit: () => void;
   onCancel: () => void;
+  /** Some o botão "Cancelar" — pra quando o form é só uma lista de ações imediatas (cada linha já age sozinha) e "Salvar"/"Fechar" já fecha tudo, sem precisar dos dois botões dizendo a mesma coisa. */
+  hideCancel?: boolean;
+  /** `max-w-2xl` em vez do `max-w-lg` padrão — pra conteúdo mais largo, tipo lista de pacientes com telefone e ações por linha. */
+  wide?: boolean;
 }
 
 export function FormModal({
@@ -29,6 +33,8 @@ export function FormModal({
   children,
   onSubmit,
   onCancel,
+  hideCancel = false,
+  wide = false,
 }: FormModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Fecha ao clicar fora, mas só quando o clique inteiro (mousedown E o
@@ -76,7 +82,7 @@ export function FormModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="form-modal-title"
-        className="card max-h-[90vh] w-full max-w-lg overflow-y-auto p-5 shadow-xl"
+        className={`card max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-lg"} overflow-y-auto p-5 shadow-xl`}
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="form-modal-title" className="text-base font-semibold text-ink">
@@ -100,9 +106,11 @@ export function FormModal({
           )}
 
           <div className="mt-2 flex justify-end gap-2">
-            <button type="button" className="btn btn-quiet" onClick={onCancel} disabled={busy}>
-              Cancelar
-            </button>
+            {!hideCancel && (
+              <button type="button" className="btn btn-quiet" onClick={onCancel} disabled={busy}>
+                Cancelar
+              </button>
+            )}
             <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? "Salvando…" : submitLabel}
             </button>

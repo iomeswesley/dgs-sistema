@@ -154,6 +154,18 @@ export function CancelamentoDetalhe() {
     [detail.data]
   );
 
+  // Saiu (ou chegou), mas ninguém clicou no "Ciente, obrigado(a)" nem
+  // escreveu nada ainda — pedido do usuário em 2026-08-27, mesmo resumo
+  // que Listas ganhou, pra equipe ligar avisando quem ainda não deu
+  // sinal de que soube do cancelamento. Sem ação de Sim/Não aqui (não tem
+  // decisão nenhuma pra registrar, diferente de Listas) — é só o aviso de
+  // cancelamento, informativo.
+  const pendingResponseAppointments = useMemo(
+    () => detail.data?.appointments.filter((a) => effectiveMessageStatus(a) === "ENVIADO" || effectiveMessageStatus(a) === "ENTREGUE") ?? [],
+    [detail.data]
+  );
+  const [pendingResponseOpen, setPendingResponseOpen] = useState(false);
+
   function openRetry() {
     const initial: Record<number, string> = {};
     for (const a of failedAppointments) initial[a.id] = a.alternatePhone ?? "";
@@ -327,11 +339,23 @@ export function CancelamentoDetalhe() {
                 );
               })}
             </div>
-            {failedAppointments.length > 0 && (
-              <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openRetry}>
-                Reenviar pra quem falhou/sem telefone ({failedAppointments.length})
-              </button>
-            )}
+            <div className="flex gap-2">
+              {pendingResponseAppointments.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-quiet px-3 py-1.5 text-sm"
+                  onClick={() => setPendingResponseOpen(true)}
+                  title="Quem já recebeu o aviso mas ainda não deu sinal nenhum de que soube — pronto pra ligar"
+                >
+                  Quem ainda não respondeu ({pendingResponseAppointments.length})
+                </button>
+              )}
+              {failedAppointments.length > 0 && (
+                <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openRetry}>
+                  Reenviar pra quem falhou/sem telefone ({failedAppointments.length})
+                </button>
+              )}
+            </div>
           </div>
 
           <Table
@@ -448,6 +472,47 @@ export function CancelamentoDetalhe() {
                 onChange={(e) => setQuickFixPhone(e.target.value)}
               />
             </Field>
+          </FormModal>
+
+          <FormModal
+            open={pendingResponseOpen}
+            title="Quem ainda não respondeu"
+            description="O aviso de cancelamento chegou (ou pelo menos saiu), mas ninguém deu sinal de que soube — nem clicou em 'Ciente, obrigado(a)' nem escreveu nada. Vale ligar avisando direto, já que a agenda foi mesmo cancelada."
+            submitLabel="Fechar"
+            hideCancel
+            wide
+            busy={false}
+            onSubmit={() => setPendingResponseOpen(false)}
+            onCancel={() => setPendingResponseOpen(false)}
+          >
+            {pendingResponseAppointments.length === 0 ? (
+              <p className="text-sm text-ink-muted">Ninguém nessa situação — todo mundo já deu sinal de que soube.</p>
+            ) : (
+              <div className="grid gap-2">
+                {pendingResponseAppointments.map((a) => (
+                  <div key={a.id} className="rounded-md border border-rule p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-ink">{a.patientName}</p>
+                        <p className="text-xs text-ink-faint">
+                          {formatDateTime(a.scheduledAt)} · {a.procedureName}
+                        </p>
+                      </div>
+                      <MessageStatusBadge status={effectiveMessageStatus(a) ?? "ENVIADO"} />
+                    </div>
+                    <p className="mt-2 text-sm">
+                      <span className="text-ink-muted">Aviso enviado pra </span>
+                      <span className="tabular font-medium">{formatPhone(a.phone)}</span>
+                    </p>
+                    {a.alternatePhone && (
+                      <p className="text-xs text-ink-faint">
+                        Outro número no cadastro: <span className="tabular">{formatPhone(a.alternatePhone)}</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </FormModal>
         </>
       )}

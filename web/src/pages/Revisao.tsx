@@ -186,6 +186,12 @@ export function Revisao() {
   const [approvePreview, setApprovePreview] = useState<MessagePreview | null>(null);
   const [approvePreviewLoading, setApprovePreviewLoading] = useState(false);
   const [approvePreviewError, setApprovePreviewError] = useState<string | null>(null);
+  // Resumo "quem ainda não respondeu" — cada linha age na hora (Sim/Não),
+  // sem formulário nenhum; `contactBusyId` trava só a linha clicada, não a
+  // lista inteira.
+  const [pendingResponseOpen, setPendingResponseOpen] = useState(false);
+  const [contactBusyId, setContactBusyId] = useState<number | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -257,6 +263,15 @@ export function Revisao() {
   // mensagem depois (achado em 2026-08-26).
   const failedAppointments = appointments.filter(
     (appointment) => appointment.status === "FALHA" || appointment.status === "SEM_TELEFONE"
+  );
+
+  // Chegou (ou pelo menos saiu) mas ainda sem resposta nenhuma — o "resumo
+  // pra ligar" que a equipe pediu em 2026-08-27: quem já devia ter visto a
+  // mensagem, mas nem clicou Sim/Não nem escreveu nada. ENVIADO/ENTREGUE
+  // porque não dá pra saber, do lado de cá, se o paciente já leu ou não —
+  // só que a Meta não reportou clique nenhum ainda.
+  const pendingResponseAppointments = appointments.filter(
+    (appointment) => appointment.status === "ENVIADO" || appointment.status === "ENTREGUE"
   );
 
   function openRetry() {
@@ -361,6 +376,27 @@ export function Revisao() {
       setApprovePreviewError(err instanceof Error ? err.message : "Falha ao aprovar.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * Registro rápido de contato por telefone — mesmo `/api/appointments/:id/
+   * contact` que Acompanhamento já usa, só que direto na linha, sem modal
+   * de motivo/observação: pedido do usuário em 2026-08-27 pra tocar uma
+   * lista de ligações rápido (liga, pergunta, clica, próximo). Recusa sem
+   * motivo específico cai em "Outro" (o backend já faz isso sozinho) — quem
+   * quiser detalhar o motivo continua podendo editar depois em Acompanhamento.
+   */
+  async function quickContact(appointmentId: number, outcome: "CONFIRMADO" | "RECUSADO") {
+    setContactBusyId(appointmentId);
+    setContactError(null);
+    try {
+      await api.post(`/api/appointments/${appointmentId}/contact`, { outcome });
+      detail.reload();
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : "Falha ao registrar o contato.");
+    } finally {
+      setContactBusyId(null);
     }
   }
 
@@ -578,6 +614,16 @@ export function Revisao() {
             >
               {refreshing ? "Atualizando…" : "Atualizar"}
             </button>
+            {pendingResponseAppointments.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-quiet"
+                onClick={() => setPendingResponseOpen(true)}
+                title="Quem já recebeu a mensagem mas ainda não clicou Sim/Não nem respondeu nada — pronto pra ligar"
+              >
+                Quem ainda não respondeu ({pendingResponseAppointments.length})
+              </button>
+            )}
             <a className="btn btn-quiet" href={`/api/indicators/list-report?listId=${list.id}`}>
               Exportar CSV
             </a>
@@ -1077,6 +1123,71 @@ export function Revisao() {
             <p className="mt-2 text-xs text-ink-faint">
               Vai pro número {approvePreview.phone ? formatPhone(approvePreview.phone) : "— sem telefone cadastrado"}.
             </p>
+          </div>
+        )}
+      </FormModal>
+
+      <FormModal
+        open={pendingResponseOpen}
+        title="Quem ainda não respondeu"
+        description="A mensagem chegou (ou pelo menos saiu), mas ninguém clicou Sim/Não nem escreveu nada ainda. Liga, explica que é só clicar no botão da mensagem, e já registra a resposta aqui se a pessoa confirmar por telefone."
+        submitLabel="Fechar"
+        hideCancel
+        wide
+        busy={false}
+        error={contactError}
+        onSubmit={() => setPendingResponseOpen(false)}
+        onCancel={() => setPendingResponseOpen(false)}
+      >
+        {pendingResponseAppointments.length === 0 ? (
+          <p className="text-sm text-ink-muted">Ninguém nessa situação — todo mundo já respondeu.</p>
+        ) : (
+          <div className="grid gap-2">
+            {pendingResponseAppointments.map((a) => {
+              const otherPhones = a.patient.phones.filter((p) => p !== a.selectedPhone);
+              return (
+                <div key={a.id} className="rounded-md border border-rule p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-ink">{a.patient.name}</p>
+                      <p className="text-xs text-ink-faint">
+                        {formatDateTime(a.scheduledAt)} · {a.procedure.name}
+                      </p>
+                    </div>
+                    <StatusPill status={a.status} />
+                  </div>
+                  <p className="mt-2 text-sm">
+                    <span className="text-ink-muted">Mensagem enviada pra </span>
+                    <span className="tabular font-medium">{formatPhone(a.selectedPhone)}</span>
+                  </p>
+                  {otherPhones.length > 0 && (
+                    <p className="text-xs text-ink-faint">
+                      Outro(s) número(s) no cadastro: <span className="tabular">{otherPhones.map(formatPhone).join(", ")}</span>
+                    </p>
+                  )}
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      style={{ color: "var(--mark-green)" }}
+                      disabled={contactBusyId === a.id}
+                      onClick={() => void quickContact(a.id, "CONFIRMADO")}
+                    >
+                      ✓ Confirmou por telefone
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      style={{ color: "var(--mark-red)" }}
+                      disabled={contactBusyId === a.id}
+                      onClick={() => void quickContact(a.id, "RECUSADO")}
+                    >
+                      ✕ Não vai comparecer
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </FormModal>
