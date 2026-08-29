@@ -63,7 +63,7 @@ export function Indicadores() {
       />
 
       <div className="card mb-5 p-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="De">
             <input type="date" className="field" value={from} onChange={(e) => setFrom(e.target.value)} />
           </Field>

@@ -885,7 +885,7 @@ export function Revisao() {
 
       <div className="card mb-5 p-4">
         <p className="eyebrow mb-2">O que significa cada situação</p>
-        <dl className="grid gap-2 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {STATUS_EXPLANATION.filter((item) => (counts[item.status] ?? 0) > 0).map((item) => (
             <div key={item.status} className="flex items-start gap-2">
               <dt className="mt-0.5 shrink-0">
@@ -955,7 +955,7 @@ export function Revisao() {
         )}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_minmax(320px,420px)]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_minmax(320px,420px)]">
         <div className="min-w-0">
           <Table
             head={
@@ -1242,7 +1242,7 @@ export function Revisao() {
         {pendingResponseAppointments.length === 0 ? (
           <p className="text-sm text-ink-muted">Ninguém nessa situação — todo mundo já respondeu.</p>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {pendingResponseAppointments.map((a) => {
               const otherPhones = a.patient.phones.filter((p) => p !== a.selectedPhone);
               return (

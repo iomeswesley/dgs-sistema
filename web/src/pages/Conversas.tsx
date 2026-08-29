@@ -295,7 +295,7 @@ export function Conversas() {
           nunca as duas — era o que cobria a tela inteira antes), com um
           "← Voltar" pra sair da conversa. A partir de md (mesmo ponto de
           quebra que o menu lateral já usa) as duas ficam lado a lado. */}
-      <div className="grid h-[75vh] gap-4 overflow-hidden md:grid-cols-[320px_1fr]">
+      <div className="grid h-[75vh] grid-cols-1 gap-4 overflow-hidden md:grid-cols-[320px_1fr]">
         <div
           className={`card flex-col overflow-hidden p-0 ${selectedPhone ? "hidden md:flex" : "flex"}`}
         >

@@ -596,7 +596,7 @@ export function Listas() {
             ))}
           </select>
         </Field>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="Data">
             <input
               type="date"
@@ -639,7 +639,15 @@ export function Listas() {
         />
       )}
 
-      <div className="grid gap-3">
+      {/* `grid-cols-1`, não só `grid`: sem `grid-template-columns` explícito
+          o item do grid nasce com `min-width: auto` (não 0) — se qualquer
+          conteúdo lá dentro não quebrar linha, o track inteiro cresce pra
+          caber nele e a PÁGINA TODA ganha scroll horizontal, mesmo com
+          `min-w-0`/`flex-1` certos dentro do card (achado pelo usuário em
+          2026-08-29, print real do celular: só os cards da lista cortavam,
+          o formulário de upload acima — fora desse grid — não). O utilitário
+          `grid-cols-1` do Tailwind já usa `minmax(0, 1fr)`, que corrige isso. */}
+      <div className="grid grid-cols-1 gap-3">
         {lists.data?.lists.map((list) => {
           const total = Object.values(list.counts).reduce((sum, value) => sum + value, 0);
           const canDelete = list.status !== "DISPARADA" && list.status !== "CONCLUIDA";

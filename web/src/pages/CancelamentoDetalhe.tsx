@@ -299,7 +299,7 @@ export function CancelamentoDetalhe() {
 
           <div className="card mb-4 p-4">
             <p className="eyebrow mb-2">O que significa cada situação da mensagem</p>
-            <dl className="grid gap-2 sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {MESSAGE_STATUS_EXPLANATION.map((item) => (
                 <div key={item.status} className="flex items-start gap-2">
                   <dt className="mt-0.5 shrink-0">
@@ -500,7 +500,7 @@ export function CancelamentoDetalhe() {
             {pendingResponseAppointments.length === 0 ? (
               <p className="text-sm text-ink-muted">Ninguém nessa situação — todo mundo já deu sinal de que soube.</p>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 {pendingResponseAppointments.map((a) => (
                   <div key={a.id} className="rounded-md border border-rule p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">

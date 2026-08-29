@@ -187,7 +187,10 @@ function MunicipalitiesTab() {
       {data.loading && <Spinner />}
       {data.error && <ErrorNote message={data.error} />}
 
-      <div className="grid gap-3">
+      {/* grid-cols-1, não só grid — mesmo bug de overflow horizontal do
+          `min-width: auto` padrão de item de grid sem coluna explícita, ver
+          comentário igual em Listas.tsx. */}
+      <div className="grid grid-cols-1 gap-3">
         {data.data?.municipalities.map((municipality) => {
           const municipalityUnits = (units.data?.units ?? []).filter(
             (unit) => unit.municipalityId === municipality.id
@@ -910,7 +913,7 @@ function DoctorProceduresTab() {
             ))}
           </select>
         </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Minutos por consulta">
             <input
               type="number"
@@ -1286,7 +1289,7 @@ function AgendasTab() {
             ))}
           </select>
         </Field>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="Data">
             <input
               type="date"
@@ -1330,7 +1333,7 @@ function AgendasTab() {
           <p className="text-sm text-ink-muted">Nenhuma vaga aberta nesta agenda.</p>
         )}
         {(slots.data?.slots.length ?? 0) > 0 && (
-          <ul className="grid gap-1.5 text-sm">
+          <ul className="grid grid-cols-1 gap-1.5 text-sm">
             {slots.data?.slots.map((slot) => (
               <li key={slot.id} className="flex justify-between gap-3 border-b border-rule pb-1.5">
                 <span>
