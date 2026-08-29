@@ -79,6 +79,15 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
   // mais recente (que pode ser nossa). A janela de 24h conta a partir do
   // paciente, não de quando a equipe respondeu por último.
   const lastInboundAt = new Map<string, Date>();
+  // Nome do paciente, achado em QUALQUER mensagem daquele telefone dentro da
+  // janela buscada — não só na mais recente. Bug real achado pelo usuário em
+  // 2026-08-29 (Isolde Kindlein sumia da lista, mas aparecia ao abrir a
+  // conversa): resposta de texto livre do paciente nunca tem `appointment`
+  // vinculado (só mensagem de template tem), então se ela for a mais recente
+  // o nome sumia mesmo com uma mensagem anterior linkada certinho — a thread
+  // (`getThread()`, abaixo) já varria todas as mensagens à procura do nome,
+  // só a lista que só olhava a última.
+  const nameByPhone = new Map<string, string>();
 
   for (const message of messages) {
     const key = normalizePhone(message.phone)?.e164 ?? message.phone;
@@ -87,12 +96,15 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
       lastInboundAt.set(key, message.createdAt);
     }
 
+    const name = message.appointment?.patient?.name;
+    if (name && !nameByPhone.has(key)) nameByPhone.set(key, name);
+
     if (byPhone.has(key)) continue; // já pegou a mais recente pra esse número (a mensagens estão em ordem desc)
 
     byPhone.set(key, {
       phone: key,
       phoneFormatted: formatPhone(key),
-      patientName: message.appointment?.patient?.name ?? null,
+      patientName: null, // resolvido abaixo, depois de varrer todas as mensagens
       lastMessage: previewBody(message),
       lastDirection: message.direction,
       lastAt: message.createdAt,
@@ -102,6 +114,8 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
   }
 
   for (const conversation of byPhone.values()) {
+    conversation.patientName = nameByPhone.get(conversation.phone) ?? null;
+
     const lastInbound = lastInboundAt.get(conversation.phone);
     conversation.everReplied = !!lastInbound;
     conversation.withinWindow = !!lastInbound && Date.now() - lastInbound.getTime() < WINDOW_24H_MS;
