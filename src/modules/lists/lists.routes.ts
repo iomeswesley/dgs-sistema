@@ -14,6 +14,7 @@ import {
   editAppointment,
   extractAndStage,
   getMessagePreview,
+  importAdditionalPatients,
   removeAppointment,
   retryFailedAppointments,
 } from "./lists.service.js";
@@ -314,6 +315,35 @@ listsRouter.post(
     const data = parseBody(req, manualAppointmentSchema);
     const result = await addManualAppointment(routeId(req), data, currentUserId(req));
     if (result.queued) await processQueue();
+    res.status(201).json(result);
+  })
+);
+
+const importAdditionalSchema = z.object({
+  mimeType: z.string().min(1),
+  fileBase64: z.string().min(1),
+});
+
+/**
+ * Importa mais pacientes de um PDF novo pra dentro desta lista já
+ * existente — pedido do usuário em 2026-08-27, ver `importAdditionalPatients()`.
+ * Quem já está nesta lista (o PDF "atualizado" da prefeitura costuma trazer
+ * todo mundo de novo, não só os novos) é ignorado, nunca duplicado.
+ */
+listsRouter.post(
+  "/api/lists/:id/import-additional",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, importAdditionalSchema);
+    if (!ACCEPTED_TYPES.includes(data.mimeType)) {
+      throw new AppError("Só PDF nativo (SISREG ou CELK) é aceito.", 400);
+    }
+    const fileData = Buffer.from(data.fileBase64, "base64");
+    if (fileData.byteLength > MAX_UPLOAD_BYTES) {
+      throw new AppError("Arquivo maior que 20 MB. Divida em partes.", 400);
+    }
+
+    const result = await importAdditionalPatients(routeId(req), fileData, data.mimeType, currentUserId(req));
+    if (result.queued > 0) await processQueue();
     res.status(201).json(result);
   })
 );

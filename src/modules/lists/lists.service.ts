@@ -572,6 +572,115 @@ async function removeUnrecognizedEntry(listId: number, rawText: string): Promise
   });
 }
 
+export interface ImportAdditionalResult {
+  added: number;
+  /** Já tinha um agendamento pra esse paciente nessa lista — ignorado, não duplicou. */
+  skippedDuplicates: number;
+  totalInFile: number;
+  queued: number;
+}
+
+/**
+ * Importa mais pacientes pra dentro de uma lista já existente, a partir de
+ * um PDF novo — pedido do usuário em 2026-08-27: agenda que ganhou mais
+ * gente depois do disparo original, e a prefeitura manda um PDF "atualizado"
+ * (às vezes com todo mundo de novo, os antigos incluídos, não só os novos).
+ * Cada linha do PDF passa pela MESMA extração e resolução de paciente da
+ * extração normal (`extractList`/`mapExtraction`/`resolvePatient` — inclusive
+ * a mesma proteção de identidade por CNS/nome/telefone), só que em vez de
+ * criar uma lista nova, os agendamentos entram nesta aqui — e quem já tem
+ * agendamento nesta lista (o "de novo" do PDF atualizado) é ignorado, nunca
+ * duplicado.
+ *
+ * Funciona em qualquer status, menos "extraindo" (lista sem nada estável
+ * ainda pra comparar duplicata). Igual `addManualAppointment`: se a lista já
+ * passou da revisão, a confirmação sai pra cada paciente novo na hora.
+ */
+export async function importAdditionalPatients(
+  listId: number,
+  file: Buffer,
+  mimeType: string,
+  userId: number
+): Promise<ImportAdditionalResult> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+  if (list.status === "EXTRAINDO") {
+    throw new AppError("Espera a leitura desta lista terminar antes de importar mais pacientes.", 409);
+  }
+
+  const { result } = await extractList(file, mimeType);
+  const mapped = mapExtraction(result);
+
+  const dispatchNow = list.status !== "EM_REVISAO";
+  const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+
+  let added = 0;
+  let skippedDuplicates = 0;
+  let queued = 0;
+
+  // Uma transação por linha (não a importação inteira) — um PDF de
+  // centenas de pacientes não pode travar tudo se uma linha der problema
+  // de conexão no meio, e cada linha já é uma unidade completa (resolve
+  // paciente + cria agendamento + enfileira).
+  for (const draft of mapped.drafts) {
+    await prisma.$transaction(async (tx) => {
+      const { doctorId, procedureId, requestingUnitId } = await resolveCatalog(tx, list.municipalityId, draft);
+      const patient = await resolvePatient(tx, draft);
+
+      const alreadyInList = await tx.appointment.findFirst({
+        where: { listId, patientId: patient.id },
+        select: { id: true },
+      });
+      if (alreadyInList) {
+        skippedDuplicates++;
+        return;
+      }
+
+      const created = await tx.appointment.create({
+        data: {
+          listId,
+          agendaId: list.agendaId,
+          patientId: patient.id,
+          municipalityId: list.municipalityId,
+          doctorId,
+          procedureId,
+          requestingUnitId,
+          scheduledAt: draft.scheduledAt ? parseBrasiliaDateTime(draft.scheduledAt) : new Date(),
+          isFirstVisit: draft.isFirstVisit,
+          phones: draft.phones,
+          selectedPhone: draft.dispatchPhone,
+          status: draft.dispatchPhone ? "PENDENTE" : "SEM_TELEFONE",
+          extractionConfidence: draft.confidence,
+          rawLine: {
+            issues: draft.issues,
+            invalidPhones: draft.invalidPhones,
+            notes: draft.notes,
+            executingUnit: mapped.executingUnit,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+      added++;
+
+      if (dispatchNow && draft.dispatchPhone && !patient.optedOut) {
+        await tx.messageJob.create({
+          data: { appointmentId: created.id, template, phone: draft.dispatchPhone },
+        });
+        queued++;
+      }
+    });
+  }
+
+  await recordAudit({
+    userId,
+    action: "import_additional",
+    entity: "List",
+    entityId: listId,
+    metadata: { added, skippedDuplicates, totalInFile: mapped.drafts.length },
+  });
+
+  return { added, skippedDuplicates, totalInFile: mapped.drafts.length, queued };
+}
+
 export interface RetryFailedUpdate {
   appointmentId: number;
   phone: string;

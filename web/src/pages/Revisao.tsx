@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatDateTime, formatPhone, LIST_STATUS_LABEL, STATUS_LABEL, toBandCounts } from "../lib/format";
 import { runQueueUntilDone } from "../lib/queue";
+import { fileToBase64 } from "../lib/file";
 
 /*
   Tela de revisão: a etapa obrigatória entre a leitura automática e o disparo.
@@ -192,6 +193,13 @@ export function Revisao() {
   const [pendingResponseOpen, setPendingResponseOpen] = useState(false);
   const [contactBusyId, setContactBusyId] = useState<number | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
+  // "Importar mais pacientes (PDF)" — agenda que ganhou gente nova depois
+  // do disparo original, sobe um PDF atualizado que se soma nesta lista
+  // (quem já está aqui é ignorado, não duplica).
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -397,6 +405,48 @@ export function Revisao() {
       setContactError(err instanceof Error ? err.message : "Falha ao registrar o contato.");
     } finally {
       setContactBusyId(null);
+    }
+  }
+
+  /**
+   * "Importar mais pacientes (PDF)" — pedido do usuário em 2026-08-27:
+   * agenda que ganhou mais gente depois do disparo original, e a prefeitura
+   * manda um PDF "atualizado" (às vezes com todo mundo de novo, não só os
+   * novos). O backend (`importAdditionalPatients`) já ignora quem já está
+   * nesta lista — aqui só sobe o arquivo e mostra o resultado.
+   */
+  async function handleImportAdditional(file: File) {
+    setImportBusy(true);
+    setImportError(null);
+    setImportNotice(null);
+    try {
+      const result = await api.post<{ added: number; skippedDuplicates: number; totalInFile: number; queued: number }>(
+        `/api/lists/${list.id}/import-additional`,
+        { mimeType: file.type || "application/pdf", fileBase64: await fileToBase64(file) }
+      );
+      setImportNotice(
+        `${result.added} paciente(s) novo(s) adicionado(s)` +
+          (result.skippedDuplicates > 0 ? `, ${result.skippedDuplicates} já estavam na lista (ignorados)` : "") +
+          "."
+      );
+      detail.reload();
+      if (result.queued > 0) {
+        const finished = await runQueueUntilDone(({ sent, failed }) => {
+          setImportNotice((prev) => `${prev} Enviando confirmação pros novos... ${sent} enviada(s), ${failed} falharam.`);
+        });
+        setImportNotice(
+          `${result.added} paciente(s) novo(s) adicionado(s)` +
+            (result.skippedDuplicates > 0 ? `, ${result.skippedDuplicates} já estavam na lista (ignorados)` : "") +
+            `. ${finished.sent} confirmação(ões) enviada(s)` +
+            (finished.failed > 0 ? `, ${finished.failed} falharam` : "") +
+            "."
+        );
+        detail.reload();
+      }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Falha ao importar o PDF.");
+    } finally {
+      setImportBusy(false);
     }
   }
 
@@ -780,10 +830,40 @@ export function Revisao() {
         <button type="button" className="btn btn-quiet px-3 py-1.5 text-sm" onClick={() => openAddModal()}>
           + Adicionar paciente manualmente
         </button>
+        <button
+          type="button"
+          className="btn btn-quiet ml-2 px-3 py-1.5 text-sm"
+          disabled={importBusy}
+          onClick={() => importInputRef.current?.click()}
+          title="Sobe um PDF novo — quem já está nesta lista é ignorado, só entra quem é de fato novo"
+        >
+          {importBusy ? "Importando…" : "Importar mais pacientes (PDF)"}
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = ""; // permite escolher o mesmo arquivo de novo depois
+            if (file) void handleImportAdditional(file);
+          }}
+        />
         {!isReviewing && (
           <span className="ml-2 text-xs text-ink-faint">
             A lista já {list.status === "DISPARADA" || list.status === "CONCLUIDA" ? "foi disparada" : "foi aprovada"} — a mensagem sai pra essa pessoa na hora, separado do resto.
           </span>
+        )}
+        {importNotice && (
+          <div className="mt-2">
+            <Callout>{importNotice}</Callout>
+          </div>
+        )}
+        {importError && (
+          <div className="mt-2">
+            <ErrorNote message={importError} />
+          </div>
         )}
       </div>
 

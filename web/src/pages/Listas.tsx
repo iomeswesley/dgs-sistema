@@ -8,6 +8,7 @@ import { ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatCalendarDate, formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
+import { fileToBase64 } from "../lib/file";
 
 interface ListSummary {
   id: number;
@@ -174,17 +175,6 @@ export function Listas() {
   const unitMismatch =
     !!selectedAgenda?.unit && !!pdfExecutingUnit && !unitNamesLikelyMatch(pdfExecutingUnit, selectedAgenda.unit.name);
 
-  // btoa não aceita a string inteira de uma vez em arquivos grandes;
-  // converter em blocos evita estourar a pilha de argumentos.
-  async function fileToBase64(file: File): Promise<string> {
-    const buffer = await file.arrayBuffer();
-    let binary = "";
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.length; i += 8192) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    }
-    return btoa(binary);
-  }
 
   function resetUploadForm() {
     if (fileRef.current) fileRef.current.value = "";
