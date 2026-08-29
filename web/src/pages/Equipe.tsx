@@ -43,6 +43,7 @@ const ACTION_LABEL: Record<string, string> = {
   closing_attended: "lançou atendidos",
   closing_paid: "lançou guias",
   create_user: "criou usuário",
+  edit_user: "editou usuário",
   reset_password: "redefiniu senha",
   activate_user: "reativou usuário",
   deactivate_user: "desativou usuário",
@@ -75,6 +76,8 @@ export function Equipe() {
   );
   const [resetting, setResetting] = useState<TeamUser | null>(null);
   const [toggling, setToggling] = useState<TeamUser | null>(null);
+  const [editing, setEditing] = useState<TeamUser | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", email: "" });
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
   const [busy, setBusy] = useState(false);
@@ -124,6 +127,28 @@ export function Equipe() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao alterar.");
       setToggling(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit(user: TeamUser) {
+    setEditing(user);
+    setEditForm({ name: user.name, email: user.email });
+    setError(null);
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.patch(`/api/team/${editing.id}`, editForm);
+      setEditing(null);
+      team.reload();
+      audit.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar.");
     } finally {
       setBusy(false);
     }
@@ -225,6 +250,15 @@ export function Equipe() {
                     <button
                       type="button"
                       className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => startEdit(user)}
+                      aria-label={`Editar ${user.name}`}
+                      title="Editar nome/e-mail"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
                       onClick={() => setResetting(user)}
                     >
                       Redefinir senha
@@ -311,6 +345,34 @@ export function Equipe() {
             className="field"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
+            required
+          />
+        </Field>
+      </FormModal>
+
+      <FormModal
+        open={editing !== null}
+        title={`Editar ${editing?.name ?? ""}`}
+        description="Só nome e e-mail — senha e situação têm botão próprio."
+        busy={busy}
+        error={error}
+        onSubmit={saveEdit}
+        onCancel={() => setEditing(null)}
+      >
+        <Field label="Nome">
+          <input
+            className="field"
+            value={editForm.name}
+            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+            required
+          />
+        </Field>
+        <Field label="E-mail">
+          <input
+            type="email"
+            className="field"
+            value={editForm.email}
+            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
             required
           />
         </Field>

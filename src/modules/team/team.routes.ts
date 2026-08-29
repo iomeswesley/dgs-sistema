@@ -69,6 +69,46 @@ teamRouter.post(
   })
 );
 
+const editSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  email: z.string().email("E-mail inválido"),
+});
+
+/** Edita nome/e-mail de um acesso já existente — não mexe em senha nem em `active`. */
+teamRouter.patch(
+  "/api/team/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const data = parseBody(req, editSchema);
+    const email = data.email.toLowerCase().trim();
+
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new AppError("Usuário não encontrado", 404);
+
+    if (email !== existing.email) {
+      const emailTaken = await prisma.user.findUnique({ where: { email } });
+      if (emailTaken) throw new AppError("Já existe alguém com esse e-mail.", 409);
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { name: data.name, email },
+      select: { id: true, name: true, email: true, active: true, lastLoginAt: true, createdAt: true },
+    });
+
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "edit_user",
+      entity: "User",
+      entityId: id,
+      oldValue: existing.email,
+      newValue: user.email,
+    });
+
+    res.json({ user });
+  })
+);
+
 teamRouter.post(
   "/api/team/:id/reset-password",
   asyncHandler(async (req, res) => {
