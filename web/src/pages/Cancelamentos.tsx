@@ -442,23 +442,32 @@ export function Cancelamentos() {
           head={
             <tr>
               <Th>Data da agenda</Th>
-              <Th>Médico</Th>
-              <Th>Município</Th>
+              {/* No celular, médico/município/disparado em entram dentro da
+                  célula "Data da agenda" (achado em 2026-08-27: tabela
+                  larga demais, forçando scroll lateral). */}
+              <Th className="hidden md:table-cell">Médico</Th>
+              <Th className="hidden md:table-cell">Município</Th>
               <Th align="right">Pacientes</Th>
-              <Th>Disparado em</Th>
+              <Th className="hidden md:table-cell">Disparado em</Th>
               <Th align="right">Ações</Th>
             </tr>
           }
         >
           {batches.data.batches.map((b) => (
             <tr key={b.id}>
-              <Td>{formatCalendarDate(b.source.date)}</Td>
-              <Td muted>{b.source.doctorName}</Td>
-              <Td muted>{b.source.municipalityName}</Td>
+              <Td>
+                {formatCalendarDate(b.source.date)}
+                <p className="text-xs text-ink-faint md:hidden">
+                  {b.source.doctorName} · {b.source.municipalityName}
+                </p>
+                <p className="text-xs text-ink-faint md:hidden">Disparado em {formatDateTime(b.createdAt)}</p>
+              </Td>
+              <Td muted className="hidden md:table-cell">{b.source.doctorName}</Td>
+              <Td muted className="hidden md:table-cell">{b.source.municipalityName}</Td>
               <Td align="right" muted>
                 {b.count}
               </Td>
-              <Td muted>{formatDateTime(b.createdAt)}</Td>
+              <Td muted className="hidden md:table-cell">{formatDateTime(b.createdAt)}</Td>
               <Td align="right">
                 <Link to={`/cancelamentos/${b.id}`} className="text-accent underline underline-offset-2">
                   Ver mensagens

@@ -196,8 +196,11 @@ export function Equipe() {
             head={
               <tr>
                 <Th>Pessoa</Th>
-                <Th>Último acesso</Th>
-                <Th>Situação</Th>
+                {/* No celular, último acesso/situação entram dentro da
+                    célula "Pessoa" (achado pelo usuário em 2026-08-27:
+                    tabela larga demais, forçando scroll lateral). */}
+                <Th className="hidden md:table-cell">Último acesso</Th>
+                <Th className="hidden md:table-cell">Situação</Th>
                 <Th align="right">Ações</Th>
               </tr>
             }
@@ -208,9 +211,15 @@ export function Equipe() {
                   <span className="font-medium">{user.name}</span>
                   {user.id === me?.id && <span className="ml-2 text-xs text-ink-faint">você</span>}
                   <p className="text-xs text-ink-faint">{user.email}</p>
+                  <p className="text-xs text-ink-faint md:hidden">
+                    {user.active ? "Ativo" : "Desativado"} ·{" "}
+                    {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "nunca entrou"}
+                  </p>
                 </Td>
-                <Td muted>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "nunca entrou"}</Td>
-                <Td muted>{user.active ? "Ativo" : "Desativado"}</Td>
+                <Td muted className="hidden md:table-cell">
+                  {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "nunca entrou"}
+                </Td>
+                <Td muted className="hidden md:table-cell">{user.active ? "Ativo" : "Desativado"}</Td>
                 <Td align="right">
                   <div className="flex justify-end gap-1.5">
                     <button
@@ -247,7 +256,9 @@ export function Equipe() {
         <Table
           head={
             <tr>
-              <Th>Quando</Th>
+              {/* No celular, "Quando" entra dentro da célula "Quem" —
+                  tabela larga demais senão (achado em 2026-08-27). */}
+              <Th className="hidden md:table-cell">Quando</Th>
               <Th>Quem</Th>
               <Th>O quê</Th>
               <Th>Mudança</Th>
@@ -256,8 +267,11 @@ export function Equipe() {
         >
           {audit.data?.logs.map((log) => (
             <tr key={log.id}>
-              <Td muted>{formatDateTime(log.createdAt)}</Td>
-              <Td>{log.user?.name ?? "sistema"}</Td>
+              <Td muted className="hidden md:table-cell">{formatDateTime(log.createdAt)}</Td>
+              <Td>
+                {log.user?.name ?? "sistema"}
+                <p className="text-xs text-ink-faint md:hidden">{formatDateTime(log.createdAt)}</p>
+              </Td>
               <Td muted>
                 {ACTION_LABEL[log.action] ?? log.action}
                 {log.entity && ` · ${ENTITY_LABEL[log.entity] ?? log.entity}`}

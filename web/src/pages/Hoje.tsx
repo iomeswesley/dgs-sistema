@@ -249,12 +249,29 @@ export function Hoje() {
 
       {(data.data?.appointments.length ?? 0) > 0 && (
         <Table
+          colgroup={
+            // Largura fixa (não só esconder coluna) — sem isso "Registrar
+            // contato" força a linha inteira mais larga que a tela, mesmo
+            // com telefone/data/médico já escondidos (achado pelo usuário
+            // em 2026-08-27).
+            <colgroup>
+              <col className="w-[45%] md:w-[26%]" />
+              <col className="hidden md:table-column md:w-[15%]" />
+              <col className="hidden md:table-column md:w-[13%]" />
+              <col className="hidden md:table-column md:w-[18%]" />
+              <col className="w-[30%] md:w-[16%]" />
+              <col className="w-[25%] md:w-[12%]" />
+            </colgroup>
+          }
           head={
             <tr>
               <Th>Paciente</Th>
-              <Th>Telefone</Th>
-              <Th>Data e hora</Th>
-              <Th>Médico / município</Th>
+              {/* No celular, telefone/data/médico entram dentro da célula
+                  "Paciente" (achado pelo usuário em 2026-08-27: tabela
+                  larga demais, cortando conteúdo e forçando scroll lateral). */}
+              <Th className="hidden md:table-cell">Telefone</Th>
+              <Th className="hidden md:table-cell">Data e hora</Th>
+              <Th className="hidden md:table-cell">Médico / município</Th>
               <Th>Situação</Th>
               <Th align="right">Ação</Th>
             </tr>
@@ -270,15 +287,25 @@ export function Hoje() {
                 <Td>
                   <span className="font-medium">{appointment.patient.name}</span>
                   <p className="text-xs text-ink-faint">{appointment.procedure.name}</p>
+                  {/* Só no celular — no desktop já aparece nas colunas ao lado. */}
+                  <p className="mt-1 tabular text-xs text-ink-muted md:hidden">
+                    {formatPhone(appointment.selectedPhone)} · {formatDateTime(appointment.scheduledAt)}
+                  </p>
+                  <p className="text-xs text-ink-faint md:hidden">
+                    {appointment.doctor.name} · {appointment.municipality.name}
+                  </p>
+                  {appointment.patient.optedOut && (
+                    <p className="text-xs text-mark-red md:hidden">não quer receber</p>
+                  )}
                 </Td>
-                <Td muted>
+                <Td muted className="hidden md:table-cell">
                   <span className="tabular">{formatPhone(appointment.selectedPhone)}</span>
                   {appointment.patient.optedOut && (
                     <p className="text-xs text-mark-red">não quer receber</p>
                   )}
                 </Td>
-                <Td muted>{formatDateTime(appointment.scheduledAt)}</Td>
-                <Td muted>
+                <Td muted className="hidden md:table-cell">{formatDateTime(appointment.scheduledAt)}</Td>
+                <Td muted className="hidden md:table-cell">
                   {appointment.doctor.name}
                   <p className="text-xs text-ink-faint">{appointment.municipality.name}</p>
                 </Td>

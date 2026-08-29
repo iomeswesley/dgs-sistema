@@ -360,21 +360,26 @@ export function CancelamentoDetalhe() {
 
           <Table
             colgroup={
+              // No celular, só Paciente/Situação/Ações ficam de coluna
+              // própria (telefone/procedimento/horário entram dentro da
+              // célula "Paciente" — achado pelo usuário em 2026-08-27:
+              // tabela larga demais, cortando conteúdo). As 3 escondidas
+              // reaparecem a partir de md, com as larguras originais.
               <colgroup>
-                <col className="w-[19%]" />
-                <col className="w-[13%]" />
-                <col className="w-[16%]" />
-                <col className="w-[13%]" />
-                <col className="w-[24%]" />
-                <col className="w-[15%]" />
+                <col className="w-[35%] md:w-[19%]" />
+                <col className="hidden md:table-column md:w-[13%]" />
+                <col className="hidden md:table-column md:w-[16%]" />
+                <col className="hidden md:table-column md:w-[13%]" />
+                <col className="w-[40%] md:w-[24%]" />
+                <col className="w-[25%] md:w-[15%]" />
               </colgroup>
             }
             head={
               <tr>
                 <Th>Paciente</Th>
-                <Th>Telefone</Th>
-                <Th>Procedimento</Th>
-                <Th>Horário original</Th>
+                <Th className="hidden md:table-cell">Telefone</Th>
+                <Th className="hidden md:table-cell">Procedimento</Th>
+                <Th className="hidden md:table-cell">Horário original</Th>
                 <Th align="right">Situação</Th>
                 <Th align="right">Ações</Th>
               </tr>
@@ -384,12 +389,19 @@ export function CancelamentoDetalhe() {
               const status = effectiveMessageStatus(a);
               return (
                 <tr key={a.id}>
-                  <Td>{a.patientName}</Td>
-                  <Td muted>
+                  <Td>
+                    {a.patientName}
+                    {/* Só no celular — no desktop já aparece nas colunas ao lado. */}
+                    <p className="tabular text-xs text-ink-faint md:hidden">{formatPhone(a.phone)}</p>
+                    <p className="text-xs text-ink-faint md:hidden">
+                      {a.procedureName} · {formatDateTime(a.scheduledAt)}
+                    </p>
+                  </Td>
+                  <Td muted className="hidden md:table-cell">
                     <span className="tabular">{formatPhone(a.phone)}</span>
                   </Td>
-                  <Td muted>{a.procedureName}</Td>
-                  <Td muted>{formatDateTime(a.scheduledAt)}</Td>
+                  <Td muted className="hidden md:table-cell">{a.procedureName}</Td>
+                  <Td muted className="hidden md:table-cell">{formatDateTime(a.scheduledAt)}</Td>
                   <Td align="right">
                     <div className="flex flex-col items-end gap-0.5">
                       {status ? <MessageStatusBadge status={status} /> : <span className="text-ink-faint">—</span>}

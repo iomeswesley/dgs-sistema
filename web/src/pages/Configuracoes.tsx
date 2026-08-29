@@ -406,8 +406,11 @@ function DoctorsTab() {
           head={
             <tr>
               <Th>Médico</Th>
-              <Th>Especialidade</Th>
-              <Th>Registro</Th>
+              {/* No celular, especialidade/registro entram dentro da
+                  célula "Médico" (achado em 2026-08-27: tabela larga
+                  demais, forçando scroll lateral). */}
+              <Th className="hidden md:table-cell">Especialidade</Th>
+              <Th className="hidden md:table-cell">Registro</Th>
               <Th align="right">Procedimentos</Th>
               <Th align="right">Ações</Th>
             </tr>
@@ -418,9 +421,12 @@ function DoctorsTab() {
               <Td>
                 {doctor.name}
                 {!doctor.active && <span className="ml-1.5 text-xs text-ink-faint">(inativo)</span>}
+                <p className="text-xs text-ink-faint md:hidden">
+                  {doctor.specialty ?? "—"} · {doctor.registration ?? "—"}
+                </p>
               </Td>
-              <Td muted>{doctor.specialty ?? "—"}</Td>
-              <Td muted>{doctor.registration ?? "—"}</Td>
+              <Td muted className="hidden md:table-cell">{doctor.specialty ?? "—"}</Td>
+              <Td muted className="hidden md:table-cell">{doctor.registration ?? "—"}</Td>
               <Td align="right" muted>
                 {doctor.procedures.length}
               </Td>
@@ -1119,11 +1125,14 @@ function AgendasTab() {
           head={
             <tr>
               <Th>Data</Th>
-              <Th>Médico</Th>
-              <Th>Município</Th>
-              <Th>Unidade</Th>
-              <Th align="right">Capacidade</Th>
-              <Th align="right">Vagas abertas</Th>
+              {/* No celular, médico/município/unidade/capacidade/vagas
+                  entram dentro da célula "Data" (achado em 2026-08-27:
+                  tabela larga demais, forçando scroll lateral). */}
+              <Th className="hidden md:table-cell">Médico</Th>
+              <Th className="hidden md:table-cell">Município</Th>
+              <Th className="hidden md:table-cell">Unidade</Th>
+              <Th align="right" className="hidden md:table-cell">Capacidade</Th>
+              <Th align="right" className="hidden md:table-cell">Vagas abertas</Th>
               <Th align="right">Ações</Th>
             </tr>
           }
@@ -1133,17 +1142,28 @@ function AgendasTab() {
               <Td>
                 {formatCalendarDate(agenda.date)}
                 <p className="text-xs text-ink-faint">{SHIFT_LABEL[agenda.shift] ?? agenda.shift}</p>
+                <p className="text-xs text-ink-faint md:hidden">
+                  {agenda.doctor.name}
+                  {agenda.procedure && ` · ${agenda.procedure.name}`}
+                </p>
+                <p className="text-xs text-ink-faint md:hidden">
+                  {agenda.municipality.name} ·{" "}
+                  {agenda.unit ? agenda.unit.name : "sem unidade"}
+                </p>
+                <p className="text-xs text-ink-faint md:hidden">
+                  Capacidade {agenda.capacity ?? "—"} · {agenda._count.appointments} vaga(s) aberta(s)
+                </p>
               </Td>
-              <Td muted>
+              <Td muted className="hidden md:table-cell">
                 {agenda.doctor.name}
                 {agenda.procedure && <p className="text-xs text-ink-faint">{agenda.procedure.name}</p>}
               </Td>
-              <Td muted>{agenda.municipality.name}</Td>
-              <Td muted>{agenda.unit ? agenda.unit.name : <span className="italic text-ink-faint">sem unidade</span>}</Td>
-              <Td align="right" muted>
+              <Td muted className="hidden md:table-cell">{agenda.municipality.name}</Td>
+              <Td muted className="hidden md:table-cell">{agenda.unit ? agenda.unit.name : <span className="italic text-ink-faint">sem unidade</span>}</Td>
+              <Td align="right" muted className="hidden md:table-cell">
                 {agenda.capacity ?? "—"}
               </Td>
-              <Td align="right" muted>
+              <Td align="right" muted className="hidden md:table-cell">
                 {agenda._count.appointments}
               </Td>
               <Td align="right">

@@ -116,7 +116,13 @@ export function Table({
 }) {
   return (
     <div className="card overflow-x-auto">
-      <table className={`w-full min-w-[720px] border-collapse text-sm ${colgroup ? "table-fixed" : ""}`}>
+      {/* min-w-[720px] só a partir de md — abaixo disso ele forçava scroll
+          lateral em toda tabela do site, mesmo nas que já couberiam sem
+          problema com menos colunas visíveis no celular (achado pelo
+          usuário em 2026-08-27, ver as colunas com `hidden md:table-cell`
+          em Revisão/Hoje/CancelamentoDetalhe). Acima de md mantém a largura
+          confortável de sempre — não muda nada no desktop. */}
+      <table className={`w-full md:min-w-[720px] border-collapse text-sm ${colgroup ? "table-fixed" : ""}`}>
         {colgroup}
         <thead className="border-b border-rule bg-sheet-alt text-left">{head}</thead>
         <tbody>{children}</tbody>
@@ -125,12 +131,21 @@ export function Table({
   );
 }
 
-export function Th({ children, align = "left" }: { children: ReactNode; align?: "left" | "right" }) {
+export function Th({
+  children,
+  align = "left",
+  className = "",
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  /** Ex.: "hidden md:table-cell" pra esconder a coluna no celular (ver `Td` — a mesma classe precisa ir nas duas, cabeçalho e célula). */
+  className?: string;
+}) {
   return (
     <th
       className={`px-3 py-2.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint ${
         align === "right" ? "text-right" : ""
-      }`}
+      } ${className}`}
     >
       {children}
     </th>
@@ -141,16 +156,19 @@ export function Td({
   children,
   align = "left",
   muted = false,
+  className = "",
 }: {
   children: ReactNode;
   align?: "left" | "right";
   muted?: boolean;
+  /** Ex.: "hidden md:table-cell" — mesma classe do `Th` correspondente. */
+  className?: string;
 }) {
   return (
     <td
       className={`border-b border-rule px-3 py-2.5 ${align === "right" ? "text-right tabular" : ""} ${
         muted ? "text-ink-muted" : "text-ink"
-      }`}
+      } ${className}`}
     >
       {children}
     </td>

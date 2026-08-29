@@ -961,9 +961,14 @@ export function Revisao() {
             head={
               <tr>
                 <Th>Paciente</Th>
-                <Th>Telefone</Th>
-                <Th>Data e hora</Th>
-                <Th>Procedimento</Th>
+                {/* No celular, telefone/data/procedimento entram dentro da
+                    célula "Paciente" (ver abaixo) em vez de coluna própria —
+                    sem isso a tabela ficava larga demais e precisava de
+                    scroll lateral pra ler qualquer coisa (achado pelo
+                    usuário em 2026-08-27). */}
+                <Th className="hidden md:table-cell">Telefone</Th>
+                <Th className="hidden md:table-cell">Data e hora</Th>
+                <Th className="hidden md:table-cell">Procedimento</Th>
                 <Th>Situação</Th>
                 <Th align="right">Ações</Th>
               </tr>
@@ -1003,10 +1008,19 @@ export function Revisao() {
                             {appointment.rawLine.notes}
                           </p>
                         )}
+                        {/* Só no celular — no desktop essa informação já
+                            aparece nas colunas próprias ao lado. */}
+                        <p className="mt-1 tabular text-xs text-ink-muted md:hidden">
+                          {formatPhone(appointment.selectedPhone)} · {formatDateTime(appointment.scheduledAt)}
+                        </p>
+                        <p className="text-xs text-ink-faint md:hidden">{appointment.procedure.name}</p>
                       </>
                     )}
                   </Td>
-                  <Td muted>
+                  {/* Editando, o campo precisa continuar alcançável no
+                      celular também — só esconde a coluna quando é texto
+                      solto, não quando é o input de correção. */}
+                  <Td muted className={isEditing ? "" : "hidden md:table-cell"}>
                     {isEditing ? (
                       <input
                         className="field"
@@ -1028,7 +1042,7 @@ export function Revisao() {
                       </>
                     )}
                   </Td>
-                  <Td muted>
+                  <Td muted className={isEditing ? "" : "hidden md:table-cell"}>
                     {isEditing ? (
                       <input
                         type="datetime-local"
@@ -1040,7 +1054,7 @@ export function Revisao() {
                       formatDateTime(appointment.scheduledAt)
                     )}
                   </Td>
-                  <Td muted>
+                  <Td muted className="hidden md:table-cell">
                     {appointment.procedure.name}
                     <p className="text-xs text-ink-faint">{appointment.doctor.name}</p>
                   </Td>
