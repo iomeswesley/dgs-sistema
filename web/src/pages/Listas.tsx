@@ -660,7 +660,8 @@ export function Listas() {
                     )}
                     {list.usedInCancellation && (
                       <span
-                        className="ml-2 align-middle text-xs font-normal text-ink-faint"
+                        className="ml-2 inline-block whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-xs font-semibold"
+                        style={{ background: "var(--mark-red-soft)", color: "var(--mark-red)" }}
                         title="Todos os agendamentos dessa lista foram cancelados — não é uma lista de confirmação normal."
                       >
                         agenda cancelada
