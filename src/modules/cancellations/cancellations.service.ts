@@ -452,3 +452,63 @@ export async function retryFailedMessages(
 
   return { queued };
 }
+
+export interface CancellationStatusSummary {
+  /** Clicou "Ciente, obrigado(a)" ou respondeu qualquer coisa — prova que soube do cancelamento. */
+  cientes: number;
+  /** Saiu (ou chegou), mas ainda sem sinal nenhum de que a pessoa viu. */
+  enviados: number;
+  /** Falhou, ou não tinha telefone pra mandar — precisa de alguém mexer. */
+  precisaDeAcao: number;
+}
+
+/**
+ * Resumo por situação da mensagem, pra listas usadas como origem de um
+ * cancelamento (`CancellationBatch.listId`) — pedido do usuário em
+ * 2026-08-27: em Listas, essas listas apareciam com "Confirmados/Recusados"
+ * sempre zerados (o status do agendamento nelas é sempre `CANCELADO`, que a
+ * faixa de status normal nem soma) — não fazia sentido nenhum, porque um
+ * aviso de cancelamento não tem "confirmação" pra dar, tem "ficou ciente ou
+ * não". Mesma classificação de situação de mensagem que `CancelamentoDetalhe`
+ * já usa (`effectiveMessageStatus`), só que resumida em 3 números — versão
+ * enxuta de `getCancellationBatch()`, sem o resto (motivo, reconciliação
+ * etc.) que a listagem de Listas não precisa.
+ */
+export async function getCancellationStatusSummary(listId: number): Promise<CancellationStatusSummary | null> {
+  const batch = await prisma.cancellationBatch.findFirst({ where: { listId }, select: { id: true } });
+  if (!batch) return null;
+
+  const appointments = await prisma.appointment.findMany({
+    where: { cancellationBatchId: batch.id },
+    select: {
+      selectedPhone: true,
+      messages: { where: { template: "CANCELAMENTO" }, orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+    },
+  });
+
+  const phones = appointments.map((a) => a.selectedPhone).filter((p): p is string => !!p);
+  const candidateSet = [...new Set(phones.flatMap((p) => phoneCandidates(p)))];
+  const repliedPhones = new Set(
+    candidateSet.length > 0
+      ? (
+          await prisma.whatsappMessage.findMany({
+            where: { direction: "RECEBIDA", phone: { in: candidateSet } },
+            select: { phone: true },
+          })
+        ).map((m) => m.phone)
+      : []
+  );
+
+  let cientes = 0;
+  let enviados = 0;
+  let precisaDeAcao = 0;
+  for (const appointment of appointments) {
+    const messageStatus = appointment.messages[0]?.status ?? null;
+    const replied = !!appointment.selectedPhone && phoneCandidates(appointment.selectedPhone).some((p) => repliedPhones.has(p));
+    if (replied || messageStatus === "LIDO") cientes++;
+    else if (messageStatus === "ENVIADO" || messageStatus === "ENTREGUE") enviados++;
+    else precisaDeAcao++; // FALHOU, ou sem mensagem nenhuma (sem telefone)
+  }
+
+  return { cientes, enviados, precisaDeAcao };
+}

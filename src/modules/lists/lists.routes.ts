@@ -22,6 +22,10 @@ import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import {
+  getCancellationStatusSummary,
+  type CancellationStatusSummary,
+} from "@/modules/cancellations/cancellations.service.js";
 
 export const listsRouter = Router();
 listsRouter.use("/api/lists", requireAuth);
@@ -76,6 +80,9 @@ listsRouter.get(
         agenda: { select: { id: true, date: true } },
         uploadedBy: { select: { name: true } },
         approvedBy: { select: { name: true } },
+        // Lista usada como origem de um cancelamento ("Nunca passou pela
+        // plataforma") — muda como a faixa de status é mostrada, ver abaixo.
+        cancellationBatches: { select: { id: true }, take: 1 },
       },
     });
 
@@ -93,8 +100,22 @@ listsRouter.get(
       byList.set(row.listId, entry);
     }
 
+    // Poucas listas, no geral, são origem de cancelamento — um loop simples
+    // aqui é mais claro que tentar uma query em lote só pra esse caso raro.
+    const cancellationSummaries = new Map<number, CancellationStatusSummary>();
+    for (const list of lists) {
+      if (list.cancellationBatches.length === 0) continue;
+      const summary = await getCancellationStatusSummary(list.id);
+      if (summary) cancellationSummaries.set(list.id, summary);
+    }
+
     res.json({
-      lists: lists.map((list) => ({ ...list, counts: byList.get(list.id) ?? {} })),
+      lists: lists.map(({ cancellationBatches, ...list }) => ({
+        ...list,
+        counts: byList.get(list.id) ?? {},
+        usedInCancellation: cancellationBatches.length > 0,
+        cancellationCounts: cancellationSummaries.get(list.id) ?? null,
+      })),
       extractionConfigured,
     });
   })

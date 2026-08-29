@@ -35,23 +35,51 @@ const SEGMENTS = [
   },
 ] as const;
 
+export interface StatusSegment {
+  key: string;
+  label: string;
+  color: string;
+  title?: string;
+}
+
+/**
+ * Segmentos pra lista usada como origem de cancelamento — situação de
+ * MENSAGEM (ciente/enviado/precisa de ação), não de agendamento (que nessas
+ * listas é sempre "Cancelado", os 4 segmentos padrão não fazem sentido
+ * nenhum ali). Pedido do usuário em 2026-08-27.
+ */
+export const CANCELLATION_SEGMENTS: StatusSegment[] = [
+  { key: "cientes", label: "Cientes", color: "var(--mark-green)" },
+  { key: "enviados", label: "Enviados", color: "var(--mark-yellow)" },
+  {
+    key: "precisaDeAcao",
+    label: "Precisa de ação",
+    title: "Falhou, ou não tinha telefone cadastrado — não deu pra avisar",
+    color: "var(--mark-gray)",
+  },
+];
+
 export function StatusBand({
   counts,
   showLegend = true,
   unrecognizedCount = 0,
+  segments = SEGMENTS,
 }: {
-  counts: StatusCounts;
+  counts: Record<string, number>;
   showLegend?: boolean;
   /**
    * Linhas que a leitura nem conseguiu transformar em agendamento nenhum
    * ("Registro não reconhecido") — não são `Appointment`, não entram na
    * proporção da barra, mas também "precisam de ação" tanto quanto o resto
    * dessa faixa. Mostrado à parte ("25 + 2") pra não sumir do resumo
-   * (achado em 2026-08-26).
+   * (achado em 2026-08-26). Só faz sentido nos segmentos padrão de
+   * confirmação — listas de cancelamento não usam extração pra isso.
    */
   unrecognizedCount?: number;
+  /** Segmentos a desenhar — padrão é confirmação; `CANCELLATION_SEGMENTS` pra lista usada em cancelamento. */
+  segments?: readonly StatusSegment[];
 }) {
-  const total = SEGMENTS.reduce((sum, segment) => sum + counts[segment.key], 0);
+  const total = segments.reduce((sum, segment) => sum + (counts[segment.key] ?? 0), 0);
 
   return (
     <div>
@@ -61,14 +89,15 @@ export function StatusBand({
         aria-label={
           total === 0
             ? "Nenhum paciente na lista"
-            : SEGMENTS.filter((s) => counts[s.key] > 0)
+            : segments
+                .filter((s) => (counts[s.key] ?? 0) > 0)
                 .map((s) => `${counts[s.key]} ${s.label.toLowerCase()}`)
                 .join(", ")
         }
       >
         {total > 0 &&
-          SEGMENTS.map((segment) => {
-            const value = counts[segment.key];
+          segments.map((segment) => {
+            const value = counts[segment.key] ?? 0;
             if (value === 0) return null;
             return (
               <div
@@ -82,12 +111,12 @@ export function StatusBand({
 
       {showLegend && (
         <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
-          {SEGMENTS.map((segment) => (
+          {segments.map((segment) => (
             <div
               key={segment.key}
               className="flex items-center gap-1.5 text-xs"
               title={
-                "title" in segment
+                segment.title !== undefined
                   ? segment.title +
                     (segment.key === "semTelefone" && unrecognizedCount > 0
                       ? " + registro não reconhecido pela leitura (nem virou agendamento)"
@@ -98,7 +127,7 @@ export function StatusBand({
               <span className="h-2 w-2 rounded-full" style={{ background: segment.color }} aria-hidden />
               <span className="text-ink-muted">{segment.label}</span>
               <span className="tabular font-semibold text-ink">
-                {counts[segment.key]}
+                {counts[segment.key] ?? 0}
                 {segment.key === "semTelefone" && unrecognizedCount > 0 && (
                   <>
                     {" "}

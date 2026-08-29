@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { EmptyState, PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
-import { StatusBand } from "../components/StatusBand";
+import { CANCELLATION_SEGMENTS, StatusBand } from "../components/StatusBand";
 import { ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
@@ -22,6 +22,9 @@ interface ListSummary {
   agenda: { id: number; date: string } | null;
   uploadedBy: { name: string };
   counts: Record<string, number>;
+  /** Usada como origem de um cancelamento ("Nunca passou pela plataforma") — muda o rótulo/faixa de status, ver abaixo. */
+  usedInCancellation: boolean;
+  cancellationCounts: { cientes: number; enviados: number; precisaDeAcao: number } | null;
 }
 
 interface Municipality {
@@ -649,6 +652,14 @@ export function Listas() {
                     {list.isComplementary && (
                       <span className="ml-2 align-middle text-xs font-normal text-accent">complementar</span>
                     )}
+                    {list.usedInCancellation && (
+                      <span
+                        className="ml-2 align-middle text-xs font-normal text-ink-faint"
+                        title="Essa lista foi enviada pra saber quem avisar de um cancelamento — não é uma lista de confirmação normal."
+                      >
+                        usada em cancelamento
+                      </span>
+                    )}
                   </p>
                   <p className="mt-0.5 text-sm text-ink-muted">
                     {list.municipality.name}
@@ -681,10 +692,22 @@ export function Listas() {
                 </p>
               )}
 
-              {total > 0 && (
-                <div className="mt-4">
-                  <StatusBand counts={toBandCounts(list.counts)} />
-                </div>
+              {list.usedInCancellation ? (
+                // Situação de mensagem (ciente/enviado/precisa de ação), não
+                // de agendamento — nessas listas o status do agendamento é
+                // sempre "Cancelado", "Confirmados/Recusados" não tem
+                // sentido nenhum (pedido do usuário em 2026-08-27).
+                list.cancellationCounts && (
+                  <div className="mt-4">
+                    <StatusBand counts={list.cancellationCounts} segments={CANCELLATION_SEGMENTS} />
+                  </div>
+                )
+              ) : (
+                total > 0 && (
+                  <div className="mt-4">
+                    <StatusBand counts={toBandCounts(list.counts)} />
+                  </div>
+                )
               )}
             </Link>
           );
