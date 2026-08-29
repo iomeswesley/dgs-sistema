@@ -7,6 +7,9 @@ import { normalizePhoneList } from "@/lib/phone.js";
 import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { parseBrasiliaDateTime } from "@/lib/timezone.js";
+import { buildTemplateParams } from "@/modules/queue/queue.service.js";
+import { TEMPLATE_NAMES } from "@/lib/templates.js";
+import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 
 /*
   Ciclo de vida de uma lista:
@@ -629,6 +632,58 @@ export async function retryFailedAppointments(
   });
 
   return { queued };
+}
+
+export interface MessagePreview {
+  template: "CONFIRMACAO" | "VAGA_ABERTA";
+  text: string;
+  patientName: string;
+  phone: string | null;
+  totalPatients: number;
+}
+
+/**
+ * Monta a mensagem de WhatsApp de verdade — texto final, já com as
+ * variáveis preenchidas — do primeiro paciente da lista (mesma ordem que a
+ * tabela de Revisão mostra, `id: asc`). Pedido do usuário em 2026-08-27:
+ * antes de aprovar, dá pra conferir a mensagem que vai sair de verdade, não
+ * só o comparativo abstrato de unidade/endereço que já existia.
+ *
+ * Reaproveita `buildTemplateParams()`/`renderTemplateText()` — a MESMA
+ * lógica usada no envio de verdade (`queue.service.ts`), pra garantir que a
+ * prévia bate exatamente com o que o paciente recebe, sem duplicar regra.
+ */
+export async function getMessagePreview(listId: number): Promise<MessagePreview> {
+  const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+
+  const appointment = await prisma.appointment.findFirst({
+    where: { listId },
+    orderBy: { id: "asc" },
+    include: {
+      patient: true,
+      municipality: true,
+      procedure: true,
+      doctor: true,
+      agenda: { include: { unit: true } },
+      cancellationBatch: true,
+    },
+  });
+  if (!appointment) throw new AppError("Essa lista ainda não tem nenhum paciente.", 409);
+
+  const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+  const params = buildTemplateParams(template, appointment);
+  const text = renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body);
+
+  const totalPatients = await prisma.appointment.count({ where: { listId } });
+
+  return {
+    template,
+    text,
+    patientName: appointment.patient.name,
+    phone: appointment.selectedPhone,
+    totalPatients,
+  };
 }
 
 /**

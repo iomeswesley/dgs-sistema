@@ -85,6 +85,14 @@ interface UnrecognizedGuess {
   phones: string[];
 }
 
+interface MessagePreview {
+  template: "CONFIRMACAO" | "VAGA_ABERTA";
+  text: string;
+  patientName: string;
+  phone: string | null;
+  totalPatients: number;
+}
+
 interface ListDetail {
   list: {
     id: number;
@@ -169,6 +177,15 @@ export function Revisao() {
   const [quickFixPhone, setQuickFixPhone] = useState("");
   const [quickFixBusy, setQuickFixBusy] = useState(false);
   const [quickFixError, setQuickFixError] = useState<string | null>(null);
+  // Prévia da mensagem de verdade (já com as variáveis preenchidas) do
+  // primeiro paciente, antes de aprovar — pedido do usuário em 2026-08-27:
+  // o comparativo de unidade/endereço já existia, mas era abstrato; agora
+  // dá pra ver a mensagem exata que vai sair, com nome/data/procedimento/
+  // endereço reais, antes de confirmar "Aprovar".
+  const [approvePreviewOpen, setApprovePreviewOpen] = useState(false);
+  const [approvePreview, setApprovePreview] = useState<MessagePreview | null>(null);
+  const [approvePreviewLoading, setApprovePreviewLoading] = useState(false);
+  const [approvePreviewError, setApprovePreviewError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -176,9 +193,7 @@ export function Revisao() {
     scheduledAt: "",
   });
   const [removing, setRemoving] = useState<Appointment | null>(null);
-  const [confirmAction, setConfirmAction] = useState<
-    "approve" | "dispatch" | "conclude" | "reprocess" | "delete" | null
-  >(null);
+  const [confirmAction, setConfirmAction] = useState<"dispatch" | "conclude" | "reprocess" | "delete" | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -319,6 +334,36 @@ export function Revisao() {
     }
   }
 
+  async function openApprovePreview() {
+    setApprovePreviewOpen(true);
+    setApprovePreview(null);
+    setApprovePreviewError(null);
+    setApprovePreviewLoading(true);
+    try {
+      const result = await api.get<MessagePreview>(`/api/lists/${list.id}/message-preview`);
+      setApprovePreview(result);
+    } catch (err) {
+      setApprovePreviewError(err instanceof Error ? err.message : "Falha ao montar a prévia da mensagem.");
+    } finally {
+      setApprovePreviewLoading(false);
+    }
+  }
+
+  async function confirmApprove() {
+    setBusy(true);
+    setApprovePreviewError(null);
+    try {
+      await api.post(`/api/lists/${list.id}/approve`, { confirmUnitMismatch: unitConfirmed });
+      setApprovePreviewOpen(false);
+      setNotice("Lista aprovada. Agora dá para disparar as confirmações.");
+      detail.reload();
+    } catch (err) {
+      setApprovePreviewError(err instanceof Error ? err.message : "Falha ao aprovar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function startEdit(appointment: Appointment) {
     setEditing(appointment.id);
     setDraft({
@@ -440,9 +485,6 @@ export function Revisao() {
         await api.delete(`/api/lists/${list.id}`);
         navigate("/listas");
         return;
-      } else if (confirmAction === "approve") {
-        await api.post(`/api/lists/${list.id}/approve`, { confirmUnitMismatch: unitConfirmed });
-        setNotice("Lista aprovada. Agora dá para disparar as confirmações.");
       } else if (confirmAction === "reprocess") {
         await api.post(`/api/lists/${list.id}/reprocess`);
         setNotice("Reprocessando a lista…");
@@ -567,7 +609,7 @@ export function Revisao() {
                 className="btn btn-primary"
                 disabled={hasUnitIssue && !unitConfirmed}
                 title={hasUnitIssue && !unitConfirmed ? "Confirme o comparativo de unidade/endereço abaixo antes de aprovar." : undefined}
-                onClick={() => setConfirmAction("approve")}
+                onClick={() => void openApprovePreview()}
               >
                 Aprovar lista
               </button>
@@ -980,43 +1022,64 @@ export function Revisao() {
         title={
           confirmAction === "delete"
             ? "Excluir esta lista?"
-            : confirmAction === "approve"
-              ? "Aprovar a lista?"
-              : confirmAction === "reprocess"
-                ? "Tentar a leitura de novo?"
-                : confirmAction === "dispatch"
-                  ? "Disparar as confirmações?"
-                  : "Concluir esta lista?"
+            : confirmAction === "reprocess"
+              ? "Tentar a leitura de novo?"
+              : confirmAction === "dispatch"
+                ? "Disparar as confirmações?"
+                : "Concluir esta lista?"
         }
         description={
           confirmAction === "delete"
             ? `"${list.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
-            : confirmAction === "approve"
-              ? "Depois de aprovada a revisão fecha e os dados não podem mais ser corrigidos aqui."
-              : confirmAction === "reprocess"
-                ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
-                : confirmAction === "dispatch"
-                  ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
-                      pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
-                    }`
-                  : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar CSV\"/\"Exportar PDF\" para enviar à secretaria manualmente."
+            : confirmAction === "reprocess"
+              ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
+              : confirmAction === "dispatch"
+                ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
+                    pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
+                  }`
+                : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar CSV\"/\"Exportar PDF\" para enviar à secretaria manualmente."
         }
         confirmLabel={
           confirmAction === "delete"
             ? "Excluir"
-            : confirmAction === "approve"
-              ? "Aprovar"
-              : confirmAction === "reprocess"
-                ? "Tentar novamente"
-                : confirmAction === "dispatch"
-                  ? "Disparar"
-                  : "Concluir"
+            : confirmAction === "reprocess"
+              ? "Tentar novamente"
+              : confirmAction === "dispatch"
+                ? "Disparar"
+                : "Concluir"
         }
         danger={confirmAction === "delete"}
         busy={busy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
+      <FormModal
+        open={approvePreviewOpen}
+        title="Conferir mensagem antes de aprovar"
+        description={
+          approvePreview
+            ? `Assim que aprovar, é essa a mensagem que sai pra cada um dos ${approvePreview.totalPatients} paciente(s) da lista (com os dados de cada um, claro) — abaixo, com os dados de "${approvePreview.patientName}", o primeiro da lista.`
+            : "Montando a mensagem com os dados do primeiro paciente da lista…"
+        }
+        submitLabel="Confirmar e aprovar"
+        busy={busy || approvePreviewLoading}
+        error={approvePreviewError}
+        onSubmit={confirmApprove}
+        onCancel={() => setApprovePreviewOpen(false)}
+      >
+        {approvePreviewLoading && <Spinner />}
+        {approvePreview && (
+          <div className="rounded-lg bg-wa-bg p-4">
+            <div className="max-w-[85%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-ink shadow-sm">
+              <p className="whitespace-pre-wrap">{approvePreview.text}</p>
+            </div>
+            <p className="mt-2 text-xs text-ink-faint">
+              Vai pro número {approvePreview.phone ? formatPhone(approvePreview.phone) : "— sem telefone cadastrado"}.
+            </p>
+          </div>
+        )}
+      </FormModal>
 
       <FormModal
         open={retryOpen}

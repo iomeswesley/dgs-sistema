@@ -13,6 +13,7 @@ import {
   deleteList,
   editAppointment,
   extractAndStage,
+  getMessagePreview,
   removeAppointment,
   retryFailedAppointments,
 } from "./lists.service.js";
@@ -332,6 +333,18 @@ listsRouter.post(
     runInBackground(extractAndStage(id), (err) =>
       console.error(`[LISTA ${id}] Falha no reprocessamento:`, (err as Error).message)
     );
+  })
+);
+
+/**
+ * Prévia da mensagem de verdade (já com as variáveis preenchidas) do
+ * primeiro paciente da lista — pra conferir antes de aprovar, ver
+ * `getMessagePreview()`.
+ */
+listsRouter.get(
+  "/api/lists/:id/message-preview",
+  asyncHandler(async (req, res) => {
+    res.json(await getMessagePreview(routeId(req)));
   })
 );
 

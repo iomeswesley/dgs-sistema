@@ -272,7 +272,7 @@ export async function processQueue(): Promise<ProcessResult> {
   return { sent, failed, deferred: after.pending, remainingToday: after.remaining, dueNow };
 }
 
-type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrThrow>> & {
+export type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrThrow>> & {
   patient: { name: string };
   municipality: { name: string };
   procedure: { name: string; preparationInstructions: string | null };
@@ -302,7 +302,8 @@ function formatTime(date: Date): string {
  * Variável vazia é rejeitada pela API, então tudo tem fallback — é
  * justamente o erro que hoje faz sair "Data: XX/07/2026" no WhatsApp comum.
  */
-function buildTemplateParams(template: TemplateKind, appointment: JobAppointment) {
+/** Exportado pra `lists.service.ts` montar a prévia da mensagem antes de aprovar — mesma lógica exata usada no envio real. */
+export function buildTemplateParams(template: TemplateKind, appointment: JobAppointment) {
   const firstName = appointment.patient.name.trim().split(/\s+/)[0] ?? appointment.patient.name;
   const unit = appointment.agenda?.unit;
   const local = unit
