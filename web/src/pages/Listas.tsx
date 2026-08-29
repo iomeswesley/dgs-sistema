@@ -22,7 +22,7 @@ interface ListSummary {
   agenda: { id: number; date: string } | null;
   uploadedBy: { name: string };
   counts: Record<string, number>;
-  /** Usada como origem de um cancelamento ("Nunca passou pela plataforma") — muda o rótulo/faixa de status, ver abaixo. */
+  /** Todos os agendamentos dessa lista foram cancelados (a lista foi feita pra isso, ou a agenda dela foi cancelada depois) — muda o rótulo/faixa de status, ver abaixo. */
   usedInCancellation: boolean;
   cancellationCounts: { cientes: number; enviados: number; precisaDeAcao: number } | null;
 }
@@ -646,7 +646,13 @@ export function Listas() {
           return (
             <Link key={list.id} to={`/listas/${list.id}`} className="card block p-5 hover:border-accent">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
+                {/* `flex-1`, não só `min-w-0` — sem largura definida na
+                    linha flex, o item cresce pro tamanho do próprio
+                    conteúdo (nome de arquivo comprido) em vez de ser
+                    contido pela tela, e o `truncate` do título não tem
+                    caixa nenhuma pra cortar (achado pelo usuário em
+                    2026-08-27, com print real do celular). */}
+                <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-ink">
                     {list.originalName}
                     {list.isComplementary && (
@@ -655,9 +661,9 @@ export function Listas() {
                     {list.usedInCancellation && (
                       <span
                         className="ml-2 align-middle text-xs font-normal text-ink-faint"
-                        title="Essa lista foi enviada pra saber quem avisar de um cancelamento — não é uma lista de confirmação normal."
+                        title="Todos os agendamentos dessa lista foram cancelados — não é uma lista de confirmação normal."
                       >
-                        usada em cancelamento
+                        agenda cancelada
                       </span>
                     )}
                   </p>

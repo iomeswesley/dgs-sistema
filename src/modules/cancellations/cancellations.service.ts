@@ -463,28 +463,35 @@ export interface CancellationStatusSummary {
 }
 
 /**
- * Resumo por situação da mensagem, pra listas usadas como origem de um
- * cancelamento (`CancellationBatch.listId`) — pedido do usuário em
- * 2026-08-27: em Listas, essas listas apareciam com "Confirmados/Recusados"
- * sempre zerados (o status do agendamento nelas é sempre `CANCELADO`, que a
- * faixa de status normal nem soma) — não fazia sentido nenhum, porque um
- * aviso de cancelamento não tem "confirmação" pra dar, tem "ficou ciente ou
- * não". Mesma classificação de situação de mensagem que `CancelamentoDetalhe`
- * já usa (`effectiveMessageStatus`), só que resumida em 3 números — versão
- * enxuta de `getCancellationBatch()`, sem o resto (motivo, reconciliação
- * etc.) que a listagem de Listas não precisa.
+ * Resumo por situação da mensagem, pra listas cujos agendamentos foram
+ * cancelados — pedido do usuário em 2026-08-27: em Listas, essas listas
+ * apareciam com "Confirmados/Recusados" sempre zerados (o status do
+ * agendamento nelas é sempre `CANCELADO`, que a faixa de status normal nem
+ * soma) — não fazia sentido nenhum, porque um aviso de cancelamento não tem
+ * "confirmação" pra dar, tem "ficou ciente ou não". Mesma classificação de
+ * situação de mensagem que `CancelamentoDetalhe` já usa
+ * (`effectiveMessageStatus`), só que resumida em 3 números — versão enxuta
+ * de `getCancellationBatch()`, sem o resto (motivo, reconciliação etc.) que
+ * a listagem de Listas não precisa.
+ *
+ * Busca por `Appointment.listId` + `cancellationBatchId` preenchido, NÃO
+ * por `CancellationBatch.listId` — achado pelo usuário em 2026-08-27: uma
+ * lista pode ter sido enviada normal (upload comum, nunca ligada a
+ * `CancellationBatch.listId`) e só DEPOIS ter a agenda dela cancelada pelo
+ * caminho "Agenda já cadastrada" (que liga por `agendaId`, não por
+ * `listId`) — nesse caso `CancellationBatch.listId` fica `null`, mas os
+ * agendamentos da lista viram `CANCELADO` do mesmo jeito. Olhar direto pro
+ * `cancellationBatchId` de cada agendamento cobre os dois casos.
  */
 export async function getCancellationStatusSummary(listId: number): Promise<CancellationStatusSummary | null> {
-  const batch = await prisma.cancellationBatch.findFirst({ where: { listId }, select: { id: true } });
-  if (!batch) return null;
-
   const appointments = await prisma.appointment.findMany({
-    where: { cancellationBatchId: batch.id },
+    where: { listId, cancellationBatchId: { not: null } },
     select: {
       selectedPhone: true,
       messages: { where: { template: "CANCELAMENTO" }, orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
     },
   });
+  if (appointments.length === 0) return null;
 
   const phones = appointments.map((a) => a.selectedPhone).filter((p): p is string => !!p);
   const candidateSet = [...new Set(phones.flatMap((p) => phoneCandidates(p)))];

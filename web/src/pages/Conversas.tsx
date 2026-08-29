@@ -384,7 +384,10 @@ export function Conversas() {
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold text-white">
                   {initials(selectedName)}
                 </span>
-                <div className="min-w-0">
+                {/* `flex-1`, não só `min-w-0` — mesmo ajuste de Listas.tsx
+                    (2026-08-27): sem largura definida na linha flex, nome
+                    de paciente comprido não é contido pela tela. */}
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{selectedName}</p>
                   {thread.data?.patientName && (
                     <p className="truncate text-xs text-white/70">{selected?.phoneFormatted}</p>

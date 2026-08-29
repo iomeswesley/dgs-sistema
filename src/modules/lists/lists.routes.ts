@@ -80,9 +80,6 @@ listsRouter.get(
         agenda: { select: { id: true, date: true } },
         uploadedBy: { select: { name: true } },
         approvedBy: { select: { name: true } },
-        // Lista usada como origem de um cancelamento ("Nunca passou pela
-        // plataforma") — muda como a faixa de status é mostrada, ver abaixo.
-        cancellationBatches: { select: { id: true }, take: 1 },
       },
     });
 
@@ -100,20 +97,32 @@ listsRouter.get(
       byList.set(row.listId, entry);
     }
 
-    // Poucas listas, no geral, são origem de cancelamento — um loop simples
-    // aqui é mais claro que tentar uma query em lote só pra esse caso raro.
+    // Agenda cancelada: TODOS os agendamentos da lista viraram "Cancelado"
+    // — não olha `CancellationBatch.listId` (só cobre quem foi enviado
+    // direto pra um cancelamento), porque uma lista normal, nunca ligada a
+    // cancelamento nenhum na hora do upload, também vira assim quando a
+    // AGENDA dela é cancelada depois pelo caminho "Agenda já cadastrada"
+    // (que liga por `agendaId`, `CancellationBatch.listId` fica `null`
+    // nesse caso — achado pelo usuário em 2026-08-27, com uma lista real
+    // de produção nessa exata situação). Uma lista com só uma parte
+    // cancelada (paciente cancelado avulso, não a agenda inteira) não
+    // entra aqui de propósito — "Confirmados/Recusados" continua fazendo
+    // sentido pro resto dela.
     const cancellationSummaries = new Map<number, CancellationStatusSummary>();
     for (const list of lists) {
-      if (list.cancellationBatches.length === 0) continue;
+      const listCounts = byList.get(list.id) ?? {};
+      const total = Object.values(listCounts).reduce((sum, value) => sum + value, 0);
+      const allCancelled = total > 0 && listCounts.CANCELADO === total;
+      if (!allCancelled) continue;
       const summary = await getCancellationStatusSummary(list.id);
       if (summary) cancellationSummaries.set(list.id, summary);
     }
 
     res.json({
-      lists: lists.map(({ cancellationBatches, ...list }) => ({
+      lists: lists.map((list) => ({
         ...list,
         counts: byList.get(list.id) ?? {},
-        usedInCancellation: cancellationBatches.length > 0,
+        usedInCancellation: cancellationSummaries.has(list.id),
         cancellationCounts: cancellationSummaries.get(list.id) ?? null,
       })),
       extractionConfigured,
