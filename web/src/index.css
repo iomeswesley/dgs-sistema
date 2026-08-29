@@ -258,7 +258,12 @@
     border: 1px solid var(--rule);
     border-radius: 8px;
     padding: 0.55rem 0.75rem;
-    font-size: 0.9375rem;
+    /* 16px, não 15px (0.9375rem) — abaixo de 16px o Safari/iOS dá zoom
+       automático sozinho ao focar o campo (pra "ajudar" a digitar) e não
+       desfaz o zoom depois, deixando a página cortada até a pessoa dar
+       zoom pra fora na mão (achado pelo usuário em 2026-08-27, no
+       dropdown de município em Listas). */
+    font-size: 1rem;
     color: var(--ink);
   }
   .field::placeholder {
