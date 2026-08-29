@@ -6,11 +6,13 @@ import {
   CalendarX,
   ClipboardCheck,
   ClipboardList,
+  Menu,
   MessageCircle,
   Moon,
   Settings,
   Sun,
   UsersRound,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { useSession } from "../lib/session";
@@ -43,6 +45,11 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== "undefined" && window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1"
   );
+  // Só pro celular — a barra de navegação virava uma fileira com scroll
+  // lateral (achado pelo usuário em 2026-08-29: "Conversas" cortado na
+  // borda da tela); agora é um botão de hambúrguer que abre/fecha a lista
+  // de páginas, igual um menu retrátil. Não afeta o menu lateral do desktop.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
@@ -93,6 +100,15 @@ export function AppShell() {
           <div className="flex items-center gap-3 md:hidden">
             <button
               type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-expanded={mobileMenuOpen}
+              aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"}
+              className="rounded-md p-1.5 text-board-ink-muted hover:text-board-ink"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+            <button
+              type="button"
               onClick={toggleTheme}
               title={`Tema ${theme === "dark" ? "claro" : "escuro"}`}
               className="rounded-md p-1.5 text-board-ink-muted hover:text-board-ink"
@@ -110,14 +126,20 @@ export function AppShell() {
           </div>
         </div>
 
-        <ul className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:gap-0.5 md:overflow-visible md:pb-0">
+        {/* No celular só aparece com o menu aberto (painel que desce, não
+            mais fileira com scroll lateral); no desktop sempre visível,
+            como sempre foi. */}
+        <ul
+          className={`${mobileMenuOpen ? "flex" : "hidden"} flex-col gap-1 px-3 pb-3 md:flex md:gap-0.5 md:pb-0`}
+        >
           {NAV.map((item) => {
             const Icon = item.icon;
             return (
-              <li key={item.to} className="shrink-0 md:shrink">
+              <li key={item.to}>
                 <NavLink
                   to={item.to}
                   title={collapsed ? item.label : undefined}
+                  onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }) =>
                     [
                       "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
