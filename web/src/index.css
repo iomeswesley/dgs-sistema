@@ -14,9 +14,14 @@
 :root {
   color-scheme: light;
 
-  --board: #16202c;
-  --board-raised: #1e2b3a;
-  --board-line: #2b3a4b;
+  /* Azul-marinho da marca (#042951) — mesmo tom no menu lateral tanto no
+     modo claro quanto no escuro (pedido do usuário em 2026-08-27: antes
+     só o modo escuro usava essa cor, no claro o menu ficava num
+     cinza-chumbo quase preto, sem bater com o resto da marca). O menu é
+     sempre escuro, então esses tokens não mudam dentro de `.dark`. */
+  --board: #042951;
+  --board-raised: #2c4b6d;
+  --board-line: #4f6985;
   --board-ink: #e8edf2;
   --board-ink-muted: #8fa1b3;
 
@@ -64,16 +69,11 @@
 .dark {
   color-scheme: dark;
 
-  /* Azul-marinho da marca (pedido do usuário em 2026-08-27, "dark blue 3",
-     #042951) — base de todo o tema escuro, mais visível no menu lateral
-     (--board, cor sólida) e no PDF de Cancelamento (mesma cor na faixa de
-     cabeçalho, ver cancellations.pdf.ts). As demais variáveis são tons
-     derivados dessa base, misturando com branco/preto pra manter a mesma
-     hierarquia de contraste que já existia (board mais escuro que sheet,
-     board-raised/sheet-alt um degrau acima, sheet-sunken o mais escuro). */
-  --board: #042951;
-  --board-raised: #2c4b6d;
-  --board-line: #4f6985;
+  /* --board* não repete aqui — já é o mesmo azul-marinho em `:root`
+     (o menu lateral é sempre escuro, não muda com o tema, ver comentário
+     lá). O resto do tema escuro deriva dessa mesma base #042951, mantendo
+     a mesma hierarquia de contraste que já existia (sheet mais claro que
+     board, sheet-alt um degrau acima, sheet-sunken o mais escuro). */
   --board-ink: #e8edf2;
   --board-ink-muted: #8fa1b3;
 

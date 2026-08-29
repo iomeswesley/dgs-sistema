@@ -18,6 +18,13 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
     doctorId: filters.doctorId,
     municipalityId: filters.municipalityId,
     procedureId: filters.procedureId,
+    // Cancelado pela DGS (médico indisponível) não passou pelo fluxo de
+    // confirmação normal — nunca teve chance real de virar "confirmado".
+    // Contar como "planejado" infla o denominador e derruba a taxa de
+    // confirmação artificialmente (achado pelo usuário em 2026-08-29: agenda
+    // do Dr. Edvaldo mostrando "110 planejados, 1 confirmado" — os outros
+    // 109 eram de uma agenda cancelada, não confirmações perdidas de verdade).
+    status: { not: "CANCELADO" as const },
   };
 
   const appointments = await prisma.appointment.findMany({
