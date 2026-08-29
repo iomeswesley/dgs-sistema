@@ -766,20 +766,26 @@ export function Revisao() {
                 ))}
               </div>
             )}
-
-            <p className="mt-3">
-              <button type="button" className="btn btn-quiet px-3 py-1.5 text-sm" onClick={() => openAddModal()}>
-                + Adicionar outro paciente manualmente
-              </button>
-              {!isReviewing && (
-                <span className="ml-2 text-xs text-ink-faint">
-                  A lista já {list.status === "DISPARADA" || list.status === "CONCLUIDA" ? "foi disparada" : "foi aprovada"} — a mensagem sai pra essa pessoa na hora, separado do resto.
-                </span>
-              )}
-            </p>
           </Callout>
         </div>
       )}
+
+      {/* Sempre visível, com aviso ou sem aviso nenhum — antes só aparecia
+          dentro do card de avisos da leitura, então sumia por completo numa
+          lista sem nenhum problema de extração (achado pelo usuário em
+          2026-08-27: "não achei esse botão"). "Adicionar paciente
+          manualmente" serve pra qualquer motivo de faltar alguém na lista,
+          não só pra quem a leitura não reconheceu. */}
+      <div className="mb-4">
+        <button type="button" className="btn btn-quiet px-3 py-1.5 text-sm" onClick={() => openAddModal()}>
+          + Adicionar paciente manualmente
+        </button>
+        {!isReviewing && (
+          <span className="ml-2 text-xs text-ink-faint">
+            A lista já {list.status === "DISPARADA" || list.status === "CONCLUIDA" ? "foi disparada" : "foi aprovada"} — a mensagem sai pra essa pessoa na hora, separado do resto.
+          </span>
+        )}
+      </div>
 
       {suggestion.data?.suggestion && (
         <div className="mb-4">
