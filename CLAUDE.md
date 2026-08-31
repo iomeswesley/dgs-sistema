@@ -33,8 +33,13 @@ Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil �
 
 **Coexistência (número que já usa WhatsApp Business App) continua sem confirmação de sucesso** — mesmo depois de todos os fixes abaixo (webhook, `featureType`, reset da WABA travada), o popup ainda trava em "981536728049005 isn't a valid Business ID" ao tentar confirmar o compartilhamento com o app. Hipótese em teste: falta a permissão `business_management` estar com Advanced Access publicada (estava "Not submitted" — App Review submetido em 2026-08-18, aguardando aprovação da Meta). Enquanto isso não aprova, coexistência com número de cliente externo fica bloqueada; número novo/limpo funciona normalmente.
 
+**Achado em 2026-08-31, comparando com o histórico do projeto irmão `barbearia-saas`**: lá, a mesma revisão do `business_management` foi rejeitada com o motivo "screencast incompleto" (reenviada duas vezes, nenhuma aprovada). É bem provável que seja o mesmo motivo que trava aqui: a Meta exige um vídeo mostrando o fluxo **completo e bem-sucedido** de uso da permissão — mas o fluxo de coexistência aqui trava no "isn't a valid Business ID" antes de terminar, mesmo testando como Admin do app (que já teria Standard Access, sem precisar de Advanced Access aprovado). Ou seja: não dá pra gravar o vídeo que a Meta pede enquanto o erro `#1690130` não for resolvido — é uma dependência circular, não adianta reenviar a revisão de novo sem resolver isso primeiro. Dado interessante do mesmo histórico: na barbearia, o fluxo normal (número novo, sem coexistência) funcionou de ponta a ponta mesmo sem `business_management` aprovado — sugere que essa permissão pode nem ser bloqueante fora do caso específico de coexistência.
+
 ### Pendências abertas
-1. **Coexistência do WhatsApp ainda travada** — App Review de `business_management` submetido (2026-08-18), aguardando aprovação da Meta. Se aprovar e ainda travar, o próximo passo já é abrir chamado de suporte com a Meta (erro não documentado publicamente, código de referência `#1690130`).
+1. **Coexistência do WhatsApp ainda travada.** Ordem certa dos próximos passos (não reenviar a revisão de novo antes do passo 1 — só vai travar no mesmo "screencast incompleto"):
+   1. Abrir chamado de suporte com a Meta sobre o erro "isn't a valid Business ID" (código de referência `#1690130`, não documentado publicamente) — é isso que impede completar o fluxo mesmo como Admin do app.
+   2. Só depois de conseguir completar o fluxo de coexistência pelo menos uma vez (login → "Conectar número que já usa WhatsApp Business App" → código no celular → tela de confirmação da empresa → número aparecendo em Configurações → WhatsApp), gravar o screencast desse fluxo inteiro, sem cortes.
+   3. Reenviar a revisão do `business_management` só com esse vídeo em mãos.
 2. Popular o cadastro de produção antes do cliente operar pra valer.
 
 ## Sessão de 2026-08-27 — resumo
