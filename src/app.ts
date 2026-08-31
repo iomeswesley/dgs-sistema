@@ -204,10 +204,43 @@ export function createApp() {
   /* ---------------- Frontend (SPA) ---------------- */
 
   if (fs.existsSync(WEB_DIST)) {
-    app.use(express.static(WEB_DIST));
+    app.use(
+      express.static(WEB_DIST, {
+        // Sem isso, o Express (por baixo, o pacote `send`) manda
+        // `Cache-Control: public, max-age=0` pra TUDO igual, inclusive o
+        // `index.html` — na prática o navegador guarda uma versão antiga
+        // dele por conta própria (cache heurístico). Depois do próximo
+        // deploy, esse `index.html` velho aponta pra um arquivo
+        // `assets/index-<hash antigo>.js` que já não existe mais; o pedido
+        // desse .js cai no fallback do SPA logo abaixo (`app.get("*")`),
+        // que devolve o `index.html` NOVO como se fosse o JS pedido — o
+        // navegador tenta rodar HTML como JavaScript, falha, e a tela fica
+        // em branco até a pessoa forçar um hard refresh (achado pelo
+        // usuário em 2026-08-31, tela branca "sempre que abre o site").
+        //
+        // Correção: arquivo com hash de conteúdo no nome (o Vite gera
+        // tudo dentro de `assets/`) pode cachear pra sempre — o nome já
+        // muda sozinho se o conteúdo mudar, então nunca fica desatualizado
+        // "por engano". Tudo o mais, principalmente `index.html` (nome
+        // fixo, é ele quem aponta pros hashes certos a cada deploy), tem
+        // que ser sempre revalidado.
+        setHeaders: (res, filePath) => {
+          res.setHeader(
+            "Cache-Control",
+            filePath.includes(`${path.sep}assets${path.sep}`)
+              ? "public, max-age=31536000, immutable"
+              : "no-cache"
+          );
+        },
+      })
+    );
     // Fallback do React Router: qualquer rota que não seja /api cai no
-    // index.html pra o roteamento acontecer no cliente.
-    app.get("*", (_req, res) => res.sendFile(path.join(WEB_DIST, "index.html")));
+    // index.html pra o roteamento acontecer no cliente. Mesmo no-cache do
+    // index.html acima — é o mesmo arquivo, só que servido por aqui.
+    app.get("*", (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(path.join(WEB_DIST, "index.html"));
+    });
   }
 
   app.use(errorHandler);
