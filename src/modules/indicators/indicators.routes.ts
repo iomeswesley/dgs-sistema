@@ -3,7 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { dateOnlySchema, parseDateOnly, parseQuery } from "@/lib/http.js";
-import { buildIndicators, type GroupBy } from "./indicators.service.js";
+import { buildIndicators, getMessagesPerDay, type GroupBy } from "./indicators.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { buildListReportCsv } from "@/modules/lists/list-report.js";
 import { generateListReportPdf } from "@/modules/lists/lists.pdf.js";
@@ -36,6 +36,20 @@ indicatorsRouter.get(
     const query = parseQuery(req, filterSchema);
     const report = await buildIndicators(buildFilters(query), query.groupBy as GroupBy);
     res.json(report);
+  })
+);
+
+const messagesPerDaySchema = z.object({ from: dateOnlySchema, to: dateOnlySchema });
+
+/** Série pro gráfico de colunas "Mensagens enviadas por dia" em Indicadores. */
+indicatorsRouter.get(
+  "/api/indicators/messages-per-day",
+  asyncHandler(async (req, res) => {
+    const query = parseQuery(req, messagesPerDaySchema);
+    const from = parseDateOnly(query.from);
+    const to = new Date(parseDateOnly(query.to).getTime() + 86_400_000 - 1);
+    const series = await getMessagesPerDay(from, to);
+    res.json({ series });
   })
 );
 

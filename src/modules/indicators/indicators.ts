@@ -79,6 +79,39 @@ export interface IndicatorBreakdown extends IndicatorTotals {
 
 export type GroupBy = "doctor" | "municipality" | "procedure" | "month";
 
+export interface DailyMessageCount {
+  date: string; // YYYY-MM-DD, Brasília
+  count: number;
+}
+
+/**
+ * Agrupa timestamps de mensagens ENVIADAS por dia (Brasília), preenchendo com
+ * 0 os dias sem envio dentro do intervalo — sem isso o gráfico de colunas
+ * teria buracos silenciosos em vez de barras zeradas, difícil de distinguir
+ * de "não carregou ainda". `dayKeyOf` já vem calculado pelo chamador (mesma
+ * separação timestamp-de-verdade vs `@db.Date` do resto do arquivo).
+ */
+export function buildMessagesPerDaySeries(
+  sentDayKeys: string[],
+  fromDayKey: string,
+  toDayKey: string
+): DailyMessageCount[] {
+  const counts = new Map<string, number>();
+  for (const key of sentDayKeys) {
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  const series: DailyMessageCount[] = [];
+  const cursor = new Date(`${fromDayKey}T00:00:00Z`);
+  const end = new Date(`${toDayKey}T00:00:00Z`);
+  while (cursor.getTime() <= end.getTime()) {
+    const key = cursor.toISOString().slice(0, 10);
+    series.push({ date: key, count: counts.get(key) ?? 0 });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return series;
+}
+
 export interface IndicatorReport {
   totals: IndicatorTotals;
   breakdown: IndicatorBreakdown[];

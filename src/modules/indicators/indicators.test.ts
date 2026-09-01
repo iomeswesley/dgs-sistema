@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildIndicatorsCore, type AppointmentInput, type ClosingInput, type FeeInput } from "./indicators.js";
+import {
+  buildIndicatorsCore,
+  buildMessagesPerDaySeries,
+  type AppointmentInput,
+  type ClosingInput,
+  type FeeInput,
+} from "./indicators.js";
 
 function appointment(overrides: Partial<AppointmentInput> = {}): AppointmentInput {
   return {
@@ -151,5 +157,26 @@ describe("buildIndicatorsCore", () => {
     const { totals } = buildIndicatorsCore([], closings, [], "doctor");
 
     expect(totals.extras).toBe(5);
+  });
+});
+
+describe("buildMessagesPerDaySeries", () => {
+  it("preenche com 0 os dias sem envio dentro do intervalo", () => {
+    const series = buildMessagesPerDaySeries(
+      ["2026-06-01", "2026-06-01", "2026-06-03"],
+      "2026-06-01",
+      "2026-06-03"
+    );
+
+    expect(series).toEqual([
+      { date: "2026-06-01", count: 2 },
+      { date: "2026-06-02", count: 0 },
+      { date: "2026-06-03", count: 1 },
+    ]);
+  });
+
+  it("intervalo de um único dia devolve um único ponto", () => {
+    const series = buildMessagesPerDaySeries(["2026-06-01"], "2026-06-01", "2026-06-01");
+    expect(series).toEqual([{ date: "2026-06-01", count: 1 }]);
   });
 });

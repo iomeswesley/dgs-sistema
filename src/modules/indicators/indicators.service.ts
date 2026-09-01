@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma.js";
-import { buildIndicatorsCore, type GroupBy, type IndicatorReport } from "./indicators.js";
+import { toBrasiliaDateString } from "@/lib/timezone.js";
+import { buildIndicatorsCore, buildMessagesPerDaySeries, type DailyMessageCount, type GroupBy, type IndicatorReport } from "./indicators.js";
 
-export type { GroupBy, IndicatorReport, IndicatorTotals, IndicatorBreakdown } from "./indicators.js";
+export type { GroupBy, IndicatorReport, IndicatorTotals, IndicatorBreakdown, DailyMessageCount } from "./indicators.js";
 
 export interface IndicatorFilters {
   from: Date;
@@ -90,5 +91,24 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
       cityRate: fee.cityRate ? Number(fee.cityRate) : null,
     })),
     groupBy
+  );
+}
+
+/**
+ * Série de mensagens ENVIADAS por dia, pro gráfico de colunas em Indicadores
+ * — busca só o timestamp (não o conteúdo, nem o telefone) de cada envio no
+ * intervalo, agrega em Brasília. `to` já vem como fim do dia (23:59:59.999),
+ * mesmo padrão do `buildFilters` em indicators.routes.ts.
+ */
+export async function getMessagesPerDay(from: Date, to: Date): Promise<DailyMessageCount[]> {
+  const messages = await prisma.whatsappMessage.findMany({
+    where: { direction: "ENVIADA", createdAt: { gte: from, lte: to } },
+    select: { createdAt: true },
+  });
+
+  return buildMessagesPerDaySeries(
+    messages.map((m) => toBrasiliaDateString(m.createdAt)),
+    toBrasiliaDateString(from),
+    toBrasiliaDateString(to)
   );
 }

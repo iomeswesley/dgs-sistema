@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EmptyState, PageHeader } from "../components/AppShell";
+import { MessagesPerDayChart } from "../components/MessagesPerDayChart";
 import { ErrorNote, Field, Spinner, Stat, Table, Td, Th } from "../components/ui";
 import { useApi } from "../lib/useApi";
 import { daysAgo, formatMoney, formatPercent, localDateString } from "../lib/format";
@@ -61,6 +62,8 @@ export function Indicadores() {
           </a>
         }
       />
+
+      <MessagesPerDayChart />
 
       <div className="card mb-5 p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
