@@ -71,11 +71,26 @@ export async function queueCapacity(): Promise<QueueCapacity> {
  * processamento da fila, que é quem respeita o limite.
  */
 export async function enqueueList(listId: number, userId: number): Promise<{ queued: number; skipped: number }> {
-  const list = await prisma.list.findUnique({ where: { id: listId } });
-  if (!list) throw new AppError("Lista não encontrada", 404);
-  if (list.status !== "APROVADA") {
+  // Trava atômica: se duas chamadas de /dispatch caírem ao mesmo tempo (achado
+  // real em produção em 2026-09-01 — duplo clique ou dois disparos quase
+  // simultâneos), o `findUnique` + checagem de status abaixo, feito em duas
+  // etapas, deixava as duas passarem pelo "list.status === APROVADA" antes de
+  // qualquer uma escrever DISPARADA — as duas então criavam job pros mesmos
+  // pacientes. `updateMany` com o status como parte do WHERE é atômico no
+  // banco: só uma das chamadas concorrentes consegue mudar a linha (count
+  // 1), a outra recebe count 0 e cai no erro de sempre, sem criar nada.
+  const claim = await prisma.list.updateMany({
+    where: { id: listId, status: "APROVADA" },
+    data: { status: "DISPARADA", dispatchedAt: new Date() },
+  });
+  if (claim.count === 0) {
+    const list = await prisma.list.findUnique({ where: { id: listId } });
+    if (!list) throw new AppError("Lista não encontrada", 404);
     throw new AppError("Só lista aprovada pode ser disparada.", 409);
   }
+  // A trava acima já confirmou que a lista existe e estava APROVADA — busca
+  // de novo só pra pegar `isComplementary`, sem repetir a checagem de status.
+  const list = await prisma.list.findUniqueOrThrow({ where: { id: listId } });
 
   const appointments = await prisma.appointment.findMany({
     where: { listId, status: "PENDENTE", selectedPhone: { not: null } },
@@ -115,10 +130,6 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
     queued++;
   }
 
-  await prisma.list.update({
-    where: { id: listId },
-    data: { status: "DISPARADA", dispatchedAt: new Date() },
-  });
   await recordAudit({
     userId,
     action: "dispatch",
@@ -170,23 +181,51 @@ export async function processQueue(): Promise<ProcessResult> {
     return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0 };
   }
 
-  const jobs = await prisma.messageJob.findMany({
-    where: { status: "PENDENTE", scheduledFor: { lte: new Date() } },
-    orderBy: { scheduledFor: "asc" },
-    take: Math.min(BATCH_SIZE, capacity.remaining),
-    include: {
-      appointment: {
-        include: {
-          patient: true,
-          municipality: true,
-          procedure: true,
-          doctor: true,
-          agenda: { include: { unit: true } },
-          cancellationBatch: true,
-        },
-      },
-    },
-  });
+  // Reserva os jobs de forma atômica (SELECT ... FOR UPDATE SKIP LOCKED +
+  // UPDATE numa query só) — achado real em produção em 2026-09-01: com
+  // `findMany` (achar) seguido de um `update` por job (marcar ENVIANDO) em
+  // dois passos separados, duas chamadas de processQueue() rodando quase ao
+  // mesmo tempo (ex.: o disparo manual e o `runQueueUntilDone` do navegador
+  // se cruzando) liam o MESMO lote de jobs ainda PENDENTE antes de qualquer
+  // uma marcar o primeiro como ENVIANDO — as duas mandavam a mensagem de
+  // verdade pro paciente. `FOR UPDATE SKIP LOCKED` faz cada chamada
+  // concorrente pegar um lote DIFERENTE de linhas, sem esperar uma pela
+  // outra e sem nunca pegar a mesma linha duas vezes.
+  const limit = Math.min(BATCH_SIZE, capacity.remaining);
+  const claimed = await prisma.$queryRaw<{ id: number }[]>`
+    WITH claimed AS (
+      SELECT id FROM message_jobs
+      WHERE status = 'PENDENTE'::"JobStatus" AND "scheduledFor" <= now()
+      ORDER BY "scheduledFor" ASC
+      LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE message_jobs mj
+    SET status = 'ENVIANDO'::"JobStatus", attempts = mj.attempts + 1, "updatedAt" = now()
+    FROM claimed
+    WHERE mj.id = claimed.id
+    RETURNING mj.id
+  `;
+
+  const jobs =
+    claimed.length === 0
+      ? []
+      : await prisma.messageJob.findMany({
+          where: { id: { in: claimed.map((c) => c.id) } },
+          orderBy: { scheduledFor: "asc" },
+          include: {
+            appointment: {
+              include: {
+                patient: true,
+                municipality: true,
+                procedure: true,
+                doctor: true,
+                agenda: { include: { unit: true } },
+                cancellationBatch: true,
+              },
+            },
+          },
+        });
 
   let sent = 0;
   let failed = 0;
@@ -195,10 +234,28 @@ export async function processQueue(): Promise<ProcessResult> {
   for (const job of jobs) {
     if (Date.now() - start > TIME_BUDGET_MS) break;
 
-    await prisma.messageJob.update({
-      where: { id: job.id },
-      data: { status: "ENVIANDO", attempts: { increment: 1 } },
+    // Segunda camada de segurança, independente da trava acima — pedida
+    // pelo usuário depois do incidente de 2026-09-01: nunca manda duas
+    // mensagens do MESMO template pro MESMO agendamento, não importa a
+    // causa (job duplicado de um bug antigo, reprocessamento, etc.). Só
+    // olha o mesmo template — cancelamento continua podendo sair mesmo se
+    // já tiver confirmação enviada antes, são mensagens diferentes.
+    const alreadySent = await prisma.whatsappMessage.findFirst({
+      where: {
+        appointmentId: job.appointmentId,
+        template: job.template,
+        direction: "ENVIADA",
+        status: { in: ["ENVIADO", "ENTREGUE", "LIDO"] },
+      },
+      select: { id: true },
     });
+    if (alreadySent) {
+      await prisma.messageJob.update({
+        where: { id: job.id },
+        data: { status: "CANCELADO", processedAt: new Date(), lastError: "Duplicado — esse template já tinha sido enviado pra esse agendamento." },
+      });
+      continue;
+    }
 
     // Cancelamento já é um fato decidido pela equipe no momento do disparo
     // (ver dispatchCancellation em modules/cancellations) — o
