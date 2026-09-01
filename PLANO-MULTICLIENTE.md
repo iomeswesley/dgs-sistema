@@ -190,6 +190,28 @@ Ao fim da Fase 0 o sistema se comporta **exatamente** como hoje.
 
 ---
 
+## 5b. Ambiente de teste (decidido em 2026-09-01)
+
+O trabalho acontece na branch **`multicliente`** — `master` continua sendo o
+que está no ar, intocado.
+
+**Banco local em Docker está descartado**, por decisão do usuário: ele quer
+abrir o ambiente de teste **de outros lugares** (celular, outra máquina), e
+`localhost` não serve pra isso. O ambiente de teste precisa ser acessível pela
+internet:
+
+- **Banco:** um projeto **Supabase separado** (free tier), exclusivo da branch.
+  Nunca o banco de produção. É a única forma segura de rodar migration sem
+  risco — lembrando que o `.env` desta máquina aponta pro banco **real**.
+- **Aplicação:** **deploy de preview da Vercel** a partir da branch
+  `multicliente`, com as variáveis de ambiente apontando pro Supabase de teste.
+  Isso dá uma URL própria, acessível de qualquer lugar, sem afetar
+  `sistema-dgs.vercel.app`.
+
+⚠️ **Primeiro passo da próxima sessão:** criar o projeto Supabase de teste e
+configurar as variáveis do preview na Vercel. Enquanto isso não existir,
+**nenhuma migration pode ser executada** — não há onde rodar com segurança.
+
 ## 6. Fases de execução
 
 Cada fase é entregável e verificável sozinha. O risco sobe até a Fase 2 e cai
