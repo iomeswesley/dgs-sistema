@@ -16,22 +16,94 @@ datasource db {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Clientes (multi-cliente)                                               */
+/* ---------------------------------------------------------------------- */
+
+// Convenção de isolamento: toda tabela do domínio tem uma coluna `clientId`
+// com índice, e o filtro é injetado automaticamente por requisição (ver
+// PLANO-MULTICLIENTE.md, seção 4). Tabelas de infraestrutura ficam de fora
+// de propósito: `users` (pessoa da DGS, uma conta só, acesso concedido via
+// UserClient), `password_resets`, `rate_limit_hits` e a tabela `session`
+// criada em runtime pelo connect-pg-simple.
+//
+// ATENÇÃO — `Client` NÃO é a mesma coisa que `Municipality`: um cliente está
+// um nível ACIMA. A DGS é um cliente que atende vários municípios (Camboriú,
+// Blumenau, Pomerode, Indaial); uma prefeitura que contrate direto será outro
+// cliente, com um município só. Confundir os dois quebra o dado que já está
+// em produção.
+model Client {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users               UserClient[]
+  municipalities      Municipality[]
+  healthUnits         HealthUnit[]
+  doctors             Doctor[]
+  procedures          Procedure[]
+  doctorProcedures    DoctorProcedure[]
+  agendas             Agenda[]
+  lists               List[]
+  patients            Patient[]
+  appointments        Appointment[]
+  cancellationBatches CancellationBatch[]
+  messageJobs         MessageJob[]
+  whatsappMessages    WhatsappMessage[]
+  whatsappAccounts    WhatsappAccount[]
+  closings            DailyClosing[]
+  closingAttachments  ClosingAttachment[]
+  auditLogs           AuditLog[]
+  settings            AppSettings?
+
+  @@map("clients")
+}
+
+// Quais clientes cada pessoa da equipe pode acessar. Uma pessoa tem UM login
+// e pode atender vários clientes (diferente dos projetos irmãos, onde cada
+// usuário pertence a um tenant só) — reflete como a equipe da DGS já
+// trabalha hoje: a mesma pessoa cuida de várias prefeituras.
+model UserClient {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  clientId  Int
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientId])
+  @@index([clientId])
+  @@map("user_clients")
+}
+
+/* ---------------------------------------------------------------------- */
 /* Equipe                                                                 */
 /* ---------------------------------------------------------------------- */
 
-// Perfil único: todo mundo da equipe tem os mesmos poderes. O controle vem
-// do AuditLog (quem lançou o quê), não de permissões — decisão explícita do
-// usuário, ver PLANO.md.
+// Dentro de um cliente o perfil continua único: todo mundo da equipe tem os
+// mesmos poderes, e o controle vem do AuditLog (quem lançou o quê), não de
+// permissões — decisão original, ver PLANO.md.
+//
+// A única distinção de papel é `isSuperAdmin`: administrador da plataforma
+// (a DGS), que enxerga todos os clientes. Diferente dos projetos irmãos, que
+// usam uma credencial fixa em variável de ambiente — aqui todo mundo que loga
+// já é da própria DGS, então vale mais manter o mesmo login e a mesma
+// auditoria de todo mundo (ver PLANO-MULTICLIENTE.md, seção 2).
 model User {
   id           Int       @id @default(autoincrement())
   name         String
   email        String    @unique
   passwordHash String
   active       Boolean   @default(true)
+  isSuperAdmin Boolean   @default(false)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  clients                   UserClient[]
   passwordResets            PasswordReset[]
   auditLogs                 AuditLog[]
   uploadedLists             List[]              @relation("ListUploadedBy")
@@ -66,6 +138,7 @@ model PasswordReset {
 
 model Municipality {
   id        Int      @id @default(autoincrement())
+  clientId  Int
   name      String
   state     String   @default("SC")
   // Observações sobre o formato da lista que essa prefeitura manda
@@ -75,13 +148,17 @@ model Municipality {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  client       Client         @relation(fields: [clientId], references: [id])
   units        HealthUnit[]
   agendas      Agenda[]
   lists        List[]
   appointments Appointment[]
   closings     DailyClosing[]
 
-  @@unique([name, state])
+  // Unicidade por cliente, não global: dois clientes podem legitimamente
+  // atender o mesmo município.
+  @@unique([clientId, name, state])
+  @@index([clientId])
   @@map("municipalities")
 }
 
@@ -90,6 +167,7 @@ model Municipality {
 // papel vem de qual campo referencia a unidade.
 model HealthUnit {
   id             Int      @id @default(autoincrement())
+  clientId       Int
   municipalityId Int
   name           String
   address        String?
@@ -98,17 +176,22 @@ model HealthUnit {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  client                Client        @relation(fields: [clientId], references: [id])
   municipality          Municipality  @relation(fields: [municipalityId], references: [id])
   agendas               Agenda[]
   requestedAppointments Appointment[] @relation("AppointmentRequestingUnit")
 
+  // Já fica isolado transitivamente (o município é de um cliente só), mas o
+  // clientId próprio permite filtrar sem join e é a convenção do schema.
   @@unique([municipalityId, name])
   @@index([municipalityId])
+  @@index([clientId])
   @@map("health_units")
 }
 
 model Doctor {
   id           Int      @id @default(autoincrement())
+  clientId     Int
   name         String
   specialty    String?
   registration String? // CRM
@@ -116,11 +199,13 @@ model Doctor {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  client       Client            @relation(fields: [clientId], references: [id])
   procedures   DoctorProcedure[]
   agendas      Agenda[]
   appointments Appointment[]
   closings     DailyClosing[]
 
+  @@index([clientId])
   @@map("doctors")
 }
 
