@@ -59,7 +59,7 @@ authRouter.post(
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await recordAudit({ userId: user.id, action: "login", entity: "User", entityId: user.id });
 
-    res.json({ user: req.session.user });
+    res.json({ user: req.session.user, clients: await accessibleClients(user.id) });
   })
 );
 
@@ -71,6 +71,52 @@ authRouter.post(
   })
 );
 
-authRouter.get("/api/auth/me", requireAuth, (req, res) => {
-  res.json({ user: req.session.user });
-});
+/** Clientes que o usuário logado pode acessar — base do seletor de cliente
+ *  na interface (Fase 3 do plano multi-cliente). Hoje quase sempre devolve
+ *  1 item ("DGS"); a tela só mostra o seletor quando vem mais de 1. */
+async function accessibleClients(userId: number) {
+  const rows = await prisma.userClient.findMany({
+    where: { userId },
+    include: { client: { select: { id: true, name: true } } },
+    orderBy: { client: { name: "asc" } },
+  });
+  return rows.map((r) => r.client);
+}
+
+authRouter.get(
+  "/api/auth/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ user: req.session.user, clients: await accessibleClients(req.session.user!.id) });
+  })
+);
+
+const switchClientSchema = z.object({ clientId: z.number().int().positive() });
+
+/**
+ * Troca o cliente ativo da sessão — o seletor no topo da interface (Fase 3).
+ * Só permite trocar pra um cliente que o `UserClient` do usuário realmente
+ * autoriza; nunca aceita um `clientId` arbitrário do corpo da requisição
+ * sem checar (isso seria um jeito trivial de ver dado de outro cliente).
+ */
+authRouter.post(
+  "/api/auth/switch-client",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { clientId } = switchClientSchema.parse(req.body);
+    const access = await prisma.userClient.findFirst({
+      where: { userId: req.session.user!.id, clientId },
+    });
+    if (!access) throw new AppError("Você não tem acesso a esse cliente.", 403);
+
+    req.session.user!.activeClientId = clientId;
+    await recordAudit({
+      userId: req.session.user!.id,
+      action: "switch_client",
+      entity: "User",
+      entityId: req.session.user!.id,
+      newValue: String(clientId),
+    });
+    res.json({ user: req.session.user });
+  })
+);

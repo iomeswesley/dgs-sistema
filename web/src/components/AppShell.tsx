@@ -38,7 +38,7 @@ const NAV: { to: string; label: string; hint: string; icon: LucideIcon }[] = [
 const SIDEBAR_STORAGE_KEY = "dgs-sidebar-collapsed";
 
 export function AppShell() {
-  const { user, signOut } = useSession();
+  const { user, clients, switchClient, signOut } = useSession();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
@@ -180,6 +180,27 @@ export function AppShell() {
             <>
               <div className="truncate text-sm font-medium">{user?.name}</div>
               <div className="truncate text-xs text-board-ink-muted">{user?.email}</div>
+              {/* Só aparece pra quem tem acesso a mais de um cliente — hoje
+                  é o caso raro (quase todo mundo só tem "DGS"). Trocar
+                  recarrega a página: mais simples e seguro que tentar
+                  invalidar na mão todo state em cache de toda tela. */}
+              {clients.length > 1 && (
+                <select
+                  className="field mt-2 w-full text-xs"
+                  value={user?.activeClientId ?? ""}
+                  onChange={async (e) => {
+                    await switchClient(Number(e.target.value));
+                    window.location.reload();
+                  }}
+                  aria-label="Cliente ativo"
+                >
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </>
           )}
           <button

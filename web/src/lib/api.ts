@@ -49,4 +49,12 @@ export interface SessionUser {
   id: number;
   name: string;
   email: string;
+  activeClientId: number;
+  isSuperAdmin: boolean;
+}
+
+/** Um cliente que o usuário logado pode acessar — base do seletor no topo. */
+export interface AccessibleClient {
+  id: number;
+  name: string;
 }
