@@ -1,5 +1,6 @@
 import type { TemplateKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { normalizePhone, phoneCandidates, formatPhone } from "@/lib/phone.js";
 import { sendTemplate, sendText, type TemplateComponentParams } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
@@ -252,7 +253,14 @@ export async function sendReply(rawPhone: string, text: string): Promise<void> {
 
   const result = await sendText(key, text);
   await prisma.whatsappMessage.create({
-    data: { wamid: result.wamid, direction: "ENVIADA", phone: key, body: text, status: "ENVIADO" },
+    data: {
+      clientId: requireActiveClientId(),
+      wamid: result.wamid,
+      direction: "ENVIADA",
+      phone: key,
+      body: text,
+      status: "ENVIADO",
+    },
   });
 }
 
@@ -273,6 +281,7 @@ export async function sendTemplateReply(
   const result = await sendTemplate(key, TEMPLATE_NAMES[template], params);
   await prisma.whatsappMessage.create({
     data: {
+      clientId: requireActiveClientId(),
       wamid: result.wamid,
       direction: "ENVIADA",
       template,

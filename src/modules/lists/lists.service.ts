@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { extractList } from "@/modules/extraction/extraction.service.js";
 import { mapExtraction, type AppointmentDraft } from "@/modules/extraction/extraction.mapper.js";
@@ -154,12 +155,12 @@ async function resolveCatalog(
   const doctorName = (draft.doctor ?? "Não informado").trim();
   const doctor =
     (await tx.doctor.findFirst({ where: { name: { equals: doctorName, mode: "insensitive" } } })) ??
-    (await tx.doctor.create({ data: { name: doctorName } }));
+    (await tx.doctor.create({ data: { name: doctorName, clientId: requireActiveClientId() } }));
 
   const procedureName = (draft.procedure ?? "Não informado").trim();
   const procedure =
     (await tx.procedure.findFirst({ where: { name: { equals: procedureName, mode: "insensitive" } } })) ??
-    (await tx.procedure.create({ data: { name: procedureName } }));
+    (await tx.procedure.create({ data: { name: procedureName, clientId: requireActiveClientId() } }));
 
   let requestingUnitId: number | null = null;
   if (draft.requestingUnit) {
@@ -167,7 +168,10 @@ async function resolveCatalog(
     const unit =
       (await tx.healthUnit.findFirst({
         where: { municipalityId, name: { equals: unitName, mode: "insensitive" } },
-      })) ?? (await tx.healthUnit.create({ data: { municipalityId, name: unitName } }));
+      })) ??
+      (await tx.healthUnit.create({
+        data: { municipalityId, name: unitName, clientId: requireActiveClientId() },
+      }));
     requestingUnitId = unit.id;
   }
 
@@ -192,7 +196,9 @@ async function resolvePatient(tx: TxClient, draft: PatientIdentity) {
   let cnsForNewPatient = draft.cns;
 
   if (draft.cns) {
-    const byCns = await tx.patient.findUnique({ where: { cns: draft.cns } });
+    const byCns = await tx.patient.findUnique({
+      where: { clientId_cns: { clientId: requireActiveClientId(), cns: draft.cns } },
+    });
     // Mesma cautela do telefone (achado em 2026-08-25) também aplicada aqui
     // em 2026-08-26: CNS é forte prova de identidade, mas não é infalível —
     // um bug de alinhamento na extração (já visto no parser SISREG, corrigido
@@ -233,6 +239,7 @@ async function resolvePatient(tx: TxClient, draft: PatientIdentity) {
 
   return tx.patient.create({
     data: {
+      clientId: requireActiveClientId(),
       name: draft.name,
       cns: cnsForNewPatient,
       birthDate: draft.birthDate ? new Date(draft.birthDate) : null,
@@ -254,6 +261,7 @@ async function createAppointmentFromDraft(
 
   return tx.appointment.create({
     data: {
+      clientId: requireActiveClientId(),
       listId,
       agendaId,
       patientId: patient.id,
@@ -500,6 +508,7 @@ export async function addManualAppointment(
 
     const created = await tx.appointment.create({
       data: {
+        clientId: requireActiveClientId(),
         listId,
         agendaId: list.agendaId,
         patientId: patient.id,
@@ -525,7 +534,12 @@ export async function addManualAppointment(
 
     if (dispatchNow && !patient.optedOut) {
       await tx.messageJob.create({
-        data: { appointmentId: created.id, template, phone: normalized.e164 },
+        data: {
+          clientId: requireActiveClientId(),
+          appointmentId: created.id,
+          template,
+          phone: normalized.e164,
+        },
       });
     }
 
@@ -638,6 +652,7 @@ export async function importAdditionalPatients(
 
       const created = await tx.appointment.create({
         data: {
+          clientId: requireActiveClientId(),
           listId,
           agendaId: list.agendaId,
           patientId: patient.id,
@@ -663,7 +678,12 @@ export async function importAdditionalPatients(
 
       if (dispatchNow && draft.dispatchPhone && !patient.optedOut) {
         await tx.messageJob.create({
-          data: { appointmentId: created.id, template, phone: draft.dispatchPhone },
+          data: {
+            clientId: requireActiveClientId(),
+            appointmentId: created.id,
+            template,
+            phone: draft.dispatchPhone,
+          },
         });
         queued++;
       }
@@ -726,7 +746,12 @@ export async function retryFailedAppointments(
         data: { selectedPhone: normalized.e164, status: "PENDENTE" },
       }),
       prisma.messageJob.create({
-        data: { appointmentId: appointment.id, template, phone: normalized.e164 },
+        data: {
+          clientId: requireActiveClientId(),
+          appointmentId: appointment.id,
+          template,
+          phone: normalized.e164,
+        },
       }),
     ]);
     queued++;

@@ -1,6 +1,7 @@
 import type { TemplateKind } from "@prisma/client";
 import { env } from "@/config/env.js";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
@@ -122,6 +123,7 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
 
     await prisma.messageJob.create({
       data: {
+        clientId: requireActiveClientId(),
         appointmentId: appointment.id,
         template,
         phone: appointment.selectedPhone!,
@@ -192,10 +194,14 @@ export async function processQueue(): Promise<ProcessResult> {
   // concorrente pegar um lote DIFERENTE de linhas, sem esperar uma pela
   // outra e sem nunca pegar a mesma linha duas vezes.
   const limit = Math.min(BATCH_SIZE, capacity.remaining);
+  // SQL cru não passa pela extensão de isolamento (ver
+  // src/lib/tenant-prisma-extension.ts) — clientId precisa ir explícito no
+  // WHERE, à mão, igual o plano multi-cliente já previa (seção 3.3).
+  const clientId = requireActiveClientId();
   const claimed = await prisma.$queryRaw<{ id: number }[]>`
     WITH claimed AS (
       SELECT id FROM message_jobs
-      WHERE status = 'PENDENTE'::"JobStatus" AND "scheduledFor" <= now()
+      WHERE status = 'PENDENTE'::"JobStatus" AND "scheduledFor" <= now() AND "clientId" = ${clientId}
       ORDER BY "scheduledFor" ASC
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
@@ -275,6 +281,7 @@ export async function processQueue(): Promise<ProcessResult> {
         }),
         prisma.whatsappMessage.create({
           data: {
+            clientId,
             appointmentId: job.appointmentId,
             wamid: result.wamid,
             direction: "ENVIADA",
@@ -301,6 +308,7 @@ export async function processQueue(): Promise<ProcessResult> {
         }),
         prisma.whatsappMessage.create({
           data: {
+            clientId,
             appointmentId: job.appointmentId,
             direction: "ENVIADA",
             template: job.template,

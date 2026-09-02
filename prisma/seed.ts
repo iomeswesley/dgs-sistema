@@ -26,9 +26,26 @@ async function main() {
     process.exit(1);
   }
 
+  // Todo usuário novo entra com acesso ao cliente "DGS" — hoje o único que
+  // existe (ver PLANO-MULTICLIENTE.md). Um seletor de verdade, pra quando
+  // existir mais de um cliente, é Fase 3 (interface); esta linha replica pro
+  // futuro o mesmo acesso que a migration deu a todo mundo que já existia.
+  const dgs = await prisma.client.findUnique({ where: { name: "DGS" } });
+  if (!dgs) {
+    console.error(
+      'Cliente "DGS" não encontrado — rodou a migration 20260902000000_multicliente_fase0?',
+    );
+    process.exit(1);
+  }
+
   const password = generateRandomPassword(14);
   const user = await prisma.user.create({
-    data: { name, email: normalizedEmail, passwordHash: hashPassword(password) },
+    data: {
+      name,
+      email: normalizedEmail,
+      passwordHash: hashPassword(password),
+      clients: { create: { clientId: dgs.id } },
+    },
   });
 
   console.log(`Usuário criado: ${user.name} <${user.email}>`);

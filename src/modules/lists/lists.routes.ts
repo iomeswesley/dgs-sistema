@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
@@ -175,6 +176,7 @@ listsRouter.post(
 
     const list = await prisma.list.create({
       data: {
+        clientId: requireActiveClientId(),
         municipalityId: data.municipalityId,
         agendaId: data.agendaId ?? null,
         originalName: data.originalName,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { env } from "@/config/env.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 
@@ -283,6 +284,7 @@ export async function saveConnection(input: SaveConnectionInput): Promise<void> 
 
   await prisma.whatsappAccount.create({
     data: {
+      clientId: requireActiveClientId(),
       wabaId: input.wabaId,
       phoneNumberId: input.phoneNumberId,
       businessName: input.businessName,
@@ -327,6 +329,7 @@ export async function adoptEnvAccount(userId: number): Promise<void> {
 
   const account = await prisma.whatsappAccount.create({
     data: {
+      clientId: requireActiveClientId(),
       wabaId: env.WHATSAPP_BUSINESS_ACCOUNT_ID,
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
       accessToken: env.WHATSAPP_ACCESS_TOKEN,

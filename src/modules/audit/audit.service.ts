@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 
 export interface AuditEntry {
   userId: number | null;
@@ -28,6 +29,7 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
   try {
     await prisma.auditLog.create({
       data: {
+        clientId: requireActiveClientId(),
         userId: entry.userId,
         action: entry.action,
         entity: entry.entity,

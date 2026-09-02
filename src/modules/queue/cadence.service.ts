@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { getSettings } from "@/modules/settings/settings.service.js";
 
 /*
@@ -80,7 +81,7 @@ export async function enqueueReminders(): Promise<CadenceResult> {
     }
 
     await prisma.messageJob.create({
-      data: { appointmentId: appointment.id, template: "LEMBRETE", phone },
+      data: { clientId: requireActiveClientId(), appointmentId: appointment.id, template: "LEMBRETE", phone },
     });
     queued++;
   }
@@ -129,7 +130,12 @@ export async function enqueueRetries(): Promise<CadenceResult> {
     }
 
     await prisma.messageJob.create({
-      data: { appointmentId: appointment.id, template: "CONFIRMACAO", phone: nextPhone },
+      data: {
+        clientId: requireActiveClientId(),
+        appointmentId: appointment.id,
+        template: "CONFIRMACAO",
+        phone: nextPhone,
+      },
     });
     queued++;
   }

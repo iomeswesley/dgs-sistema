@@ -3,6 +3,8 @@ import { waitUntil } from "@vercel/functions";
 import { env } from "@/config/env.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { parseInboundReplies, parseStatusUpdates, verifyWebhookSignature } from "@/lib/whatsapp.js";
+import { runWithClient } from "@/lib/tenant-context.js";
+import { resolveSoleActiveClientId } from "@/lib/tenant-bootstrap.js";
 import { handleInboundReply, handleStatusUpdate } from "./whatsapp.service.js";
 
 export const whatsappRouter = Router();
@@ -44,19 +46,27 @@ whatsappRouter.post(
 );
 
 async function processWebhookEvents(body: unknown): Promise<void> {
-  for (const reply of parseInboundReplies(body)) {
-    try {
-      await handleInboundReply(reply);
-    } catch (err) {
-      console.error("[WEBHOOK] Falha ao processar resposta:", (err as Error).message);
+  // Contexto de cliente: bootstrap temporário (ver
+  // src/lib/tenant-bootstrap.ts) — o roteamento de verdade por
+  // metadata.phone_number_id (achado 3.2 do PLANO-MULTICLIENTE.md) é
+  // Fase 2. Até lá, todo evento do webhook é tratado como sendo do único
+  // cliente ativo que existe.
+  const clientId = await resolveSoleActiveClientId();
+  await runWithClient(clientId, async () => {
+    for (const reply of parseInboundReplies(body)) {
+      try {
+        await handleInboundReply(reply);
+      } catch (err) {
+        console.error("[WEBHOOK] Falha ao processar resposta:", (err as Error).message);
+      }
     }
-  }
 
-  for (const update of parseStatusUpdates(body)) {
-    try {
-      await handleStatusUpdate(update);
-    } catch (err) {
-      console.error("[WEBHOOK] Falha ao processar status:", (err as Error).message);
+    for (const update of parseStatusUpdates(body)) {
+      try {
+        await handleStatusUpdate(update);
+      } catch (err) {
+        console.error("[WEBHOOK] Falha ao processar status:", (err as Error).message);
+      }
     }
-  }
+  });
 }

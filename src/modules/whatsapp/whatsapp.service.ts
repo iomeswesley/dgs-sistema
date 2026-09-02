@@ -1,5 +1,6 @@
 import type { AppointmentStatus, DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { classifyReply } from "@/lib/templates.js";
 import { phoneCandidates } from "@/lib/phone.js";
 import { downloadMedia, type InboundReply, type StatusUpdate } from "@/lib/whatsapp.js";
@@ -58,6 +59,7 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
 
   await prisma.whatsappMessage.create({
     data: {
+      clientId: requireActiveClientId(),
       appointmentId: appointment?.id ?? null,
       wamid: reply.wamid,
       direction: "RECEBIDA",

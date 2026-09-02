@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
@@ -42,7 +43,7 @@ catalogRouter.post(
   "/api/catalog/municipalities",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, municipalitySchema);
-    const municipality = await prisma.municipality.create({ data });
+    const municipality = await prisma.municipality.create({ data: { ...data, clientId: requireActiveClientId() } });
     await recordAudit({
       userId: currentUserId(req),
       action: "create",
@@ -99,7 +100,7 @@ catalogRouter.post(
   "/api/catalog/units",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, unitSchema);
-    const unit = await prisma.healthUnit.create({ data });
+    const unit = await prisma.healthUnit.create({ data: { ...data, clientId: requireActiveClientId() } });
     await recordAudit({
       userId: currentUserId(req),
       action: "create",
@@ -158,7 +159,7 @@ catalogRouter.post(
   "/api/catalog/doctors",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, doctorSchema);
-    const doctor = await prisma.doctor.create({ data });
+    const doctor = await prisma.doctor.create({ data: { ...data, clientId: requireActiveClientId() } });
     await recordAudit({
       userId: currentUserId(req),
       action: "create",
@@ -208,7 +209,7 @@ catalogRouter.post(
   "/api/catalog/procedures",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, procedureSchema);
-    const procedure = await prisma.procedure.create({ data });
+    const procedure = await prisma.procedure.create({ data: { ...data, clientId: requireActiveClientId() } });
     await recordAudit({
       userId: currentUserId(req),
       action: "create",
@@ -262,7 +263,7 @@ catalogRouter.put(
 
     const record = await prisma.doctorProcedure.upsert({
       where: { doctorId_procedureId: { doctorId, procedureId } },
-      create: { doctorId, procedureId, ...rest },
+      create: { doctorId, procedureId, ...rest, clientId: requireActiveClientId() },
       update: rest,
     });
 

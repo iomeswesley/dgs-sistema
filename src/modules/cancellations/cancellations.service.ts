@@ -1,5 +1,6 @@
 import type { AppointmentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
@@ -220,6 +221,7 @@ export async function dispatchCancellation(
 
   const batch = await prisma.cancellationBatch.create({
     data: {
+      clientId: requireActiveClientId(),
       reason,
       createdById: userId,
       agendaId: "agendaId" in source ? source.agendaId : null,
@@ -247,7 +249,12 @@ export async function dispatchCancellation(
       data: { status: "CANCELADO", cancellationBatchId: batch.id, canceledById: userId, canceledAt: now },
     });
     await prisma.messageJob.create({
-      data: { appointmentId: appointment.id, template: "CANCELAMENTO", phone: appointment.selectedPhone! },
+      data: {
+        clientId: requireActiveClientId(),
+        appointmentId: appointment.id,
+        template: "CANCELAMENTO",
+        phone: appointment.selectedPhone!,
+      },
     });
   }
 
@@ -432,7 +439,12 @@ export async function retryFailedMessages(
         data: { selectedPhone: normalized.e164 },
       }),
       prisma.messageJob.create({
-        data: { appointmentId: appointment.id, template: "CANCELAMENTO", phone: normalized.e164 },
+        data: {
+          clientId: requireActiveClientId(),
+          appointmentId: appointment.id,
+          template: "CANCELAMENTO",
+          phone: normalized.e164,
+        },
       }),
     ]);
     queued++;

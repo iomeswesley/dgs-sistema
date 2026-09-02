@@ -30,13 +30,32 @@ authRouter.post(
     if (!user || !user.active) throw invalid;
     if (!verifyPassword(parsed.data.password, user.passwordHash)) throw invalid;
 
+    // Qual cliente esta sessão vai enxergar (ver src/lib/tenant-context.ts).
+    // `UserClient`/`User` não são tabelas isoladas — não precisa de contexto
+    // pra ler. Hoje todo mundo tem acesso a exatamente um cliente ("DGS"),
+    // então o primeiro já resolve; um seletor de verdade fica pra Fase 3
+    // (interface), quando alguém puder ter acesso a mais de um.
+    const access = await prisma.userClient.findFirst({ where: { userId: user.id } });
+    if (!access) {
+      throw new AppError(
+        "Usuário sem acesso a nenhum cliente — contate um administrador.",
+        403,
+      );
+    }
+
     // Renova o id da sessão no login pra evitar session fixation (o atacante
     // não consegue reusar um id que ele mesmo plantou antes da autenticação).
     await new Promise<void>((resolve, reject) => {
       req.session.regenerate((err) => (err ? reject(err) : resolve()));
     });
 
-    req.session.user = { id: user.id, name: user.name, email: user.email };
+    req.session.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      activeClientId: access.clientId,
+      isSuperAdmin: user.isSuperAdmin,
+    };
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await recordAudit({ userId: user.id, action: "login", entity: "User", entityId: user.id });
 

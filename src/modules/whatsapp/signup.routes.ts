@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { TemplateKind } from "@prisma/client";
 import { env } from "@/config/env.js";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { requireAuth, currentUserId } from "@/middleware/auth.js";
@@ -230,6 +231,7 @@ whatsappSignupRouter.post(
       const result = await sendTemplate(normalized.e164, TEMPLATE_NAMES[template], params);
       await prisma.whatsappMessage.create({
         data: {
+          clientId: requireActiveClientId(),
           wamid: result.wamid,
           direction: "ENVIADA",
           template,
@@ -245,6 +247,7 @@ whatsappSignupRouter.post(
       const code = err instanceof WhatsappSendError ? err.code : undefined;
       await prisma.whatsappMessage.create({
         data: {
+          clientId: requireActiveClientId(),
           direction: "ENVIADA",
           template,
           phone: normalized.e164,

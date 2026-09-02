@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
@@ -184,6 +185,7 @@ export async function saveClosing(input: ClosingInput, userId: number) {
     ? await prisma.dailyClosing.update({ where: { id: before.id }, data })
     : await prisma.dailyClosing.create({
         data: {
+          clientId: requireActiveClientId(),
           doctorId: input.doctorId,
           municipalityId: input.municipalityId,
           procedureId: input.procedureId,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { dateOnlySchema, parseBody, parseDateOnly, parseQuery, routeId } from "@/lib/http.js";
@@ -70,7 +71,7 @@ agendasRouter.post(
   asyncHandler(async (req, res) => {
     const data = parseBody(req, agendaSchema);
     const agenda = await prisma.agenda.create({
-      data: { ...data, date: parseDateOnly(data.date) },
+      data: { ...data, date: parseDateOnly(data.date), clientId: requireActiveClientId() },
     });
     await recordAudit({
       userId: currentUserId(req),

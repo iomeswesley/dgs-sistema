@@ -29,6 +29,8 @@ import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js
 import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia } from "@/modules/queue/cadence.service.js";
 import { PRIVACY_POLICY_HTML } from "@/legal/privacy.js";
 import { prisma } from "@/lib/prisma.js";
+import { runWithClient } from "@/lib/tenant-context.js";
+import { resolveSoleActiveClientId } from "@/lib/tenant-bootstrap.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -156,22 +158,29 @@ export function createApp() {
         // fica tempo demais sem receber requisição nenhuma.
         await prisma.$queryRaw`SELECT 1`;
 
-        // Ordem importa: primeiro cria os jobs do dia (lembrete e reenvio),
-        // depois processa a fila — assim o que foi enfileirado agora já sai
-        // nesta mesma rodada, se couber no limite.
-        const reminders = await enqueueReminders();
-        const retries = await enqueueRetries();
-        const processed = await processQueue();
-        const closed = await closeExpiredAppointments();
-        const purged = await purgeExpiredData();
-        const mediaPurged = await purgeExpiredMedia();
+        // Contexto de cliente: bootstrap temporário (ver
+        // src/lib/tenant-bootstrap.ts) enquanto a Fase 2 do plano
+        // multi-cliente não faz o cron iterar clientes ativos de verdade.
+        const clientId = await resolveSoleActiveClientId();
+        const result = await runWithClient(clientId, async () => {
+          // Ordem importa: primeiro cria os jobs do dia (lembrete e
+          // reenvio), depois processa a fila — assim o que foi enfileirado
+          // agora já sai nesta mesma rodada, se couber no limite.
+          const reminders = await enqueueReminders();
+          const retries = await enqueueRetries();
+          const processed = await processQueue();
+          const closed = await closeExpiredAppointments();
+          const purged = await purgeExpiredData();
+          const mediaPurged = await purgeExpiredMedia();
+          return { reminders, retries, processed, closed, purged, mediaPurged };
+        });
         res.json({
-          ...processed,
-          remindersQueued: reminders.queued,
-          retriesQueued: retries.queued,
-          closedAsNoAnswer: closed,
-          purged,
-          mediaPurged,
+          ...result.processed,
+          remindersQueued: result.reminders.queued,
+          retriesQueued: result.retries.queued,
+          closedAsNoAnswer: result.closed,
+          purged: result.purged,
+          mediaPurged: result.mediaPurged,
         });
       } catch (err) {
         next(err);
