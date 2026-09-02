@@ -10,6 +10,16 @@ export interface AuditEntry {
   oldValue?: unknown;
   newValue?: unknown;
   metadata?: Record<string, unknown>;
+  /**
+   * Só pra ações do admin global (Fase 4), que rodam dentro de
+   * `runAsSuperAdmin` — sem `activeClientId` nenhum no contexto pra puxar
+   * sozinho. Nesse caso o chamador informa explicitamente a QUAL cliente
+   * o evento pertence (o cliente sendo criado/editado, ou o clientId de um
+   * acesso concedido/revogado) — nunca inventado, sempre o alvo real da
+   * ação. Toda ação normal (a esmagadora maioria) não precisa disso: puxa
+   * sozinho do `activeClientId` da sessão.
+   */
+  clientId?: number;
 }
 
 function stringify(value: unknown): string | null {
@@ -29,7 +39,7 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
   try {
     await prisma.auditLog.create({
       data: {
-        clientId: requireActiveClientId(),
+        clientId: entry.clientId ?? requireActiveClientId(),
         userId: entry.userId,
         action: entry.action,
         entity: entry.entity,

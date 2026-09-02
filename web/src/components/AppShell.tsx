@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Moon,
   Settings,
+  ShieldCheck,
   Sun,
   UsersRound,
   X,
@@ -34,6 +35,11 @@ const NAV: { to: string; label: string; hint: string; icon: LucideIcon }[] = [
   { to: "/configuracoes", label: "Configurações", hint: "Cadastros e valores", icon: Settings },
   { to: "/equipe", label: "Equipe", hint: "Acessos e auditoria", icon: UsersRound },
 ];
+
+// Só quem tem `isSuperAdmin` — ver Fase 4 do PLANO-MULTICLIENTE.md. Fica
+// fora do array principal (em vez de um campo condicional em cada item)
+// pra não ter que filtrar `NAV` toda vez que alguém for reordenar o menu.
+const ADMIN_NAV_ITEM = { to: "/admin", label: "Admin", hint: "Clientes da plataforma", icon: ShieldCheck };
 
 const SIDEBAR_STORAGE_KEY = "dgs-sidebar-collapsed";
 
@@ -132,7 +138,7 @@ export function AppShell() {
         <ul
           className={`${mobileMenuOpen ? "flex" : "hidden"} flex-col gap-1 px-3 pb-3 md:flex md:gap-0.5 md:pb-0`}
         >
-          {NAV.map((item) => {
+          {(user?.isSuperAdmin ? [...NAV, ADMIN_NAV_ITEM] : NAV).map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.to}>

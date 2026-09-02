@@ -12,6 +12,7 @@ import { Fechamento } from "./pages/Fechamento";
 import { Indicadores } from "./pages/Indicadores";
 import { Configuracoes } from "./pages/Configuracoes";
 import { Equipe } from "./pages/Equipe";
+import { Admin } from "./pages/Admin";
 
 export function App() {
   const { user, loading } = useSession();
@@ -47,6 +48,7 @@ export function App() {
         <Route path="/indicadores" element={<Indicadores />} />
         <Route path="/configuracoes" element={<Configuracoes />} />
         <Route path="/equipe" element={<Equipe />} />
+        {user.isSuperAdmin && <Route path="/admin" element={<Admin />} />}
       </Route>
       <Route path="*" element={<Navigate to="/listas" replace />} />
     </Routes>

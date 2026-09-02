@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma.js";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { parseBody, parseQuery, routeId } from "@/lib/http.js";
 import { generateRandomPassword, hashPassword, verifyPassword } from "@/lib/auth.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
@@ -52,8 +53,17 @@ teamRouter.post(
     if (existing) throw new AppError("Já existe alguém com esse e-mail.", 409);
 
     const password = generateRandomPassword(14);
+    // Ganha acesso ao mesmo cliente de quem está convidando — sem isso a
+    // pessoa nova não conseguiria logar (login exige UserClient, ver
+    // auth.routes.ts). Quem precisar de acesso a mais de um cliente
+    // recebe pela tela de admin (Fase 4 do plano multi-cliente).
     const user = await prisma.user.create({
-      data: { name: data.name, email, passwordHash: hashPassword(password) },
+      data: {
+        name: data.name,
+        email,
+        passwordHash: hashPassword(password),
+        clients: { create: { clientId: requireActiveClientId() } },
+      },
       select: { id: true, name: true, email: true, active: true, createdAt: true },
     });
 
