@@ -355,20 +355,44 @@ restante → cron processando os 2 clientes separado, cada um com seu
 `AppSettings` → auditoria gravando o `clientId` certo. Todo dado de teste
 limpo do banco depois de cada verificação.
 
+**Fechado depois disso, ainda na mesma sessão (2026-09-02)** — 3 itens que
+estavam na lista de pendências viraram trabalho de verdade, não só
+planejado:
+
+- **Conferência sistemática das ~204 queries** contra os limites da
+  extensão: só 2 usos de SQL cru no projeto inteiro (keep-alive do cron,
+  já sem risco; a reserva da fila, já corrigida na Fase 1) — nenhum
+  outro pra auditar. Todo `findUnique` fora do PK usa `id:` (sempre
+  seguro) ou é global de propósito (`User.email`, `Client.name`,
+  `WhatsappAccount.phoneNumberId`, `WhatsappMessage.wamid`). Único
+  include aninhado com `where` (`cancellations.service.ts`) é seguro por
+  transitividade — o pai já vem escopado, o filho é FK de dentro dele.
+  Achou 2 bugs reais nos dois scripts fora do Express
+  (`scripts/exportar-dados-paciente.ts` — o script de LGPD art. 18,
+  usava `PrismaClient` cru e buscava paciente em TODOS os clientes ao
+  mesmo tempo; `scripts/cadastrar-unidades.ts`, mesma causa) — os dois
+  corrigidos: usam o `prisma` isolado + exigem `--cliente=` explícito.
+- **Teste HTTP automatizado com 2 clientes**: `supertest` (devDependency
+  nova) + `src/app.multicliente.integration.test.ts` sobe o Express de
+  verdade (`createApp()`) e faz login/sessão/cookie real contra 2
+  usuários de 2 clientes — cobre a cadeia `requireAuth` → rota →
+  service que faltava. Achou (e o commit seguinte corrigiu de verdade,
+  não só documentou) um terceiro bug real: **o login nunca gravava
+  auditoria** — `recordAudit()` com `clientId` explícito não basta
+  sozinho fora de qualquer `runWithClient`/`runAsSuperAdmin` (a extensão
+  exige contexto ativo pra QUALQUER escrita, antes mesmo de olhar pro
+  que tem em `data`) — só descoberto testando de verdade contra um
+  deploy de preview real, os testes unitários não pegariam. Corrigido
+  abrindo `runWithClient` de verdade ao redor da chamada.
+- Verificado de novo, ao vivo, contra deploy de preview: login grava
+  `AuditLog` com o `clientId` certo, confirmado direto no banco.
+
 **O que ainda falta, sabendo que "funciona" ≠ "pronto pra produção multi-cliente de verdade"**:
-- Conferência exaustiva (não por amostragem) das ~204 queries do projeto
-  contra os limites da extensão — o método que pegou os 2 bugs da Fase 4
-  (testar com um segundo cliente real) é mais confiável que ler código;
-  vale repetir esse tipo de teste incluindo os fluxos mais raros
-  (fechamento, indicadores, exportação CSV) antes de confiar de vez.
-- Nenhum teste automatizado (`vitest`) cobre a cadeia HTTP completa
-  (`requireAuth` → rota → service) com 2 clientes — a verificação real
-  até aqui foi manual, via `vercel curl` contra o deploy. Valeria a pena
-  um teste com `supertest` (o projeto não usa hoje) cobrindo isso, pra
-  não depender de repetir a verificação manual toda vez.
 - Nunca testado com WhatsApp de verdade (WABA real, mensagem de paciente
   de verdade) — Fase 2 só foi verificada com a lógica de roteamento
   isolada (`resolveClientIdByPhoneNumberId` contra uma `WhatsappAccount`
-  de teste), não um webhook real da Meta.
+  de teste), não um webhook real da Meta. Isso precisa de um segundo
+  número/WABA de teste na Meta, fora do alcance de rodar sozinho nesta
+  sessão.
 - Sem `git merge` pra `master` ainda — decisão de quando promover isso
   pra produção é do usuário, não automática.
