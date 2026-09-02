@@ -256,24 +256,53 @@ seguir, o que reduz muito o risco das seguintes.
       (`koplspjaqazgsvcaspmp`) segue intocada — nenhum comando desta fase
       usou o `.env` ativo, só `.env.multicliente` (fora do git), carregado
       explicitamente.
-- [~] Fase 1 — Isolamento no backend. Núcleo pronto **e validado contra banco
-      real** (`src/lib/tenant-context.ts` — AsyncLocalStorage + fail-closed +
-      `runAsSuperAdmin`; `src/lib/tenant-prisma-extension.ts` — injeção
-      automática de clientId). 18 testes (14 unitários + 4 de integração em
-      `tenant-isolation.integration.test.ts`, que só roda se
-      `.env.multicliente` existir e blinda contra apontar sem querer pro
-      projeto de produção). **O teste de integração pegou um bug real antes
-      de qualquer coisa ir pra produção**: `runWithClient`/`runAsSuperAdmin`
+- [~] Fase 1 — Isolamento no backend. **Extensão ligada de verdade** — o
+      `prisma` exportado (`src/lib/prisma.ts`) passa pela extensão em
+      produção de código, não só em teste isolado. `requireAuth`
+      (`src/middleware/auth.ts`) abre `runWithClient(activeClientId, ...)`
+      pra toda rota que já usa requireAuth (a esmagadora maioria do
+      sistema) — sem precisar lembrar de um middleware a mais em cada
+      arquivo. Login (`auth.routes.ts`) resolve `activeClientId` via
+      `UserClient`. Os ~35 pontos de `create`/`upsert` que faltavam
+      `clientId` (13 arquivos) corrigidos, incluindo o SQL cru da reserva
+      atômica da fila (`queue.service.ts`, achado 3.3 do plano — não passa
+      pela extensão, precisa do clientId explícito no WHERE) e a busca de
+      paciente por CNS (agora usa a chave composta `clientId_cns`).
+      **Verificado de ponta a ponta contra um deploy de preview real**
+      (login → GET/POST em `/api/catalog/municipalities` → clientId
+      correto automaticamente injetado, conferido no banco). 145/145
+      testes, typecheck (server+web) limpo.
+
+      Bootstrap temporário pra quem ainda não tem sessão de usuário (cron,
+      webhook do WhatsApp): `src/lib/tenant-bootstrap.ts`
+      (`resolveSoleActiveClientId()`) pega o único cliente ativo que existe
+      hoje e **falha alto** (não fail-closed silencioso) se algum dia
+      houver mais de um — força a Fase 2 acontecer antes de operar um
+      segundo cliente de verdade. Isso significa que **cron e webhook ainda
+      tratam tudo como sendo de um cliente só** — o roteamento de verdade
+      (webhook por `phone_number_id`, cron iterando clientes) é Fase 2,
+      não terminado.
+
+      Núcleo (`src/lib/tenant-context.ts` — AsyncLocalStorage +
+      fail-closed + `runAsSuperAdmin`; `src/lib/tenant-prisma-extension.ts`
+      — injeção automática de clientId) tem 18 testes (14 unitários + 4 de
+      integração em `tenant-isolation.integration.test.ts`, que só roda se
+      `.env.multicliente` existir e blinda contra apontar pro projeto de
+      produção). **O teste de integração pegou um bug real antes de
+      qualquer coisa ir pra produção**: `runWithClient`/`runAsSuperAdmin`
       perdiam o contexto quando quem chama passa uma função síncrona que só
       `return`a a Promise da query sem `await` dentro dela — as Promises do
-      Prisma são preguiçosas (`createPrismaPromise`), só disparam a extensão
-      no `.then()`, que nesse padrão acontece fora do escopo do
+      Prisma são preguiçosas (`createPrismaPromise`), só disparam a
+      extensão no `.then()`, que nesse padrão acontece fora do escopo do
       `AsyncLocalStorage.run()`. Corrigido fazendo as duas funções sempre
-      `await fn()` internamente, então funcionam com os dois estilos de
-      chamada. **Deliberadamente ainda não ligado** ao `prisma` exportado de
-      verdade — falta middleware de sessão carregando `activeClientId` de
-      `UserClient`, e conferir as ~204 queries do projeto uma a uma contra
-      os limites conhecidos (SQL cru da fila, includes aninhados).
+      `await fn()` internamente.
+
+      **Falta pra fechar de vez**: conferir as ~204 queries do projeto uma
+      a uma contra os limites conhecidos (includes aninhados que não
+      passam pelos hooks do modelo pai) — feito por amostragem até aqui,
+      não exaustivamente; e o teste automatizado com 2 clientes de verdade
+      logando via HTTP (hoje o teste de integração cobre a extensão
+      diretamente, não a cadeia completa requireAuth → rota → service).
 - [ ] Fase 2 — WhatsApp por cliente
 - [ ] Fase 3 — Interface / seletor de cliente
 - [ ] Fase 4 — Admin global
