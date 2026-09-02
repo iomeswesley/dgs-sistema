@@ -141,6 +141,15 @@ describe.skipIf(!envFileExists)("HTTP multi-cliente (banco de teste real, Expres
     expect(loginB.status).toBe(200);
     expect(loginB.body.user.activeClientId).toBe(clientB.id);
 
+    // Login grava auditoria — achado real nesta mesma sessão: recordAudit()
+    // engole erro em silêncio, então um 200 no login sozinho não prova que
+    // a trilha foi gravada (já aconteceu de não ser, sem ninguém notar).
+    const auditA = await runAsSuperAdmin(() =>
+      prisma.auditLog.findFirst({ where: { userId: userA.id, action: "login" } })
+    );
+    expect(auditA).not.toBeNull();
+    expect(auditA.clientId).toBe(clientA.id);
+
     const createA = await agentA
       .post("/api/catalog/municipalities")
       .send({ name: "Cidade Só de A", state: "SC" });

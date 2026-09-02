@@ -11,13 +11,23 @@ export interface AuditEntry {
   newValue?: unknown;
   metadata?: Record<string, unknown>;
   /**
-   * Só pra ações do admin global (Fase 4), que rodam dentro de
-   * `runAsSuperAdmin` — sem `activeClientId` nenhum no contexto pra puxar
-   * sozinho. Nesse caso o chamador informa explicitamente a QUAL cliente
-   * o evento pertence (o cliente sendo criado/editado, ou o clientId de um
-   * acesso concedido/revogado) — nunca inventado, sempre o alvo real da
-   * ação. Toda ação normal (a esmagadora maioria) não precisa disso: puxa
-   * sozinho do `activeClientId` da sessão.
+   * Só pra ações do admin global (Fase 4), chamadas de DENTRO de um
+   * `runAsSuperAdmin` já aberto (`requireSuperAdmin`) — nesse contexto não
+   * existe UM `activeClientId` pra puxar sozinho, então o chamador informa
+   * explicitamente a QUAL cliente o evento pertence (o cliente sendo
+   * criado/editado, ou o clientId de um acesso concedido/revogado).
+   *
+   * ⚠️ NÃO substitui abrir contexto — `AuditLog` é um modelo isolado, e a
+   * extensão do Prisma exige `runWithClient`/`runAsSuperAdmin` ativo pra
+   * QUALQUER escrita nele, além do que está em `data` (ver
+   * tenant-prisma-extension.ts). Chamar `recordAudit({ clientId: X, ... })`
+   * fora de qualquer um dos dois ainda lança fail-closed — foi exatamente
+   * esse engano que quebrou a auditoria do login em silêncio (só corrigido
+   * de verdade abrindo `runWithClient` ao redor da chamada em
+   * auth.routes.ts, não só passando o campo). Toda ação normal (a
+   * esmagadora maioria, já dentro do `runWithClient` que `requireAuth`
+   * abre) não precisa deste campo: puxa sozinho do `activeClientId` da
+   * sessão.
    */
   clientId?: number;
 }

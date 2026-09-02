@@ -6,6 +6,7 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { loginRateLimiter } from "@/middleware/rateLimiter.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { runWithClient } from "@/lib/tenant-context.js";
 
 export const authRouter = Router();
 
@@ -58,17 +59,19 @@ authRouter.post(
     };
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     // Sem `requireAuth` aqui (é o próprio login) — nenhum contexto de
-    // cliente está aberto ainda nesse ponto, por isso o clientId explícito
-    // (mesmo padrão de admin.routes.ts). Achado real: sem isso, TODO login
-    // falhava a auditoria em silêncio desde a Fase 1 (recordAudit engole
-    // erro de propósito, pra nunca derrubar o login por causa disso).
-    await recordAudit({
-      clientId: access.clientId,
-      userId: user.id,
-      action: "login",
-      entity: "User",
-      entityId: user.id,
-    });
+    // cliente está aberto ainda nesse ponto. Passar `clientId` explícito
+    // pro recordAudit NÃO basta sozinho: a extensão do Prisma
+    // (tenant-prisma-extension.ts) exige contexto ativo pra QUALQUER
+    // query num modelo isolado, antes mesmo de olhar pro que tem em
+    // `data` — sem um `runWithClient` de verdade aqui, `AuditLog.create`
+    // lança fail-closed igual quaisquer outro. Achado real, ao vivo
+    // contra o deploy de preview: mesmo com `entry.clientId` setado
+    // (fix anterior, insuficiente sozinho), TODO login continuava
+    // falhando a auditoria em silêncio (recordAudit engole erro de
+    // propósito, pra nunca derrubar o login por causa disso).
+    await runWithClient(access.clientId, () =>
+      recordAudit({ userId: user.id, action: "login", entity: "User", entityId: user.id })
+    );
 
     res.json({ user: req.session.user, clients: await accessibleClients(user.id) });
   })
