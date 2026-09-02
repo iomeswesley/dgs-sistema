@@ -248,19 +248,32 @@ seguir, o que reduz muito o risco das seguintes.
 
 ## 8. Estado atual (atualizar a cada fase)
 
-- [~] Fase 0 — Schema + migração. Schema completo (clientId nas 17 tabelas,
-      unicidades compostas), migration SQL escrita à mão
-      (`20260902000000_multicliente_fase0`). **Falta só**: banco de teste
-      (Supabase separado, bloqueio conhecido da seção 5b) pra rodar
-      `prisma migrate deploy` de verdade e confirmar as contagens antes/depois.
-- [~] Fase 1 — Isolamento no backend. Núcleo pronto e testado sem precisar de
-      banco (`src/lib/tenant-context.ts` — AsyncLocalStorage + fail-closed +
+- [x] Fase 0 — Schema + migração. Schema completo (clientId nas 17 tabelas,
+      unicidades compostas), migration `20260902000000_multicliente_fase0`
+      **aplicada com sucesso** contra o Supabase de teste
+      (`qiacbjpsjkkeeaaflmum`) via `prisma migrate deploy` — confirmado: as
+      17 tabelas existem e são consultáveis, cliente "DGS" criado. Produção
+      (`koplspjaqazgsvcaspmp`) segue intocada — nenhum comando desta fase
+      usou o `.env` ativo, só `.env.multicliente` (fora do git), carregado
+      explicitamente.
+- [~] Fase 1 — Isolamento no backend. Núcleo pronto **e validado contra banco
+      real** (`src/lib/tenant-context.ts` — AsyncLocalStorage + fail-closed +
       `runAsSuperAdmin`; `src/lib/tenant-prisma-extension.ts` — injeção
-      automática de clientId, 14 testes). **Deliberadamente ainda não ligado**
-      ao `prisma` exportado de verdade — falta middleware de sessão
-      carregando `activeClientId` de `UserClient`, conferir as ~204 queries
-      contra os limites conhecidos (SQL cru da fila, includes aninhados), e o
-      teste de isolamento com 2 clientes contra banco real (seção 6).
+      automática de clientId). 18 testes (14 unitários + 4 de integração em
+      `tenant-isolation.integration.test.ts`, que só roda se
+      `.env.multicliente` existir e blinda contra apontar sem querer pro
+      projeto de produção). **O teste de integração pegou um bug real antes
+      de qualquer coisa ir pra produção**: `runWithClient`/`runAsSuperAdmin`
+      perdiam o contexto quando quem chama passa uma função síncrona que só
+      `return`a a Promise da query sem `await` dentro dela — as Promises do
+      Prisma são preguiçosas (`createPrismaPromise`), só disparam a extensão
+      no `.then()`, que nesse padrão acontece fora do escopo do
+      `AsyncLocalStorage.run()`. Corrigido fazendo as duas funções sempre
+      `await fn()` internamente, então funcionam com os dois estilos de
+      chamada. **Deliberadamente ainda não ligado** ao `prisma` exportado de
+      verdade — falta middleware de sessão carregando `activeClientId` de
+      `UserClient`, e conferir as ~204 queries do projeto uma a uma contra
+      os limites conhecidos (SQL cru da fila, includes aninhados).
 - [ ] Fase 2 — WhatsApp por cliente
 - [ ] Fase 3 — Interface / seletor de cliente
 - [ ] Fase 4 — Admin global

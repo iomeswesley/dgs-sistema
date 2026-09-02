@@ -26,12 +26,30 @@ interface TenantContext {
 
 const storage = new AsyncLocalStorage<TenantContext>();
 
-export function runWithClient<T>(clientId: number, fn: () => T): T {
-  return storage.run({ clientId, isSuperAdmin: false }, fn);
+// IMPORTANTE — por que estas duas funções são `async` e sempre fazem
+// `await fn()` por dentro, mesmo quando `fn` não é assíncrona:
+//
+// As queries do Prisma são "preguiçosas" (`createPrismaPromise`): chamar
+// `prisma.modelo.findMany(...)` não dispara nada sozinho, só monta um
+// objeto — o Prisma (e por consequência a extensão de isolamento, ver
+// tenant-prisma-extension.ts) só executa de verdade quando alguém chama
+// `.then()`/`await` nesse objeto. O `AsyncLocalStorage.run(store, cb)` do
+// Node só garante contexto pras continuações que nascem DENTRO da execução
+// de `cb` — se `cb` for síncrona e só `return prisma.x.findMany()` (sem
+// `await`), o `.then()` de quem chamou `runWithClient(...)` acontece DEPOIS
+// que `run()` já retornou, ou seja, FORA do contexto. Resultado: a extensão
+// lançaria `MissingTenantContextError` mesmo com `runWithClient` "por
+// cima" — bug real, pego pelo teste de integração com banco de verdade
+// (`tenant-isolation.integration.test.ts`) antes de qualquer coisa ir pra
+// produção. Fazendo o `await fn()` aqui dentro, o `.then()` sempre
+// acontece enquanto o `run()` ainda está com o contexto ativo,
+// independente de como quem chama escreveu `fn`.
+export async function runWithClient<T>(clientId: number, fn: () => T | Promise<T>): Promise<T> {
+  return storage.run({ clientId, isSuperAdmin: false }, async () => await fn());
 }
 
-export function runAsSuperAdmin<T>(fn: () => T): T {
-  return storage.run({ clientId: null, isSuperAdmin: true }, fn);
+export async function runAsSuperAdmin<T>(fn: () => T | Promise<T>): Promise<T> {
+  return storage.run({ clientId: null, isSuperAdmin: true }, async () => await fn());
 }
 
 // Erro dedicado (não `Error` genérico) pra fail-closed ficar fácil de
