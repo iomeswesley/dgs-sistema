@@ -248,10 +248,19 @@ seguir, o que reduz muito o risco das seguintes.
 
 ## 8. Estado atual (atualizar a cada fase)
 
-- [ ] Fase 0 — Schema + migração
-- [ ] Fase 1 — Isolamento no backend
+- [~] Fase 0 — Schema + migração. Schema completo (clientId nas 17 tabelas,
+      unicidades compostas), migration SQL escrita à mão
+      (`20260902000000_multicliente_fase0`). **Falta só**: banco de teste
+      (Supabase separado, bloqueio conhecido da seção 5b) pra rodar
+      `prisma migrate deploy` de verdade e confirmar as contagens antes/depois.
+- [~] Fase 1 — Isolamento no backend. Núcleo pronto e testado sem precisar de
+      banco (`src/lib/tenant-context.ts` — AsyncLocalStorage + fail-closed +
+      `runAsSuperAdmin`; `src/lib/tenant-prisma-extension.ts` — injeção
+      automática de clientId, 14 testes). **Deliberadamente ainda não ligado**
+      ao `prisma` exportado de verdade — falta middleware de sessão
+      carregando `activeClientId` de `UserClient`, conferir as ~204 queries
+      contra os limites conhecidos (SQL cru da fila, includes aninhados), e o
+      teste de isolamento com 2 clientes contra banco real (seção 6).
 - [ ] Fase 2 — WhatsApp por cliente
 - [ ] Fase 3 — Interface / seletor de cliente
 - [ ] Fase 4 — Admin global
-
-Nada implementado ainda. Este documento é só o plano.
