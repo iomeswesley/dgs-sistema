@@ -15,9 +15,15 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Clientes (multi-cliente)                                               */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Clientes (multi-cliente)
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 // Convenção de isolamento: toda tabela do domínio tem uma coluna `clientId`
 // com índice, e o filtro é injetado automaticamente por requisição (ver
@@ -79,9 +85,15 @@ model UserClient {
   @@map("user_clients")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Equipe                                                                 */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Equipe
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 // Dentro de um cliente o perfil continua único: todo mundo da equipe tem os
 // mesmos poderes, e o controle vem do AuditLog (quem lançou o quê), não de
@@ -132,9 +144,15 @@ model PasswordReset {
   @@map("password_resets")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Cadastros                                                              */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Cadastros
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 model Municipality {
   id        Int      @id @default(autoincrement())
@@ -211,7 +229,8 @@ model Doctor {
 
 model Procedure {
   id                      Int      @id @default(autoincrement())
-  name                    String   @unique
+  clientId                Int
+  name                    String
   // Preparo enviado no lembrete de véspera (jejum, bexiga cheia, etc.).
   // Quando vazio, o template usa um texto neutro — a Meta não aceita
   // variável em branco.
@@ -220,11 +239,15 @@ model Procedure {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
+  client       Client            @relation(fields: [clientId], references: [id])
   doctors      DoctorProcedure[]
   agendas      Agenda[]
   appointments Appointment[]
   closings     DailyClosing[]
 
+  // Unicidade por cliente, nao global: dois clientes podem ter "ULTRASSOM".
+  @@unique([clientId, name])
+  @@index([clientId])
   @@map("procedures")
 }
 
@@ -233,6 +256,7 @@ model Procedure {
 // (repasse ao médico e faturamento da prefeitura).
 model DoctorProcedure {
   id              Int      @id @default(autoincrement())
+  clientId        Int
   doctorId        Int
   procedureId     Int
   minutesPerVisit Int?
@@ -245,23 +269,32 @@ model DoctorProcedure {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  client    Client    @relation(fields: [clientId], references: [id])
   doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   procedure Procedure @relation(fields: [procedureId], references: [id], onDelete: Cascade)
 
   @@unique([doctorId, procedureId])
   @@index([doctorId])
+  @@index([clientId])
   @@map("doctor_procedures")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Agenda e listas                                                        */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Agenda e listas
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 // Escala do médico: o sistema sabe o esperado ANTES da lista chegar. Uma
 // agenda pode receber a lista original e listas complementares (reposição
 // de vagas), daí a relação 1:N com List.
 model Agenda {
   id             Int      @id @default(autoincrement())
+  clientId       Int
   doctorId       Int
   municipalityId Int
   unitId         Int?
@@ -273,6 +306,7 @@ model Agenda {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  client              Client              @relation(fields: [clientId], references: [id])
   doctor              Doctor              @relation(fields: [doctorId], references: [id])
   municipality        Municipality        @relation(fields: [municipalityId], references: [id])
   unit                HealthUnit?         @relation(fields: [unitId], references: [id])
@@ -283,12 +317,14 @@ model Agenda {
 
   @@index([date])
   @@index([doctorId, date])
+  @@index([clientId])
   @@map("agendas")
 }
 
 // Cada arquivo (PDF ou foto) recebido de uma prefeitura.
 model List {
   id              Int          @id @default(autoincrement())
+  clientId        Int
   municipalityId  Int
   agendaId        Int?
   originalName    String
@@ -312,29 +348,38 @@ model List {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  municipality Municipality  @relation(fields: [municipalityId], references: [id])
-  agenda       Agenda?       @relation(fields: [agendaId], references: [id])
-  uploadedBy   User          @relation("ListUploadedBy", fields: [uploadedById], references: [id])
-  approvedBy   User?         @relation("ListApprovedBy", fields: [approvedById], references: [id])
-  appointments Appointment[]
+  client              Client              @relation(fields: [clientId], references: [id])
+  municipality        Municipality        @relation(fields: [municipalityId], references: [id])
+  agenda              Agenda?             @relation(fields: [agendaId], references: [id])
+  uploadedBy          User                @relation("ListUploadedBy", fields: [uploadedById], references: [id])
+  approvedBy          User?               @relation("ListApprovedBy", fields: [approvedById], references: [id])
+  appointments        Appointment[]
   cancellationBatches CancellationBatch[]
 
   @@index([municipalityId])
   @@index([status])
+  @@index([clientId])
   @@map("lists")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Pacientes e agendamentos                                               */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Pacientes e agendamentos
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 // Entidade própria (não só linha de lista) pra ter histórico entre listas,
 // score de no-show e opt-out de LGPD. Dedupe por CNS quando existir, senão
 // por telefone normalizado.
 model Patient {
   id         Int       @id @default(autoincrement())
+  clientId   Int
   name       String
-  cns        String?   @unique
+  cns        String?
   birthDate  DateTime? @db.Date
   // Todos os telefones conhecidos, em E.164. As listas trazem até 5 colunas
   // de telefone por paciente — guardar todos permite fallback quando o
@@ -348,14 +393,21 @@ model Patient {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  client       Client        @relation(fields: [clientId], references: [id])
   appointments Appointment[]
 
+  // Unicidade por cliente, nao global: a mesma pessoa pode ser atendida por
+  // dois clientes (municipios vizinhos) - com CNS global, o segundo cadastro
+  // falharia na insercao e derrubaria a lista inteira.
+  @@unique([clientId, cns])
   @@index([name])
+  @@index([clientId])
   @@map("patients")
 }
 
 model Appointment {
   id                   Int               @id @default(autoincrement())
+  clientId             Int
   listId               Int
   agendaId             Int?
   patientId            Int
@@ -392,6 +444,7 @@ model Appointment {
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
+  client            Client             @relation(fields: [clientId], references: [id])
   list              List               @relation(fields: [listId], references: [id], onDelete: Cascade)
   agenda            Agenda?            @relation(fields: [agendaId], references: [id])
   patient           Patient            @relation(fields: [patientId], references: [id])
@@ -412,6 +465,7 @@ model Appointment {
   @@index([scheduledAt])
   @@index([doctorId, scheduledAt])
   @@index([cancellationBatchId])
+  @@index([clientId])
   @@map("appointments")
 }
 
@@ -425,12 +479,14 @@ model Appointment {
 // dois nem nenhum — validado na camada de aplicação, não no banco.
 model CancellationBatch {
   id          Int      @id @default(autoincrement())
+  clientId    Int
   agendaId    Int?
   listId      Int?
   reason      String
   createdById Int
   createdAt   DateTime @default(now())
 
+  client       Client        @relation(fields: [clientId], references: [id])
   agenda       Agenda?       @relation(fields: [agendaId], references: [id])
   list         List?         @relation(fields: [listId], references: [id])
   createdBy    User          @relation(fields: [createdById], references: [id])
@@ -438,18 +494,26 @@ model CancellationBatch {
 
   @@index([agendaId])
   @@index([listId])
+  @@index([clientId])
   @@map("cancellation_batches")
 }
 
-/* ---------------------------------------------------------------------- */
-/* WhatsApp                                                               */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * WhatsApp
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 // Fila de envio. Disparo em massa é assíncrono por causa do limite diário da
 // Meta: o processador respeita o teto do dia e reporta o que não coube, em
 // vez de falhar em silêncio.
 model MessageJob {
   id            Int          @id @default(autoincrement())
+  clientId      Int
   appointmentId Int
   template      TemplateKind
   phone         String
@@ -461,8 +525,12 @@ model MessageJob {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
+  client      Client      @relation(fields: [clientId], references: [id])
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
+  // A fila passa a ser por cliente (teto diario e do numero na Meta, que e
+  // por cliente) - este indice e o que a reserva atomica de jobs usa.
+  @@index([clientId, status, scheduledFor])
   @@index([status, scheduledFor])
   @@index([appointmentId])
   @@map("message_jobs")
@@ -472,15 +540,20 @@ model MessageJob {
 // ajustar em Configurações, sem precisar de deploy — hoje só a retenção da
 // mídia recebida do paciente (ver WhatsappMessage.mediaData).
 model AppSettings {
-  id                 Int      @id @default(1)
+  id                 Int      @id @default(autoincrement())
+  // Uma linha por cliente (antes era linha unica com id fixo 1).
+  clientId           Int      @unique
   mediaRetentionDays Int      @default(7)
   updatedAt          DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("app_settings")
 }
 
 model WhatsappMessage {
   id            Int            @id @default(autoincrement())
+  clientId      Int
   appointmentId Int?
   // Id da mensagem na Meta. Único: garante idempotência quando o webhook
   // reentrega o mesmo evento.
@@ -509,10 +582,12 @@ model WhatsappMessage {
   raw           Json?
   createdAt     DateTime       @default(now())
 
+  client      Client       @relation(fields: [clientId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([appointmentId])
   @@index([phone])
+  @@index([clientId, phone])
   @@map("whatsapp_messages")
 }
 
@@ -528,8 +603,12 @@ model WhatsappMessage {
 // por constraint de banco).
 model WhatsappAccount {
   id             Int       @id @default(autoincrement())
+  clientId       Int
   wabaId         String
-  phoneNumberId  String
+  // Id do numero na Meta. Unico no sistema inteiro (e o que o webhook usa
+  // pra descobrir de qual cliente e a mensagem que chegou - sem isso, uma
+  // resposta poderia ser atribuida ao cliente errado).
+  phoneNumberId  String    @unique
   businessName   String?
   // Apelido interno da equipe (ex.: "Principal", "Reserva — colega"),
   // separado do businessName que vem da Meta — esse a equipe não controla
@@ -542,19 +621,28 @@ model WhatsappAccount {
   connectedAt    DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  connectedBy User? @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  client      Client @relation(fields: [clientId], references: [id])
+  connectedBy User?  @relation(fields: [connectedById], references: [id], onDelete: SetNull)
 
+  @@index([clientId])
   @@map("whatsapp_accounts")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Conciliação e auditoria                                                */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Conciliação e auditoria
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 // Checks 2 e 3 da conciliação. Os confirmados (check 1) não estão aqui de
 // propósito — são derivados de Appointment.status.
 model DailyClosing {
   id             Int      @id @default(autoincrement())
+  clientId       Int
   doctorId       Int
   municipalityId Int
   procedureId    Int?
@@ -577,6 +665,7 @@ model DailyClosing {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  client             Client              @relation(fields: [clientId], references: [id])
   doctor             Doctor              @relation(fields: [doctorId], references: [id])
   municipality       Municipality        @relation(fields: [municipalityId], references: [id])
   procedure          Procedure?          @relation(fields: [procedureId], references: [id])
@@ -591,12 +680,14 @@ model DailyClosing {
   // criados na migration (um para procedureId NOT NULL, outro para NULL).
   @@index([doctorId, municipalityId, date])
   @@index([date])
+  @@index([clientId])
   @@map("daily_closings")
 }
 
 // Guias anexadas como evidência do check 3.
 model ClosingAttachment {
   id           Int      @id @default(autoincrement())
+  clientId     Int
   closingId    Int
   originalName String
   fileData     Bytes
@@ -604,9 +695,11 @@ model ClosingAttachment {
   uploadedById Int
   createdAt    DateTime @default(now())
 
+  client  Client       @relation(fields: [clientId], references: [id])
   closing DailyClosing @relation(fields: [closingId], references: [id], onDelete: Cascade)
 
   @@index([closingId])
+  @@index([clientId])
   @@map("closing_attachments")
 }
 
@@ -614,6 +707,7 @@ model ClosingAttachment {
 // perfis separados — sem roles, a rastreabilidade tem que ser total.
 model AuditLog {
   id        Int      @id @default(autoincrement())
+  clientId  Int
   userId    Int?
   action    String
   entity    String
@@ -624,10 +718,12 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  client Client @relation(fields: [clientId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([clientId])
   @@map("audit_logs")
 }
 
@@ -642,9 +738,15 @@ model RateLimitHit {
   @@map("rate_limit_hits")
 }
 
-/* ---------------------------------------------------------------------- */
-/* Enums                                                                  */
-/* ---------------------------------------------------------------------- */
+/**
+ * ----------------------------------------------------------------------
+ */
+/**
+ * Enums
+ */
+/**
+ * ----------------------------------------------------------------------
+ */
 
 enum Shift {
   MANHA
