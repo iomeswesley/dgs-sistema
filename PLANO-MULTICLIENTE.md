@@ -387,12 +387,30 @@ planejado:
 - Verificado de novo, ao vivo, contra deploy de preview: login grava
   `AuditLog` com o `clientId` certo, confirmado direto no banco.
 
-**O que ainda falta, sabendo que "funciona" ≠ "pronto pra produção multi-cliente de verdade"**:
-- Nunca testado com WhatsApp de verdade (WABA real, mensagem de paciente
-  de verdade) — Fase 2 só foi verificada com a lógica de roteamento
-  isolada (`resolveClientIdByPhoneNumberId` contra uma `WhatsappAccount`
-  de teste), não um webhook real da Meta. Isso precisa de um segundo
-  número/WABA de teste na Meta, fora do alcance de rodar sozinho nesta
-  sessão.
-- Sem `git merge` pra `master` ainda — decisão de quando promover isso
-  pra produção é do usuário, não automática.
+## 9. Rollout pra produção (2026-09-02) — feito
+
+Os dois últimos itens da seção 8 foram resolvidos no mesmo dia, com o
+usuário presente e confirmando cada etapa:
+
+1. Backup manual completo da produção antes de qualquer coisa (JSON, via
+   Prisma, todas as tabelas — `pg_dump` não disponível nesta máquina).
+   Pasta local, fora do repo (`backup-pre-multicliente-<timestamp>`, um
+   nível acima de `sistema-dgs/`).
+2. Migration `20260902000000_multicliente_fase0` aplicada em produção.
+   Contagens conferidas batendo com o backup.
+3. Confirmado que o código ANTIGO (antes do merge) continuava
+   funcionando normal contra o schema já migrado — a ordem
+   migration-antes-do-código foi respeitada (o `npm run build` da
+   Vercel não roda `prisma migrate deploy` sozinho; se o código novo
+   subisse antes da migration, o login quebraria na hora pra todo
+   mundo).
+4. Merge `multicliente` → `master` (fast-forward), push, `vercel --prod`.
+5. **Testado com WhatsApp de verdade, em produção, pelo usuário**:
+   mensagem real trocada com paciente, confirmando que o roteamento do
+   webhook por `phone_number_id` (achado 3.2) funciona fora do ambiente
+   de teste. Esse era o item que mais preocupava antes de subir — item
+   fechado, confirmado pelo usuário em 2026-09-02.
+
+Produção está rodando o multi-cliente desde então. Só existe o cliente
+"DGS" até aqui; ninguém está marcado `isSuperAdmin` em produção ainda
+(feito só quando pedido explicitamente — ver seção 5, passo 7).

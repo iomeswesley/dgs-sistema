@@ -6,13 +6,27 @@ Leia isto no início de qualquer sessão nova. O desenho completo do produto est
 
 Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que intermedia secretarias municipais de saúde e médicos contratados em SC. Recebe listas diárias de agendamento (PDF nativo gerado pelo SISREG ou CELK — nunca foto), extrai localmente sem IA, dispara confirmação por WhatsApp com botões Sim/Não e concilia o atendimento em três checagens.
 
-Não é multi-tenant, não tem cobrança e não tem perfis de acesso: **perfil único**, todo mundo da equipe pode tudo. O controle vem da tabela `audit_logs`, não de permissões — decisão explícita do usuário.
+**Multi-cliente desde 2026-09-02** (ver [PLANO-MULTICLIENTE.md](PLANO-MULTICLIENTE.md) pro desenho completo) — dado isolado por cliente (município, paciente, agendamento, WhatsApp, tudo), com um admin global (`isSuperAdmin`) que enxerga todos. Continua **sem cobrança e sem perfis de acesso dentro de um cliente**: perfil único, todo mundo da equipe que tem acesso a um cliente pode tudo nele. O controle vem da tabela `audit_logs`, não de permissões — decisão explícita do usuário.
 
 - Repo: [github.com/iomeswesley/dgs-sistema](https://github.com/iomeswesley/dgs-sistema) (privado), branch `master`.
 - Deploy: **publicado em produção desde 2026-08-14/15** — `https://sistema-dgs.vercel.app` (projeto Vercel `innova-ia/sistema-dgs`). `vercel.json` + `api/index.js`.
 - Banco de **produção**: Postgres/Supabase (`aws-0-sa-east-1.pooler.supabase.com`), projeto `koplspjaqazgsvcaspmp`. **Em uso de verdade agora** — deixou de ser só referência em `.env.production`. O projeto Supabase é free tier e **pausa sozinho por inatividade** (aconteceu em 2026-08-14: precisou reativar manualmente no dashboard antes de `prisma migrate deploy` funcionar de novo — se der erro `tenant/user ... not found`, é isso, não é bug).
 - Banco de **dev local**: Postgres 17 em container Docker (`docker-compose.yml` na raiz, serviço `postgres`, container `dgs-postgres`), banco `sistema_dgs`, usuário `postgres`, senha `dgs_local_dev`, porta 5432.
 - **⚠️ O `.env` ativo desta máquina está apontando pro banco de PRODUÇÃO desde o deploy de 2026-08-14/15**, não mais pro Docker local — troca deliberada, mantida assim por decisão do usuário ("sem problemas deixar produção pro Vercel direto"). Qualquer script rodado localmente (seed, reset de senha, `npx prisma ...`) afeta o banco real. Pra voltar a apontar pro Docker local, trocar `DATABASE_URL`/`DIRECT_URL` de volta — só fazer isso se o usuário pedir.
+
+## Estado atual (2026-09-02) — multi-cliente em produção
+
+**As 5 fases do plano multi-cliente (ver [PLANO-MULTICLIENTE.md](PLANO-MULTICLIENTE.md)) foram implementadas, testadas contra um Supabase de teste separado + deploy de preview, e promovidas pra produção no mesmo dia.** Sequência seguida (documentada em detalhe no PLANO-MULTICLIENTE.md, seção 8):
+
+1. Backup manual completo da produção (JSON, todas as tabelas, ~263MB — pasta local `backup-pre-multicliente-<timestamp>`, um nível acima do repo, fora do git) — `pg_dump` não estava disponível nesta máquina, então o backup foi feito via Prisma, tabela por tabela.
+2. Migration `20260902000000_multicliente_fase0` aplicada em produção (aditiva — cria clientId em 17 tabelas, cliente "DGS" recebendo tudo que já existia). Contagens conferidas batendo com o backup (1899 pacientes, 1780 agendamentos, etc. — só `whatsappMessage` variou +2, esperado, sistema seguia ativo).
+3. Confirmado que o site ANTIGO (código de antes do merge) continuou funcionando normal contra o schema já migrado, antes de trocar o código.
+4. Merge `multicliente` → `master` (fast-forward, sem conflito), push, `vercel --prod`.
+5. Testado ao vivo: login, e o ponto que mais preocupava — mensagem de WhatsApp real trocada com o paciente, confirmando que o roteamento novo do webhook por `phone_number_id` (achado 3.2 do plano) funciona em produção, não só em teste. **Confirmado funcionando pelo usuário em 2026-09-02.**
+
+**O que isso muda na prática pra quem usa hoje**: nada — só existe o cliente "DGS" até agora, todo usuário existente já tem acesso a ele automaticamente, e o comportamento é idêntico ao de antes. A diferença é estrutural: dá pra criar um cliente novo (ex.: uma prefeitura que contrate direto) em `/admin` (só super admin vê essa tela) sem misturar dado com o da DGS.
+
+**Pendências reais que sobraram, não bloqueantes**: nenhum usuário de produção está marcado `isSuperAdmin` ainda (decisão de propósito — é escalada de privilégio, feita só quando pedido explicitamente, ver PLANO-MULTICLIENTE.md seção 5 passo 7). Se precisar acessar `/admin` em produção, marcar via `UPDATE users SET "isSuperAdmin" = true WHERE email = '...'` direto no banco (não existe UI ainda pra isso, é o próprio admin quem promove outro admin, então o primeiro precisa entrar assim).
 
 ## Estado atual (2026-08-15)
 
