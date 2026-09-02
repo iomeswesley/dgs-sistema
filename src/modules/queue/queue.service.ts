@@ -176,8 +176,18 @@ const TIME_BUDGET_MS = 45_000;
  * quando sobra `dueNow`, automaticamente de novo pelo frontend até esvaziar
  * (nunca fica esperando o cron do dia seguinte pra terminar um disparo de
  * hoje).
+ *
+ * `timeBudgetMs` — pra quem chama processQueue() em loop dentro da MESMA
+ * invocação (o cron, ver app.ts — iterando clientes e repetindo enquanto
+ * sobrar `dueNow`), não pro caso normal de uma chamada só por requisição
+ * HTTP. Sem isso, cada chamada usaria os 45s inteiros de novo, e duas
+ * chamadas em sequência poderiam somar mais que os 60s de maxDuration da
+ * função — achado real em 2026-09-02 revisando o loop novo do cron, antes
+ * de ir pra produção: quem chama em loop precisa passar o tempo que REALMENTE
+ * sobra (não o padrão de 45s), senão arrisca a função ser morta no meio do
+ * envio, exatamente o que a reserva atômica (abaixo) já foi feita pra evitar.
  */
-export async function processQueue(): Promise<ProcessResult> {
+export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promise<ProcessResult> {
   const capacity = await queueCapacity();
   if (capacity.remaining === 0) {
     return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0 };
@@ -238,7 +248,7 @@ export async function processQueue(): Promise<ProcessResult> {
   const start = Date.now();
 
   for (const job of jobs) {
-    if (Date.now() - start > TIME_BUDGET_MS) break;
+    if (Date.now() - start > timeBudgetMs) break;
 
     // Segunda camada de segurança, independente da trava acima — pedida
     // pelo usuário depois do incidente de 2026-09-01: nunca manda duas

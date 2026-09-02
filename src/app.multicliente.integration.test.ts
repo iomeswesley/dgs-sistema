@@ -186,5 +186,5 @@ describe.skipIf(!envFileExists)("HTTP multi-cliente (banco de teste real, Expres
 
     // Referência só pra typescript não reclamar de variável não usada.
     expect(municipalityBId).toBeGreaterThan(0);
-  });
+  }, 20_000); // várias requisições HTTP reais + banco remoto — folga do default de 5s
 });

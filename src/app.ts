@@ -161,29 +161,55 @@ export function createApp() {
         // Cron itera clientes ativos (PLANO-MULTICLIENTE.md, achado 3.3) —
         // cada um com seu próprio teto diário/fila (o `prisma` já isola
         // cada leitura/escrita pelo `clientId` do `runWithClient` de cada
-        // iteração). Sequencial, não paralelo: TIME_BUDGET_MS de
-        // processQueue já cuida do limite de tempo de UM cliente por
-        // chamada; com vários, o teto real do maxDuration da Vercel (60s)
-        // é dividido entre eles por ordem — o cliente que sobrar fica pro
-        // próximo cron (ou reprocessa sozinho, como hoje). Não é um
-        // problema com um cliente só (situação atual), mas é o motivo de
-        // não paralelizar sem cuidado quando houver vários de verdade.
+        // iteração). Sequencial, não paralelo — com só um cliente de
+        // verdade hoje, o orçamento de tempo abaixo (CRON_TIME_BUDGET_MS)
+        // cobre ele inteiro; com vários, o cliente que sobrar do
+        // orçamento fica pro cron do dia seguinte.
+        //
+        // Achado real em produção (2026-09-02, lembrete da véspera saindo
+        // com quase 18h de atraso — "amanhã" chegando no dia da consulta):
+        // `processQueue()` só processa até BATCH_SIZE (60) jobs por
+        // chamada — um dia com mais lembretes/reenvios que isso (194 numa
+        // rodada real) deixava o resto PENDENTE até o cron do dia
+        // seguinte, porque só era chamado UMA vez aqui. O padrão que já
+        // existia pro disparo manual (`runQueueUntilDone`, no frontend)
+        // nunca tinha sido replicado pro cron. Corrigido: repete
+        // `processQueue()` enquanto sobrar `dueNow` E ainda houver
+        // orçamento de tempo pra essa invocação (mede o total gasto desde
+        // o início do cron, não por cliente).
+        const CRON_TIME_BUDGET_MS = 50_000; // margem sob os 60s de maxDuration (vercel.json)
+        const cronStart = Date.now();
         const clients = await prisma.client.findMany({ where: { active: true }, select: { id: true, name: true } });
         const perClient: Record<string, unknown> = {};
         const totals = { sent: 0, failed: 0, remindersQueued: 0, retriesQueued: 0, closedAsNoAnswer: 0 };
         for (const client of clients) {
           const result = await runWithClient(client.id, async () => {
             // Ordem importa: primeiro cria os jobs do dia (lembrete e
-            // reenvio), depois processa a fila — assim o que foi
-            // enfileirado agora já sai nesta mesma rodada, se couber no
-            // limite.
+            // reenvio), depois processa a fila até esvaziar (ou o
+            // orçamento de tempo acabar) — assim o que foi enfileirado
+            // agora não fica esperando o cron de amanhã pra sair.
             const reminders = await enqueueReminders();
             const retries = await enqueueRetries();
-            const processed = await processQueue();
+            // Cada chamada recebe só o tempo que REALMENTE sobra da
+            // invocação inteira, nunca os 45s padrão de novo — senão duas
+            // chamadas em sequência podem somar mais que os 60s de
+            // maxDuration da função (ver comentário em processQueue()).
+            let processed = await processQueue(CRON_TIME_BUDGET_MS - (Date.now() - cronStart));
+            let sent = processed.sent;
+            let failed = processed.failed;
+            while (processed.dueNow > 0) {
+              const remaining = CRON_TIME_BUDGET_MS - (Date.now() - cronStart);
+              // Menos de 5s de sobra não vale nem tentar mais uma leva —
+              // deixa pro próximo cron/reprocessamento em vez de arriscar.
+              if (remaining < 5_000) break;
+              processed = await processQueue(remaining);
+              sent += processed.sent;
+              failed += processed.failed;
+            }
             const closed = await closeExpiredAppointments();
             const purged = await purgeExpiredData();
             const mediaPurged = await purgeExpiredMedia();
-            return { reminders, retries, processed, closed, purged, mediaPurged };
+            return { reminders, retries, processed: { ...processed, sent, failed }, closed, purged, mediaPurged };
           });
           perClient[client.name] = result;
           totals.sent += result.processed.sent;
