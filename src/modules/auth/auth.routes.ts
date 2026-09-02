@@ -57,7 +57,18 @@ authRouter.post(
       isSuperAdmin: user.isSuperAdmin,
     };
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    await recordAudit({ userId: user.id, action: "login", entity: "User", entityId: user.id });
+    // Sem `requireAuth` aqui (é o próprio login) — nenhum contexto de
+    // cliente está aberto ainda nesse ponto, por isso o clientId explícito
+    // (mesmo padrão de admin.routes.ts). Achado real: sem isso, TODO login
+    // falhava a auditoria em silêncio desde a Fase 1 (recordAudit engole
+    // erro de propósito, pra nunca derrubar o login por causa disso).
+    await recordAudit({
+      clientId: access.clientId,
+      userId: user.id,
+      action: "login",
+      entity: "User",
+      entityId: user.id,
+    });
 
     res.json({ user: req.session.user, clients: await accessibleClients(user.id) });
   })
