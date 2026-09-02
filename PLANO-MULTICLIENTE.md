@@ -248,61 +248,127 @@ seguir, o que reduz muito o risco das seguintes.
 
 ## 8. Estado atual (atualizar a cada fase)
 
-- [x] Fase 0 — Schema + migração. Schema completo (clientId nas 17 tabelas,
-      unicidades compostas), migration `20260902000000_multicliente_fase0`
-      **aplicada com sucesso** contra o Supabase de teste
-      (`qiacbjpsjkkeeaaflmum`) via `prisma migrate deploy` — confirmado: as
-      17 tabelas existem e são consultáveis, cliente "DGS" criado. Produção
-      (`koplspjaqazgsvcaspmp`) segue intocada — nenhum comando desta fase
-      usou o `.env` ativo, só `.env.multicliente` (fora do git), carregado
-      explicitamente.
-- [~] Fase 1 — Isolamento no backend. **Extensão ligada de verdade** — o
-      `prisma` exportado (`src/lib/prisma.ts`) passa pela extensão em
-      produção de código, não só em teste isolado. `requireAuth`
+**As 5 fases foram implementadas em código nesta sessão (2026-09-02) e
+verificadas contra o Supabase de teste + um deploy de preview real da
+Vercel — incluindo o teste de isolamento com 2 clientes de verdade que a
+seção 6 original do plano pedia.** `master` (produção) não foi tocado em
+nenhum momento; tudo vive na branch `multicliente`, ainda não mesclada.
+
+- [x] **Fase 0 — Schema + migração.** `clientId` nas 17 tabelas, as 3
+      unicidades corrigidas (Municipality/Procedure/Patient), migration
+      `20260902000000_multicliente_fase0` escrita à mão e **aplicada com
+      sucesso** contra o Supabase de teste (`qiacbjpsjkkeeaaflmum`) via
+      `prisma migrate deploy`. Produção (`koplspjaqazgsvcaspmp`) intocada —
+      todo comando desta fase usou só `.env.multicliente` (fora do git),
+      carregado explicitamente, nunca o `.env` ativo da máquina.
+
+- [x] **Fase 1 — Isolamento no backend.** A extensão do Prisma
+      (`src/lib/tenant-prisma-extension.ts`) está ligada de verdade no
+      `prisma` que todo o sistema usa (`src/lib/prisma.ts`) — não é mais
+      só um protótipo testado à parte. `requireAuth`
       (`src/middleware/auth.ts`) abre `runWithClient(activeClientId, ...)`
       pra toda rota que já usa requireAuth (a esmagadora maioria do
-      sistema) — sem precisar lembrar de um middleware a mais em cada
-      arquivo. Login (`auth.routes.ts`) resolve `activeClientId` via
-      `UserClient`. Os ~35 pontos de `create`/`upsert` que faltavam
-      `clientId` (13 arquivos) corrigidos, incluindo o SQL cru da reserva
-      atômica da fila (`queue.service.ts`, achado 3.3 do plano — não passa
-      pela extensão, precisa do clientId explícito no WHERE) e a busca de
-      paciente por CNS (agora usa a chave composta `clientId_cns`).
-      **Verificado de ponta a ponta contra um deploy de preview real**
-      (login → GET/POST em `/api/catalog/municipalities` → clientId
-      correto automaticamente injetado, conferido no banco). 145/145
-      testes, typecheck (server+web) limpo.
+      sistema), sem precisar de um middleware a mais em cada arquivo. Os
+      ~35 pontos de `create`/`upsert` que faltavam `clientId` (13
+      arquivos) foram corrigidos, incluindo o SQL cru da reserva atômica
+      da fila (achado 3.3) e a busca de paciente por CNS (chave composta
+      `clientId_cns`).
 
-      Bootstrap temporário pra quem ainda não tem sessão de usuário (cron,
-      webhook do WhatsApp): `src/lib/tenant-bootstrap.ts`
-      (`resolveSoleActiveClientId()`) pega o único cliente ativo que existe
-      hoje e **falha alto** (não fail-closed silencioso) se algum dia
-      houver mais de um — força a Fase 2 acontecer antes de operar um
-      segundo cliente de verdade. Isso significa que **cron e webhook ainda
-      tratam tudo como sendo de um cliente só** — o roteamento de verdade
-      (webhook por `phone_number_id`, cron iterando clientes) é Fase 2,
-      não terminado.
+      Núcleo (`tenant-context.ts` — AsyncLocalStorage + fail-closed +
+      `runAsSuperAdmin`) tem 18 testes, incluindo um de integração contra
+      banco real que **pegou um bug de verdade antes de produção**:
+      `runWithClient`/`runAsSuperAdmin` perdiam o contexto quando a
+      chamada é uma função síncrona que só `return`a a Promise sem
+      `await` por dentro — as Promises do Prisma são preguiçosas
+      (`createPrismaPromise`), só disparam a extensão no `.then()`, que
+      nesse padrão roda fora do escopo do `AsyncLocalStorage.run()`.
+      Corrigido fazendo as duas funções sempre `await fn()` internamente.
 
-      Núcleo (`src/lib/tenant-context.ts` — AsyncLocalStorage +
-      fail-closed + `runAsSuperAdmin`; `src/lib/tenant-prisma-extension.ts`
-      — injeção automática de clientId) tem 18 testes (14 unitários + 4 de
-      integração em `tenant-isolation.integration.test.ts`, que só roda se
-      `.env.multicliente` existir e blinda contra apontar pro projeto de
-      produção). **O teste de integração pegou um bug real antes de
-      qualquer coisa ir pra produção**: `runWithClient`/`runAsSuperAdmin`
-      perdiam o contexto quando quem chama passa uma função síncrona que só
-      `return`a a Promise da query sem `await` dentro dela — as Promises do
-      Prisma são preguiçosas (`createPrismaPromise`), só disparam a
-      extensão no `.then()`, que nesse padrão acontece fora do escopo do
-      `AsyncLocalStorage.run()`. Corrigido fazendo as duas funções sempre
-      `await fn()` internamente.
+      **Ressalva que fica**: as ~204 queries do projeto foram conferidas
+      por amostragem contra os limites conhecidos da extensão (SQL cru,
+      includes aninhados), não uma por uma de forma exaustiva. Onde algo
+      escapou (2 casos reais, ver Fase 4 abaixo) foi porque só apareceu
+      testando com um SEGUNDO cliente de verdade — o motivo de ter feito
+      esse teste ainda nesta sessão, em vez de deixar pra depois.
 
-      **Falta pra fechar de vez**: conferir as ~204 queries do projeto uma
-      a uma contra os limites conhecidos (includes aninhados que não
-      passam pelos hooks do modelo pai) — feito por amostragem até aqui,
-      não exaustivamente; e o teste automatizado com 2 clientes de verdade
-      logando via HTTP (hoje o teste de integração cobre a extensão
-      diretamente, não a cadeia completa requireAuth → rota → service).
-- [ ] Fase 2 — WhatsApp por cliente
-- [ ] Fase 3 — Interface / seletor de cliente
-- [ ] Fase 4 — Admin global
+- [x] **Fase 2 — WhatsApp por cliente.** Fecha os achados 3.2 e 3.3:
+      - Webhook (`whatsapp-webhook.ts`/`whatsapp.routes.ts`): cada evento
+        é resolvido pelo `phone_number_id` que recebeu a mensagem
+        (`resolveClientIdByPhoneNumberId()`, roda como super admin já que
+        o cliente ainda não é conhecido nesse ponto) — não mais um
+        cliente "padrão" pro lote inteiro. Sem cliente resolvido, o
+        evento é registrado e ignorado, nunca processado contra o banco
+        inteiro.
+      - Cron (`app.ts`, `/api/cron/queue`): itera
+        `Client.findMany({ active: true })` e roda a cadência inteira
+        dentro de `runWithClient` por cliente — fila e teto diário
+        (já isolados pela extensão desde a Fase 1) agora são de fato por
+        cliente.
+      - `resolveSoleActiveClientId()` (tenant-bootstrap.ts) deixou de ser
+        usado por cron/webhook; sobra só como fallback do `.env`
+        (sandbox/dev) dentro de `resolveClientIdByPhoneNumberId`.
+
+- [x] **Fase 3 — Interface / seletor de cliente.** `GET /api/auth/me` e
+      `POST /api/auth/login` devolvem `clients` (via `UserClient`);
+      `POST /api/auth/switch-client` troca o `activeClientId` da sessão,
+      só aceitando um cliente que o `UserClient` do usuário realmente
+      autoriza. `AppShell` mostra um seletor no rodapé do menu — só
+      quando o usuário tem acesso a mais de 1 cliente (hoje é sempre 1).
+
+- [x] **Fase 4 — Admin global.** `requireSuperAdmin` (só
+      `User.isSuperAdmin`) abre `runAsSuperAdmin` — o escape nomeado que
+      a seção 4 pede, só usado aqui. `/api/admin/clients` (listar com
+      contagens, criar, editar/desativar) e
+      `/api/admin/clients/:id/users` (ver, conceder, revogar acesso —
+      revogar bloqueia se for o único cliente da pessoa). Tela `/admin`
+      nova, só visível no menu pra super admin.
+
+      **2 bugs reais achados testando esta fase com um segundo cliente de
+      verdade** (só apareceram porque um segundo cliente passou a
+      existir de fato):
+      1. `settings.service.ts` tinha `SETTINGS_ID = 1` fixo — sobra do
+         desenho de linha única de antes da Fase 0. Funcionava por
+         coincidência pro cliente "DGS" (ficou com id=1), mas quebraria
+         qualquer outro. Corrigido pra buscar por `clientId` do
+         contexto; `admin.routes.ts` agora cria a linha de `AppSettings`
+         junto da criação do cliente (numa transação) — sem isso todo
+         cliente novo quebrava o cron/Configurações na primeira leitura.
+      2. Ações de admin não gravavam auditoria nenhuma, em silêncio —
+         `recordAudit()` sempre puxava o clientId do contexto normal, que
+         não existe dentro de `runAsSuperAdmin` (lançava, e o try/catch
+         de `recordAudit` engole o erro de propósito). `AuditEntry`
+         ganhou `clientId?` opcional pro chamador informar o cliente-alvo
+         explicitamente nesses casos.
+      3. (Achado no caminho, Fase 3) Convidar alguém novo em Equipe não
+         dava acesso a cliente nenhum — a pessoa não conseguiria logar
+         (login exige `UserClient` desde a Fase 1). `team.routes.ts`
+         corrigido: quem entra ganha acesso ao mesmo cliente de quem
+         convidou.
+
+**Verificação de ponta a ponta** (não só unitária) contra
+`https://sistema-*.vercel.app` (deploy de preview da branch, banco de
+teste): login → criar cliente de verdade via `/api/admin/clients` →
+conceder acesso → `switch-client` → confirmar que **nenhum dos dois
+clientes vê o município do outro** (create + list + `findUnique` direto
+pelo id do outro) → revogar acesso bloqueado corretamente no único
+restante → cron processando os 2 clientes separado, cada um com seu
+`AppSettings` → auditoria gravando o `clientId` certo. Todo dado de teste
+limpo do banco depois de cada verificação.
+
+**O que ainda falta, sabendo que "funciona" ≠ "pronto pra produção multi-cliente de verdade"**:
+- Conferência exaustiva (não por amostragem) das ~204 queries do projeto
+  contra os limites da extensão — o método que pegou os 2 bugs da Fase 4
+  (testar com um segundo cliente real) é mais confiável que ler código;
+  vale repetir esse tipo de teste incluindo os fluxos mais raros
+  (fechamento, indicadores, exportação CSV) antes de confiar de vez.
+- Nenhum teste automatizado (`vitest`) cobre a cadeia HTTP completa
+  (`requireAuth` → rota → service) com 2 clientes — a verificação real
+  até aqui foi manual, via `vercel curl` contra o deploy. Valeria a pena
+  um teste com `supertest` (o projeto não usa hoje) cobrindo isso, pra
+  não depender de repetir a verificação manual toda vez.
+- Nunca testado com WhatsApp de verdade (WABA real, mensagem de paciente
+  de verdade) — Fase 2 só foi verificada com a lógica de roteamento
+  isolada (`resolveClientIdByPhoneNumberId` contra uma `WhatsappAccount`
+  de teste), não um webhook real da Meta.
+- Sem `git merge` pra `master` ainda — decisão de quando promover isso
+  pra produção é do usuário, não automática.
