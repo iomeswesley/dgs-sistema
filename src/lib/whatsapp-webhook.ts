@@ -8,6 +8,15 @@
 export interface InboundReply {
   wamid: string;
   from: string;
+  /**
+   * Id do número da Meta que RECEBEU essa mensagem (`value.metadata.phone_number_id`
+   * do payload do webhook) — é o que permite descobrir de qual cliente é o
+   * evento (ver `WhatsappAccount.phoneNumberId`, achado 3.2 do
+   * PLANO-MULTICLIENTE.md). `null` só deveria acontecer com um payload
+   * malformado/de teste; nesse caso o chamador não processa o evento —
+   * nunca "chuta" o cliente.
+   */
+  phoneNumberId: string | null;
   /** Payload do botão de resposta rápida, quando o paciente clicou. */
   buttonPayload: string | null;
   /** Texto, quando o paciente escreveu em vez de clicar. */
@@ -38,6 +47,8 @@ export interface InboundReply {
 
 export interface StatusUpdate {
   wamid: string;
+  /** Ver InboundReply.phoneNumberId. */
+  phoneNumberId: string | null;
   status: "sent" | "delivered" | "read" | "failed";
   timestamp: Date;
   errorCode: string | null;
@@ -45,6 +56,7 @@ export interface StatusUpdate {
 }
 
 interface WebhookValue {
+  metadata?: { phone_number_id?: string };
   messages?: {
     id: string;
     from: string;
@@ -143,6 +155,7 @@ export function parseInboundReplies(payload: unknown): InboundReply[] {
 
       replies.push({
         wamid: message.id,
+        phoneNumberId: value.metadata?.phone_number_id ?? null,
         from: message.from,
         buttonPayload,
         text: message.text?.body ?? null,
@@ -173,6 +186,7 @@ export function parseStatusUpdates(payload: unknown): StatusUpdate[] {
       const error = status.errors?.[0];
       updates.push({
         wamid: status.id,
+        phoneNumberId: value.metadata?.phone_number_id ?? null,
         status: status.status as StatusUpdate["status"],
         timestamp: parseTimestamp(status.timestamp),
         errorCode: error?.code != null ? String(error.code) : null,

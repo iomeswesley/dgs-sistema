@@ -4,7 +4,7 @@ import { env } from "@/config/env.js";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { parseInboundReplies, parseStatusUpdates, verifyWebhookSignature } from "@/lib/whatsapp.js";
 import { runWithClient } from "@/lib/tenant-context.js";
-import { resolveSoleActiveClientId } from "@/lib/tenant-bootstrap.js";
+import { resolveClientIdByPhoneNumberId } from "./whatsapp-account.service.js";
 import { handleInboundReply, handleStatusUpdate } from "./whatsapp.service.js";
 
 export const whatsappRouter = Router();
@@ -45,28 +45,43 @@ whatsappRouter.post(
   })
 );
 
+/**
+ * Roteamento por cliente (achado 3.2 do PLANO-MULTICLIENTE.md, Fase 2): a
+ * DGS é um Provedor de Tecnologia com um app só pra todos os clientes — o
+ * webhook recebe eventos de QUALQUER WABA inscrita nele, então cada evento
+ * é resolvido pelo `phone_number_id` que RECEBEU a mensagem, nunca por um
+ * cliente "padrão". Sem cliente resolvido, o evento é registrado e
+ * ignorado — nunca processado contra o banco inteiro (fail-closed também
+ * aqui, não só dentro do Prisma).
+ */
 async function processWebhookEvents(body: unknown): Promise<void> {
-  // Contexto de cliente: bootstrap temporário (ver
-  // src/lib/tenant-bootstrap.ts) — o roteamento de verdade por
-  // metadata.phone_number_id (achado 3.2 do PLANO-MULTICLIENTE.md) é
-  // Fase 2. Até lá, todo evento do webhook é tratado como sendo do único
-  // cliente ativo que existe.
-  const clientId = await resolveSoleActiveClientId();
-  await runWithClient(clientId, async () => {
-    for (const reply of parseInboundReplies(body)) {
-      try {
-        await handleInboundReply(reply);
-      } catch (err) {
-        console.error("[WEBHOOK] Falha ao processar resposta:", (err as Error).message);
-      }
+  for (const reply of parseInboundReplies(body)) {
+    const clientId = await resolveClientIdByPhoneNumberId(reply.phoneNumberId);
+    if (clientId == null) {
+      console.error(
+        `[WEBHOOK] Não foi possível resolver o cliente pro phoneNumberId "${reply.phoneNumberId}" — resposta de ${reply.from} (wamid ${reply.wamid}) ignorada.`,
+      );
+      continue;
     }
+    try {
+      await runWithClient(clientId, () => handleInboundReply(reply));
+    } catch (err) {
+      console.error("[WEBHOOK] Falha ao processar resposta:", (err as Error).message);
+    }
+  }
 
-    for (const update of parseStatusUpdates(body)) {
-      try {
-        await handleStatusUpdate(update);
-      } catch (err) {
-        console.error("[WEBHOOK] Falha ao processar status:", (err as Error).message);
-      }
+  for (const update of parseStatusUpdates(body)) {
+    const clientId = await resolveClientIdByPhoneNumberId(update.phoneNumberId);
+    if (clientId == null) {
+      console.error(
+        `[WEBHOOK] Não foi possível resolver o cliente pro phoneNumberId "${update.phoneNumberId}" — status de ${update.wamid} ignorado.`,
+      );
+      continue;
     }
-  });
+    try {
+      await runWithClient(clientId, () => handleStatusUpdate(update));
+    } catch (err) {
+      console.error("[WEBHOOK] Falha ao processar status:", (err as Error).message);
+    }
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInboundReplies } from "@/lib/whatsapp-webhook.js";
+import { parseInboundReplies, parseStatusUpdates } from "@/lib/whatsapp-webhook.js";
 
 /*
   Mensagem do paciente que não é texto nem clique de botão (imagem, áudio,
@@ -9,13 +9,14 @@ import { parseInboundReplies } from "@/lib/whatsapp-webhook.js";
   paciente mandou de verdade (achado pelo usuário em 2026-08-27).
 */
 
-function webhookPayload(message: Record<string, unknown>) {
+function webhookPayload(message: Record<string, unknown>, metadata?: Record<string, unknown>) {
   return {
     entry: [
       {
         changes: [
           {
             value: {
+              metadata,
               messages: [
                 {
                   id: "wamid.test",
@@ -115,5 +116,43 @@ describe("parseInboundReplies", () => {
 
     const location = parseOne({ type: "location", location: { name: "Casa" } });
     expect(location.mediaId).toBeNull();
+  });
+
+  /*
+    phoneNumberId (metadata.phone_number_id do webhook) é o que permite
+    resolver de qual cliente é o evento (PLANO-MULTICLIENTE.md, achado
+    3.2) — sem ele, uma resposta de paciente podia ser processada contra
+    o cliente errado.
+  */
+  it("carrega phoneNumberId de metadata.phone_number_id", () => {
+    const replies = parseInboundReplies(
+      webhookPayload({ type: "text", text: { body: "oi" } }, { phone_number_id: "123456" }),
+    );
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.phoneNumberId).toBe("123456");
+  });
+
+  it("phoneNumberId fica null quando metadata não vem no payload", () => {
+    const reply = parseOne({ type: "text", text: { body: "oi" } });
+    expect(reply.phoneNumberId).toBeNull();
+  });
+});
+
+describe("parseStatusUpdates", () => {
+  function statusPayload(status: Record<string, unknown>, metadata?: Record<string, unknown>) {
+    return {
+      entry: [{ changes: [{ value: { metadata, statuses: [{ id: "wamid.status", timestamp: "1735300000", ...status }] } }] }],
+    };
+  }
+
+  it("carrega phoneNumberId igual parseInboundReplies", () => {
+    const updates = parseStatusUpdates(statusPayload({ status: "delivered" }, { phone_number_id: "999" }));
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.phoneNumberId).toBe("999");
+  });
+
+  it("phoneNumberId fica null sem metadata", () => {
+    const updates = parseStatusUpdates(statusPayload({ status: "delivered" }));
+    expect(updates[0]!.phoneNumberId).toBeNull();
   });
 });

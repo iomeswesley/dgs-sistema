@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma.js";
-import { requireActiveClientId } from "@/lib/tenant-context.js";
+import { requireActiveClientId, runAsSuperAdmin } from "@/lib/tenant-context.js";
+import { resolveSoleActiveClientId } from "@/lib/tenant-bootstrap.js";
 import { env } from "@/config/env.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 
@@ -142,6 +143,50 @@ export async function getActiveCredentials(): Promise<WhatsappCredentials | null
 
 export async function isWhatsappConfigured(): Promise<boolean> {
   return (await getActiveCredentials()) !== null;
+}
+
+/**
+ * Achado 3.2 do PLANO-MULTICLIENTE.md: o webhook recebe eventos de
+ * QUALQUER WABA inscrita no app (a DGS é um Provedor de Tecnologia só, um
+ * app pra todos os clientes) — sem resolver o cliente dono do número que
+ * recebeu a mensagem, um "Sim" do paciente pode ser atribuído ao
+ * agendamento do cliente ERRADO se o mesmo telefone existir nos dois.
+ *
+ * Roda como super admin de propósito: nesse ponto ainda não sabemos qual é
+ * o cliente — é justamente o que esta função existe pra descobrir, então
+ * não dá pra estar dentro de `runWithClient` ainda.
+ *
+ * `null` quando não dá pra resolver (nenhuma conta com esse phoneNumberId
+ * e não bate com o fallback do .env) — o chamador (whatsapp.routes.ts)
+ * registra e NÃO processa o evento, nunca "chuta" o cliente.
+ */
+export async function resolveClientIdByPhoneNumberId(phoneNumberId: string | null): Promise<number | null> {
+  if (!phoneNumberId) return null;
+
+  const account = await runAsSuperAdmin(() =>
+    prisma.whatsappAccount.findUnique({
+      where: { phoneNumberId },
+      select: { clientId: true },
+    }),
+  );
+  if (account) return account.clientId;
+
+  // Fallback do .env (sandbox/dev, ou o período de transição antes de toda
+  // conta ter migrado pro Embedded Signup) — inerentemente single-tenant,
+  // então só faz sentido resolver pro único cliente ativo que existir.
+  if (env.WHATSAPP_PHONE_NUMBER_ID && phoneNumberId === env.WHATSAPP_PHONE_NUMBER_ID) {
+    try {
+      return await resolveSoleActiveClientId();
+    } catch (err) {
+      console.error(
+        "[WHATSAPP] phoneNumberId bate com o fallback do .env, mas não deu pra resolver um cliente único:",
+        (err as Error).message,
+      );
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export async function listAccounts(): Promise<WhatsappAccountSummary[]> {

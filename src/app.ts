@@ -30,7 +30,6 @@ import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia }
 import { PRIVACY_POLICY_HTML } from "@/legal/privacy.js";
 import { prisma } from "@/lib/prisma.js";
 import { runWithClient } from "@/lib/tenant-context.js";
-import { resolveSoleActiveClientId } from "@/lib/tenant-bootstrap.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -158,30 +157,41 @@ export function createApp() {
         // fica tempo demais sem receber requisição nenhuma.
         await prisma.$queryRaw`SELECT 1`;
 
-        // Contexto de cliente: bootstrap temporário (ver
-        // src/lib/tenant-bootstrap.ts) enquanto a Fase 2 do plano
-        // multi-cliente não faz o cron iterar clientes ativos de verdade.
-        const clientId = await resolveSoleActiveClientId();
-        const result = await runWithClient(clientId, async () => {
-          // Ordem importa: primeiro cria os jobs do dia (lembrete e
-          // reenvio), depois processa a fila — assim o que foi enfileirado
-          // agora já sai nesta mesma rodada, se couber no limite.
-          const reminders = await enqueueReminders();
-          const retries = await enqueueRetries();
-          const processed = await processQueue();
-          const closed = await closeExpiredAppointments();
-          const purged = await purgeExpiredData();
-          const mediaPurged = await purgeExpiredMedia();
-          return { reminders, retries, processed, closed, purged, mediaPurged };
-        });
-        res.json({
-          ...result.processed,
-          remindersQueued: result.reminders.queued,
-          retriesQueued: result.retries.queued,
-          closedAsNoAnswer: result.closed,
-          purged: result.purged,
-          mediaPurged: result.mediaPurged,
-        });
+        // Cron itera clientes ativos (PLANO-MULTICLIENTE.md, achado 3.3) —
+        // cada um com seu próprio teto diário/fila (o `prisma` já isola
+        // cada leitura/escrita pelo `clientId` do `runWithClient` de cada
+        // iteração). Sequencial, não paralelo: TIME_BUDGET_MS de
+        // processQueue já cuida do limite de tempo de UM cliente por
+        // chamada; com vários, o teto real do maxDuration da Vercel (60s)
+        // é dividido entre eles por ordem — o cliente que sobrar fica pro
+        // próximo cron (ou reprocessa sozinho, como hoje). Não é um
+        // problema com um cliente só (situação atual), mas é o motivo de
+        // não paralelizar sem cuidado quando houver vários de verdade.
+        const clients = await prisma.client.findMany({ where: { active: true }, select: { id: true, name: true } });
+        const perClient: Record<string, unknown> = {};
+        const totals = { sent: 0, failed: 0, remindersQueued: 0, retriesQueued: 0, closedAsNoAnswer: 0 };
+        for (const client of clients) {
+          const result = await runWithClient(client.id, async () => {
+            // Ordem importa: primeiro cria os jobs do dia (lembrete e
+            // reenvio), depois processa a fila — assim o que foi
+            // enfileirado agora já sai nesta mesma rodada, se couber no
+            // limite.
+            const reminders = await enqueueReminders();
+            const retries = await enqueueRetries();
+            const processed = await processQueue();
+            const closed = await closeExpiredAppointments();
+            const purged = await purgeExpiredData();
+            const mediaPurged = await purgeExpiredMedia();
+            return { reminders, retries, processed, closed, purged, mediaPurged };
+          });
+          perClient[client.name] = result;
+          totals.sent += result.processed.sent;
+          totals.failed += result.processed.failed;
+          totals.remindersQueued += result.reminders.queued;
+          totals.retriesQueued += result.retries.queued;
+          totals.closedAsNoAnswer += result.closed;
+        }
+        res.json({ ...totals, clients: perClient });
       } catch (err) {
         next(err);
       }
