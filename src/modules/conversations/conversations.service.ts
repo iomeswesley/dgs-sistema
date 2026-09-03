@@ -53,28 +53,23 @@ function previewBody(message: { body: string | null; template: string | null; bu
   return null;
 }
 
-/**
- * Agrupa as mensagens mais recentes por número normalizado. Feito em
- * aplicação (não SQL) porque o telefone salvo varia de formato entre
- * envio (E.164 sem "+") e recebimento (dígitos crus da Meta, às vezes sem
- * o 9º dígito) — normalizar em JS é mais simples que replicar isso em SQL,
- * e o volume de mensagens não justifica a complexidade.
- */
-export async function listConversations(limit = 200): Promise<ConversationSummary[]> {
-  const messages = await prisma.whatsappMessage.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 1000,
-    select: {
-      phone: true,
-      body: true,
-      template: true,
-      buttonPayload: true,
-      direction: true,
-      createdAt: true,
-      appointment: { select: { patient: { select: { name: true, phones: true } } } },
-    },
-  });
+type ConversationMessageRow = {
+  phone: string;
+  body: string | null;
+  template: string | null;
+  buttonPayload: string | null;
+  direction: "ENVIADA" | "RECEBIDA";
+  createdAt: Date;
+  appointment: { patient: { name: string; phones: string[] } | null } | null;
+};
 
+/**
+ * Agrupa mensagens em conversas por número normalizado. Feito em aplicação
+ * (não SQL) porque o telefone salvo varia de formato entre envio (E.164
+ * sem "+") e recebimento (dígitos crus da Meta, às vezes sem o 9º dígito)
+ * — normalizar em JS é mais simples que replicar isso em SQL.
+ */
+async function groupIntoConversations(messages: ConversationMessageRow[]): Promise<ConversationSummary[]> {
   const byPhone = new Map<string, ConversationSummary>();
   // Data da última mensagem RECEBIDA por telefone — separado da mensagem
   // mais recente (que pode ser nossa). A janela de 24h conta a partir do
@@ -138,7 +133,82 @@ export async function listConversations(limit = 200): Promise<ConversationSummar
     }
   }
 
-  return [...byPhone.values()].sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime()).slice(0, limit);
+  return [...byPhone.values()].sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+}
+
+const CONVERSATION_MESSAGE_SELECT = {
+  phone: true,
+  body: true,
+  template: true,
+  buttonPayload: true,
+  direction: true,
+  createdAt: true,
+  appointment: { select: { patient: { select: { name: true, phones: true } } } },
+} as const;
+
+/**
+ * Lista as conversas. Sem `search`: as `limit` mais recentemente ativas,
+ * olhando só as 1000 mensagens mais novas do sistema — rápido, é a tela
+ * abrindo normal.
+ *
+ * Com `search`: busca de verdade no HISTÓRICO INTEIRO, não só nas
+ * recentes. Bug real achado pelo usuário em 2026-09-02: a busca da tela
+ * (Conversas.tsx) sempre filtrou só dentro da lista já carregada (as 200
+ * mais recentes) — uma conversa com a última mensagem há alguns dias,
+ * atrás de mais de 200 outras mais novas, nunca aparecia, MESMO buscando
+ * pelo nome exato do paciente (achado com "ISABELA DE FARIAS RAMOS": a
+ * 372ª conversa mais recente, confirmada existir e correta no banco,
+ * invisível na busca). Agora a busca por nome/telefone resolve os
+ * telefones candidatos primeiro (via `Patient.name`/`phones`, sem limite
+ * de recência) e só então busca as mensagens desses números — chega em
+ * qualquer conversa, não só nas mais recentes.
+ */
+export async function listConversations(limit = 200, search?: string): Promise<ConversationSummary[]> {
+  const query = search?.trim();
+  if (!query) {
+    const messages = await prisma.whatsappMessage.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+      select: CONVERSATION_MESSAGE_SELECT,
+    });
+    const conversations = await groupIntoConversations(messages);
+    return conversations.slice(0, limit);
+  }
+
+  const digits = query.replace(/\D/g, "");
+  const patients = await prisma.patient.findMany({
+    where: {
+      OR: [
+        { name: { contains: query, mode: "insensitive" } },
+        ...(digits.length >= 4 ? [{ phones: { hasSome: phoneCandidates(digits) } }] : []),
+      ],
+    },
+    select: { phones: true },
+  });
+  const candidatePhones = new Set(patients.flatMap((p) => p.phones.flatMap((phone) => phoneCandidates(phone))));
+
+  // Nem paciente cadastrado bateu, nem dígito suficiente pra buscar direto
+  // no telefone da mensagem — nada a fazer (evita um `OR: []` vazio, que o
+  // Prisma não aceita).
+  if (candidatePhones.size === 0 && digits.length < 4) return [];
+
+  const messages = await prisma.whatsappMessage.findMany({
+    where: {
+      OR: [
+        ...(candidatePhones.size > 0 ? [{ phone: { in: [...candidatePhones] } }] : []),
+        // Cobre também quem já escreveu mas nunca virou Patient (nenhum
+        // agendamento vinculado ainda) — busca direto pelo dígito no
+        // telefone salvo da mensagem.
+        ...(digits.length >= 4 ? [{ phone: { contains: digits } }] : []),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    select: CONVERSATION_MESSAGE_SELECT,
+  });
+  if (messages.length === 0) return [];
+
+  const conversations = await groupIntoConversations(messages);
+  return conversations.slice(0, limit);
 }
 
 export interface ThreadMessage {

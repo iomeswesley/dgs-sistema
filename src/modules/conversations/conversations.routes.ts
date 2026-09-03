@@ -11,8 +11,9 @@ conversationsRouter.use("/api/conversations", requireAuth);
 
 conversationsRouter.get(
   "/api/conversations",
-  asyncHandler(async (_req, res) => {
-    res.json({ conversations: await listConversations() });
+  asyncHandler(async (req, res) => {
+    const search = typeof req.query.search === "string" ? req.query.search : undefined;
+    res.json({ conversations: await listConversations(200, search) });
   })
 );
 

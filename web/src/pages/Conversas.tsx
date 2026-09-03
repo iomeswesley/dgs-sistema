@@ -155,7 +155,24 @@ function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
 }
 
 export function Conversas() {
-  const conversations = useApi<{ conversations: ConversationSummary[] }>("/api/conversations");
+  const [search, setSearch] = useState("");
+  // Buscado no servidor com um leve atraso (não a cada tecla) — sem isso
+  // uma busca alcançava só as ~200 conversas mais recentemente ativas já
+  // carregadas na tela, filtrando em cima delas. Bug real achado pelo
+  // usuário em 2026-09-02: uma paciente (372ª conversa mais recente,
+  // achada certinha em Acompanhamento) nunca aparecia buscando o nome
+  // exato dela em Conversas, porque a busca nunca ia além do que já tinha
+  // sido carregado. Agora `GET /api/conversations?search=` busca no
+  // histórico inteiro (ver conversations.service.ts).
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [search]);
+  const conversationsPath = debouncedSearch
+    ? `/api/conversations?search=${encodeURIComponent(debouncedSearch)}`
+    : "/api/conversations";
+  const conversations = useApi<{ conversations: ConversationSummary[] }>(conversationsPath, [conversationsPath]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const thread = useApi<{ patientName: string | null; messages: ThreadMessage[] }>(
     selectedPhone ? `/api/conversations/${selectedPhone}/messages` : null,
@@ -164,7 +181,6 @@ export function Conversas() {
   const templateFields = useApi<{ fields: Record<TemplateKind, TemplateFieldsConfig> }>(
     "/api/conversations/template-fields"
   );
-  const [search, setSearch] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
