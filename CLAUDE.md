@@ -66,6 +66,16 @@ Conferido também nessa revisão, sem achar problema: endpoint de mídia do What
    3. Reenviar a revisão do `business_management` só com esse vídeo em mãos.
 2. Popular o cadastro de produção antes do cliente operar pra valer.
 
+## Sessão de 2026-09-03 — Indicadores: taxa de confirmação + gráficos por template
+
+Pedido do usuário depois de estranhar o número da "% Confirmação" em Indicadores:
+
+- **% Confirmação corrigida** — fórmula antiga era `confirmados ÷ contatáveis`, e "contatáveis" incluía agendamento nunca disparado ainda (lista em revisão, PENDENTE) e reposição de vaga (template VAGA_ABERTA, fluxo diferente de "confirmação de consulta") no mesmo denominador — derrubava a taxa sem representar confirmação perdida de verdade. Trocado por `IndicatorTotals.confirmationConfirmed ÷ confirmationBase` ([indicators.ts](src/modules/indicators/indicators.ts)): denominador só conta quem teve tentativa real de confirmar (template CONFIRMACAO efetivamente enviado — `WhatsappMessage` ENVIADA — OU contato manual da equipe, `Appointment.contactedById`), sempre excluindo lista complementar (`list.isComplementary`); numerador conta quem virou CONFIRMADO dentro desse grupo, clique "Sim" e contato manual pesando igual (pedido explícito do usuário). `confirmed`/`contactable`/`attendanceRate`/`utilizationRate` continuam com o significado de sempre (todo fluxo) — só a % Confirmação mudou de base.
+- **"Mensagens enviadas por dia" virou colunas empilhadas por template** (Confirmação/Lembrete/Vaga aberta/Cancelamento), com legenda — antes só mostrava o total do dia, sem dizer que tipo de mensagem era. Cor fixa por template, nunca as mesmas do marca-texto de status (verde/amarelo/vermelho/cinza, reservado a paciente): paleta categórica nova (`--chart-confirmacao`/`--chart-lembrete`/`--chart-vaga-aberta`/`--chart-cancelamento`, [index.css](web/src/index.css)) validada com o script de acessibilidade da skill `dataviz` (CVD ΔE ≥ 8 no par adjacente, claro e escuro) antes de escolher os tons.
+- **Seção nova "Mensagens recebidas"** em Indicadores: um `StatusBand` por fluxo (Confirmação de consulta, Vaga aberta, Cancelamento) mostrando o desfecho de quem respondeu — reaproveita o componente e as cores de status já usados no resto do sistema (Listas/Acompanhamento/Revisão), em vez de inventar um gráfico novo. Cancelamento usa a mesma classificação cientes/enviados/precisa-de-ação de `CancelamentoDetalhe` (`getCancellationReceivedBreakdown()`, novo em `cancellations.service.ts`, extraído de `getCancellationStatusSummary` — mesma lógica, escopo por período em vez de por lista).
+- CSV de export ganhou 2 colunas novas ("Templates de confirmação enviados", "Confirmados (fluxo de confirmação)") pra transparência da nova fórmula.
+- Testes novos cobrindo a fórmula corrigida (inclusive os 2 casos que motivaram a mudança: PENDENTE nunca tentado e VAGA_ABERTA excluído) e o agrupamento por template/fluxo. `npm run typecheck` e `npm test` limpos (160 testes), commit `272a43d`, deploy em produção no mesmo dia.
+
 ## Sessão de 2026-08-27 — resumo
 
 - **"Adicionar paciente manualmente" deixava o aviso preso** — `list.extractionRaw.unrecognized` era um retrato estático da extração, nunca atualizado quando alguém completava o registro pelo formulário. `addManualAppointment()` agora recebe `sourceRawText` e remove a entrada correspondente da lista de avisos.
