@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
+import { PatientConversationModal } from "../components/PatientConversationModal";
 import { StatusBand } from "../components/StatusBand";
 import { Callout, ErrorNote, Field, Spinner, StatusPill, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
@@ -204,6 +205,10 @@ export function Revisao() {
   const [pendingResponseOpen, setPendingResponseOpen] = useState(false);
   const [contactBusyId, setContactBusyId] = useState<number | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
+  // Conversa de um paciente, aberta direto do nome na tabela — pedido do
+  // usuário em 2026-09-03 (antes precisava copiar o nome e ir em
+  // Conversas). `null` = fechado.
+  const [conversationAppointment, setConversationAppointment] = useState<Appointment | null>(null);
   // "Importar mais pacientes (PDF)" — agenda que ganhou gente nova depois
   // do disparo original, sobe um PDF atualizado que se soma nesta lista
   // (quem já está aqui é ignorado, não duplica).
@@ -1026,7 +1031,14 @@ export function Revisao() {
                       />
                     ) : (
                       <>
-                        <span className="font-medium">{appointment.patient.name}</span>
+                        <button
+                          type="button"
+                          className="font-medium text-accent underline-offset-2 hover:underline"
+                          onClick={() => setConversationAppointment(appointment)}
+                          title="Ver a conversa com esse paciente"
+                        >
+                          {appointment.patient.name}
+                        </button>
                         {appointment.patient.optedOut && (
                           <span className="ml-2 text-xs text-mark-red">não quer receber</span>
                         )}
@@ -1242,6 +1254,15 @@ export function Revisao() {
         busy={busy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
+      />
+
+      <PatientConversationModal
+        appointment={conversationAppointment}
+        onClose={() => setConversationAppointment(null)}
+        onStatusChanged={() => {
+          detail.reload();
+          setConversationAppointment(null);
+        }}
       />
 
       <FormModal

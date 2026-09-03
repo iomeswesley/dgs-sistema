@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { PageHeader } from "../components/AppShell";
 import { FormModal } from "../components/FormModal";
+import { MediaPreview, ImageLightbox } from "../components/WhatsAppMedia";
 import { Callout, ErrorNote, Field, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
@@ -72,86 +72,6 @@ function loadSeenMap(): Record<string, string> {
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
-
-/**
- * Mídia baixada de uma mensagem (ver `hasMedia`/`mediaMimeType` em
- * `ThreadMessage`) — imagem e áudio tocam direto na bolha; qualquer outra
- * coisa (documento, figurinha, vídeo) vira um link de abrir/baixar, porque
- * não dá pra prever o visualizador certo pra cada tipo. `url` já é
- * protegida por sessão (mesma auth de toda a API) — o navegador manda o
- * cookie sozinho num `<img>`/`<audio>` same-origin, sem precisar de token.
- */
-function MediaPreview({
-  url,
-  mimeType,
-  onOpenImage,
-}: {
-  url: string;
-  mimeType: string | null;
-  /** Clique na miniatura — abre a imagem em tamanho grande (ver <ImageLightbox>). */
-  onOpenImage: (url: string) => void;
-}) {
-  if (mimeType?.startsWith("image/")) {
-    return (
-      <img
-        src={url}
-        alt="Imagem enviada pelo paciente"
-        className="mb-1.5 max-h-64 cursor-zoom-in rounded-md object-contain"
-        onClick={() => onOpenImage(url)}
-      />
-    );
-  }
-  if (mimeType?.startsWith("audio/")) {
-    return (
-      <audio controls className="mb-1.5 h-10 max-w-full">
-        <source src={url} type={mimeType} />
-      </audio>
-    );
-  }
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="mb-1.5 block font-semibold underline">
-      📎 Abrir arquivo
-    </a>
-  );
-}
-
-/**
- * Imagem recebida em tamanho grande, por cima de tudo — clicar na miniatura
- * na bolha abre isso (pedido do usuário em 2026-08-27: clicar na imagem não
- * fazia nada). Fecha clicando fora, no "×" ou com Esc.
- */
-function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-      onClick={onClose}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-2xl leading-none text-white hover:bg-white/20"
-        aria-label="Fechar"
-      >
-        ×
-      </button>
-      <img
-        src={url}
-        alt="Imagem enviada pelo paciente, em tamanho maior"
-        className="max-h-full max-w-full cursor-default rounded-md object-contain"
-        onClick={(event) => event.stopPropagation()}
-      />
-    </div>,
-    document.body
-  );
 }
 
 export function Conversas() {
