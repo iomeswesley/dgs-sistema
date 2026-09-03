@@ -7,6 +7,7 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
 import { pickAlternatePhone } from "@/lib/phone.js";
+import { classifyReply } from "@/lib/templates.js";
 import {
   addManualAppointment,
   approveList,
@@ -288,9 +289,55 @@ listsRouter.get(
       alternatePhone: pickAlternatePhone(a.patient.phones, a.selectedPhone),
     }));
 
+    // "Respondido, mas não deu pra entender o quê" — pedido do usuário em
+    // 2026-09-03: até aqui, quem escrevia algo que não era Sim/Não claro
+    // ficava indistinguível de quem nunca respondeu nada (os dois só
+    // apareciam como ENVIADO/ENTREGUE). Separado aqui: agendamento ainda
+    // "aberto" (nunca chegou a CONFIRMADO/RECUSADO) com pelo menos 1
+    // mensagem recebida cuja intenção o classificador não conseguiu
+    // resolver como confirmação/recusa/opt-out — mesma função
+    // (`classifyReply`) que o webhook usa de verdade, então bate certinho
+    // com o que realmente ficou sem aplicar.
+    const OPEN_STATUSES = new Set(["ENVIADO", "ENTREGUE", "FALHA", "SEM_RESPOSTA"]);
+    const openIds = appointments.filter((a) => OPEN_STATUSES.has(a.status)).map((a) => a.id);
+    const inboundByAppointment = new Map<number, { body: string | null; buttonPayload: string | null }[]>();
+    if (openIds.length > 0) {
+      const inbound = await prisma.whatsappMessage.findMany({
+        where: { appointmentId: { in: openIds }, direction: "RECEBIDA" },
+        orderBy: { createdAt: "asc" },
+        select: { appointmentId: true, body: true, buttonPayload: true },
+      });
+      for (const m of inbound) {
+        if (m.appointmentId === null) continue;
+        const list = inboundByAppointment.get(m.appointmentId) ?? [];
+        list.push({ body: m.body, buttonPayload: m.buttonPayload });
+        inboundByAppointment.set(m.appointmentId, list);
+      }
+    }
+    const appointmentsWithReplyFlag = appointmentsWithAlternate.map((a) => {
+      const inbound = inboundByAppointment.get(a.id) ?? [];
+      // O agendamento só entrou em `openIds` (acima) porque NUNCA virou
+      // CONFIRMADO/RECUSADO — então qualquer resposta ligada a ele aqui, seja
+      // texto ambíguo ("unknown") ou até um "Sim"/"Não" classificável que
+      // chegou tarde demais (depois do fim do dia da consulta, ver
+      // `endOfBrasiliaDay` em whatsapp.service.ts), é prova de que a resposta
+      // existe mas não aplicou sozinha — precisa de alguém olhar e decidir.
+      // Só `opt_out` fica de fora (tratado à parte, não é confirmação/recusa).
+      const unresolved = inbound.filter((m) => {
+        const intent = classifyReply({ buttonPayload: m.buttonPayload, text: m.body });
+        return intent !== "opt_out";
+      });
+      const last = unresolved[unresolved.length - 1];
+      return {
+        ...a,
+        hasUnclassifiedReply: unresolved.length > 0,
+        lastReplyPreview: last ? (last.buttonPayload ?? last.body) : null,
+      };
+    });
+
     res.json({
       list: { ...list, extractionRaw: undefined },
-      appointments: appointmentsWithAlternate,
+      appointments: appointmentsWithReplyFlag,
       warnings,
       unrecognized,
       unitCheck,

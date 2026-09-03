@@ -35,6 +35,17 @@ interface Appointment {
   procedure: { id: number; name: string };
   requestingUnit: { id: number; name: string } | null;
   rawLine: { issues?: string[]; invalidPhones?: string[]; notes?: string | null } | null;
+  /**
+   * Paciente escreveu algo (não clicou Sim/Não, texto livre que o
+   * classificador não entendeu como confirmação/recusa clara) e o
+   * agendamento continua aberto — pedido do usuário em 2026-09-03: antes
+   * ficava indistinguível de quem nunca respondeu nada, os dois só
+   * apareciam como "Entregue". Calculado no backend (`GET /api/lists/:id`)
+   * com a MESMA função que o webhook de verdade usa (`classifyReply`).
+   */
+  hasUnclassifiedReply: boolean;
+  /** Texto (ou clique de botão) da última resposta não classificada — só quando `hasUnclassifiedReply`. */
+  lastReplyPreview: string | null;
 }
 
 // Filtro por situação do envio — mesma dinâmica de botões do Cancelamento
@@ -253,7 +264,15 @@ export function Revisao() {
   const searchName = search.trim().toLocaleLowerCase("pt-BR");
   const filteredAppointments = appointments.filter((appointment) => {
     if (onlyIssues && (appointment.rawLine?.issues?.length ?? 0) === 0) return false;
-    if (statusFilter && appointment.status !== statusFilter) return false;
+    // "RESPONDIDO" é um filtro sintético (não é `Appointment.status` de
+    // verdade) — pra quem escreveu algo mas não deu pra classificar,
+    // distinto de quem nunca respondeu nada (os dois eram indistinguíveis
+    // antes, sempre ENVIADO/ENTREGUE).
+    if (statusFilter === "RESPONDIDO") {
+      if (!appointment.hasUnclassifiedReply) return false;
+    } else if (statusFilter && appointment.status !== statusFilter) {
+      return false;
+    }
     if (!searchName) return true;
     const nameMatch = appointment.patient.name.toLocaleLowerCase("pt-BR").includes(searchName);
     const phoneMatch = searchDigits.length > 0 && appointment.phones.some((phone) => phone.includes(searchDigits));
@@ -281,6 +300,10 @@ export function Revisao() {
   const pendingResponseAppointments = appointments.filter(
     (appointment) => appointment.status === "ENVIADO" || appointment.status === "ENTREGUE"
   );
+  // Contagem só de quem tem prova de que respondeu algo (pra não confundir
+  // com quem simplesmente nunca escreveu nada) — usado no filtro/botão
+  // "RESPONDIDO", separado de `pendingResponseAppointments` acima.
+  const respondedUnclassifiedCount = appointments.filter((a) => a.hasUnclassifiedReply).length;
 
   function openRetry() {
     const initial: Record<number, string> = {};
@@ -669,9 +692,10 @@ export function Revisao() {
                 type="button"
                 className="btn btn-quiet"
                 onClick={() => setPendingResponseOpen(true)}
-                title="Quem já recebeu a mensagem mas ainda não clicou Sim/Não nem respondeu nada — pronto pra ligar"
+                title="Quem já recebeu a mensagem: sem clique nenhum (liga e pergunta), ou respondeu algo que não deu pra entender como Sim/Não (leia e decida) — os dois casos, prontos pra confirmar ou recusar aqui"
               >
-                Quem ainda não respondeu ({pendingResponseAppointments.length})
+                Precisa de ação ({pendingResponseAppointments.length}
+                {respondedUnclassifiedCount > 0 ? `, ${respondedUnclassifiedCount} respondeu` : ""})
               </button>
             )}
             <a className="btn btn-quiet" href={`/api/indicators/list-report?listId=${list.id}`}>
@@ -947,6 +971,17 @@ export function Revisao() {
               </button>
             );
           })}
+          {respondedUnclassifiedCount > 0 && (
+            <button
+              type="button"
+              aria-pressed={statusFilter === "RESPONDIDO"}
+              className={`btn px-3 py-1.5 text-sm ${statusFilter === "RESPONDIDO" ? "btn-primary" : "btn-quiet"}`}
+              onClick={() => setStatusFilter("RESPONDIDO")}
+              title="Escreveu algo, mas não deu pra entender se confirma ou recusa — precisa alguém conferir e decidir."
+            >
+              {STATUS_LABEL.RESPONDIDO} ({respondedUnclassifiedCount})
+            </button>
+          )}
         </div>
         {failedAppointments.length > 0 && (
           <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={openRetry}>
@@ -1060,6 +1095,15 @@ export function Revisao() {
                   </Td>
                   <Td>
                     <StatusPill status={appointment.status} />
+                    {appointment.hasUnclassifiedReply && (
+                      <p
+                        className="mt-0.5 max-w-[180px] truncate text-xs font-medium"
+                        style={{ color: "var(--mark-yellow)" }}
+                        title={`Respondeu: "${appointment.lastReplyPreview}" — não deu pra entender se é confirmação ou recusa. Precisa conferir.`}
+                      >
+                        💬 Respondeu: "{appointment.lastReplyPreview}"
+                      </p>
+                    )}
                     {appointment.extractionConfidence !== null &&
                       appointment.extractionConfidence < 0.8 && (
                         <p className="tabular mt-0.5 text-xs text-ink-faint">
@@ -1230,7 +1274,7 @@ export function Revisao() {
       <FormModal
         open={pendingResponseOpen}
         title="Quem ainda não respondeu"
-        description="A mensagem chegou (ou pelo menos saiu), mas ninguém clicou Sim/Não nem escreveu nada ainda. Liga, explica que é só clicar no botão da mensagem, e já registra a resposta aqui se a pessoa confirmar por telefone."
+        description="A mensagem chegou (ou pelo menos saiu). Quem tem uma resposta em amarelo escreveu algo que não deu pra entender como Sim/Não — leia e decida. Quem não tem nada, ninguém respondeu ainda — vale ligar."
         submitLabel="Fechar"
         hideCancel
         wide
@@ -1260,6 +1304,11 @@ export function Revisao() {
                     <span className="text-ink-muted">Mensagem enviada pra </span>
                     <span className="tabular font-medium">{formatPhone(a.selectedPhone)}</span>
                   </p>
+                  {a.hasUnclassifiedReply && (
+                    <p className="mt-1 text-sm font-medium" style={{ color: "var(--mark-yellow)" }}>
+                      💬 Respondeu: "{a.lastReplyPreview}"
+                    </p>
+                  )}
                   {otherPhones.length > 0 && (
                     <p className="text-xs text-ink-faint">
                       Outro(s) número(s) no cadastro: <span className="tabular">{otherPhones.map(formatPhone).join(", ")}</span>

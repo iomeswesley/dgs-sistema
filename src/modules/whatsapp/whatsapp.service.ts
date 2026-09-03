@@ -5,6 +5,7 @@ import { classifyReply } from "@/lib/templates.js";
 import { phoneCandidates } from "@/lib/phone.js";
 import { downloadMedia, type InboundReply, type StatusUpdate } from "@/lib/whatsapp.js";
 import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
+import { endOfBrasiliaDay } from "@/lib/timezone.js";
 
 /*
   Tratamento do webhook.
@@ -137,6 +138,19 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
   if (!appointment) return;
 
   if (intent === "confirm" || intent === "refuse") {
+    // Corte no fim do dia da consulta (pedido do usuário em 2026-09-03,
+    // depois de perguntar se existe algum limite de tempo pra pegar
+    // resposta — não existia nenhum até aqui). Resposta chegando até
+    // 23:59:59 do dia da consulta aplica sozinha, como sempre; depois
+    // disso, fica só registrada (a mensagem já foi gravada acima, com
+    // `appointmentId` vinculado — não se perde) mas não muda o status
+    // sozinha, pra não reescrever retroativamente um indicador de um
+    // período já fechado por causa de uma resposta bem atrasada. Corte
+    // simples de propósito — fim do DIA, não o horário exato da consulta
+    // (mais frágil: responder minutos depois do próprio horário é normal
+    // e deve continuar contando).
+    if (reply.timestamp > endOfBrasiliaDay(appointment.scheduledAt)) return;
+
     await prisma.appointment.update({
       where: { id: appointment.id },
       data: {

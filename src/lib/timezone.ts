@@ -48,3 +48,17 @@ export function parseBrasiliaDateTime(value: string): Date {
 export function toBrasiliaDateString(date: Date): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
+
+/**
+ * 23:59:59.999 de Brasília do mesmo dia local de `date` — usado pra saber
+ * se uma resposta chegou "no mesmo dia" da consulta (pedido do usuário em
+ * 2026-09-03: resposta chegando depois do fim do dia da consulta não deve
+ * mudar o status sozinha, só fica registrada, pra não reescrever o
+ * indicador de um período já fechado por causa de uma resposta bem
+ * atrasada). Corte simples e genérico de propósito — não é o horário exato
+ * da consulta, que seria mais frágil (paciente respondendo minutos depois
+ * do próprio horário é normal e deve continuar contando).
+ */
+export function endOfBrasiliaDay(date: Date): Date {
+  return parseBrasiliaDateTime(`${toBrasiliaDateString(date)}T23:59:59.999`);
+}
