@@ -13,6 +13,15 @@ const envSchema = z.object({
   PUBLIC_BASE_URL: z.string().optional(),
   CRON_SECRET: z.string().optional(),
 
+  // Chave AES-256 (32 bytes, base64) pra criptografar segredos gravados no
+  // banco — hoje só WhatsappAccount.accessToken (ver lib/token-crypto.ts,
+  // achado na revisão de segurança de 2026-09-02: token ficava em texto
+  // puro). Opcional pra não quebrar dev local sem a variável configurada
+  // (nesse caso o segredo grava em texto puro, com aviso) — mas OBRIGATÓRIO
+  // estar configurada em produção. Gerar com:
+  // node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  TOKEN_ENCRYPTION_KEY: z.string().optional(),
+
   // Extração das listas (PDF/foto) — sem a chave, o upload aceita o arquivo
   // mas a extração fica desligada e a lista precisa ser preenchida à mão.
   ANTHROPIC_API_KEY: z.string().optional(),

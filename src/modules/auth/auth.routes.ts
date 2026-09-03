@@ -36,10 +36,17 @@ authRouter.post(
     // pra ler. Hoje todo mundo tem acesso a exatamente um cliente ("DGS"),
     // então o primeiro já resolve; um seletor de verdade fica pra Fase 3
     // (interface), quando alguém puder ter acesso a mais de um.
-    const access = await prisma.userClient.findFirst({ where: { userId: user.id } });
+    //
+    // `client: { active: true }` — achado num check de segurança em
+    // 2026-09-02: "Desativar" um cliente em Admin só mudava o campo,
+    // ninguém verificava em lugar nenhum. Logar (e trocar de cliente,
+    // abaixo) agora recusa um cliente desativado — mesma mensagem
+    // genérica de sempre, não confirma pra quem tenta que o cliente
+    // existe mas está desativado.
+    const access = await prisma.userClient.findFirst({ where: { userId: user.id, client: { active: true } } });
     if (!access) {
       throw new AppError(
-        "Usuário sem acesso a nenhum cliente — contate um administrador.",
+        "Usuário sem acesso a nenhum cliente ativo — contate um administrador.",
         403,
       );
     }
@@ -90,7 +97,7 @@ authRouter.post(
  *  1 item ("DGS"); a tela só mostra o seletor quando vem mais de 1. */
 async function accessibleClients(userId: number) {
   const rows = await prisma.userClient.findMany({
-    where: { userId },
+    where: { userId, client: { active: true } },
     include: { client: { select: { id: true, name: true } } },
     orderBy: { client: { name: "asc" } },
   });
@@ -119,7 +126,7 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const { clientId } = switchClientSchema.parse(req.body);
     const access = await prisma.userClient.findFirst({
-      where: { userId: req.session.user!.id, clientId },
+      where: { userId: req.session.user!.id, clientId, client: { active: true } },
     });
     if (!access) throw new AppError("Você não tem acesso a esse cliente.", 403);
 

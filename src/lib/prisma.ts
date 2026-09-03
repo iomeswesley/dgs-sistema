@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { isProduction } from "@/config/env.js";
 import { tenantIsolationExtension } from "@/lib/tenant-prisma-extension.js";
+import { whatsappAccountEncryptionExtension } from "@/lib/whatsapp-account-encryption-extension.js";
 
 // Reaproveita a instância entre reloads do tsx watch em dev, pra não abrir
 // uma pool nova de conexões a cada mudança de arquivo.
@@ -14,7 +15,12 @@ function buildClient() {
   // clientId automaticamente em toda query dos modelos isolados, a partir
   // do contexto aberto por `requireAuth`/cron/webhook (ver
   // src/lib/tenant-context.ts). Fail-closed: fora de contexto, lança.
-  return base.$extends(tenantIsolationExtension);
+  //
+  // Criptografia do token do WhatsApp (2026-09-03, ver revisão de
+  // segurança de 2026-09-02) — encadeada depois, mas a ordem entre as duas
+  // não importa: mexem em campos diferentes (clientId no where/data vs.
+  // accessToken no data/resultado).
+  return base.$extends(tenantIsolationExtension).$extends(whatsappAccountEncryptionExtension);
 }
 
 type ExtendedPrismaClient = ReturnType<typeof buildClient>;

@@ -14,6 +14,16 @@ Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que interm
 - Banco de **dev local**: Postgres 17 em container Docker (`docker-compose.yml` na raiz, serviço `postgres`, container `dgs-postgres`), banco `sistema_dgs`, usuário `postgres`, senha `dgs_local_dev`, porta 5432.
 - **⚠️ O `.env` ativo desta máquina está apontando pro banco de PRODUÇÃO desde o deploy de 2026-08-14/15**, não mais pro Docker local — troca deliberada, mantida assim por decisão do usuário ("sem problemas deixar produção pro Vercel direto"). Qualquer script rodado localmente (seed, reset de senha, `npx prisma ...`) afeta o banco real. Pra voltar a apontar pro Docker local, trocar `DATABASE_URL`/`DIRECT_URL` de volta — só fazer isso se o usuário pedir.
 
+## Estado atual (2026-09-03) — revisão de segurança pós-multicliente
+
+Depois do multi-cliente ir pro ar (ver seção abaixo), o usuário pediu uma passada de segurança real (achar bugs de verdade no código, não listar teoria). Dois achados:
+
+1. **Cliente "Desativar" em Admin não bloqueava nada de verdade** — o botão só mudava `Client.active` no banco, nenhuma rota verificava. Um usuário de um cliente desativado continuava logando e operando normalmente. **Corrigido** em [auth.routes.ts](src/modules/auth/auth.routes.ts): `client: { active: true }` adicionado no login, em `accessibleClients()` e na troca de cliente — as 3 rotas que resolvem qual(is) cliente(s) um usuário enxerga.
+2. **Token de acesso do WhatsApp (`WhatsappAccount.accessToken`) ficava em texto puro no Postgres** — não vazava pela API (`listAccounts()` já montava um objeto explícito sem esse campo), mas um dump/backup/leitura direta do banco expunha um token válido pra mandar WhatsApp em nome do cliente. **Corrigido**: `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, [lib/token-crypto.ts](src/lib/token-crypto.ts)) + uma extensão do Prisma dedicada ([lib/whatsapp-account-encryption-extension.ts](src/lib/whatsapp-account-encryption-extension.ts), mesmo padrão estrutural da extensão de isolamento por cliente) que criptografa/decripta `accessToken` automaticamente em toda leitura/escrita do modelo — nenhum call site precisou mudar. Tolerante a dado legado (valor sem o prefixo `v1:` é tratado como texto puro já existente, não quebra). Script `scripts/criptografar-tokens-whatsapp.ts` migra o(s) token(s) já gravado(s) — idempotente, pula quem já está criptografado.
+   - **Pendente**: gerar `TOKEN_ENCRYPTION_KEY` de produção, configurar na Vercel, e rodar o script de migração contra o banco real — nenhum dos três foi feito ainda (mexe em credencial de produção, aguardando confirmação explícita do usuário antes de executar). Sem a chave configurada, o código grava/lê em texto puro com aviso no console (não quebra, só não protege) — comportamento antigo, não é regressão.
+
+Conferido também nessa revisão, sem achar problema: endpoint de mídia do WhatsApp em Conversas (isolamento por `clientId` automático via extensão do Prisma) e flags do cookie de sessão (`httpOnly`, `secure` em produção, `sameSite: lax`). Detalhe completo na memória `seguranca-revisao-2026-09-02` (arquivo local de memória do Claude, fora do repo).
+
 ## Estado atual (2026-09-02) — multi-cliente em produção
 
 **As 5 fases do plano multi-cliente (ver [PLANO-MULTICLIENTE.md](PLANO-MULTICLIENTE.md)) foram implementadas, testadas contra um Supabase de teste separado + deploy de preview, e promovidas pra produção no mesmo dia.** Sequência seguida (documentada em detalhe no PLANO-MULTICLIENTE.md, seção 8):
@@ -55,6 +65,7 @@ Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que interm
    2. Só depois de conseguir completar o fluxo de coexistência pelo menos uma vez (login → "Conectar número que já usa WhatsApp Business App" → código no celular → tela de confirmação da empresa → número aparecendo em Configurações → WhatsApp), gravar o screencast desse fluxo inteiro, sem cortes.
    3. Reenviar a revisão do `business_management` só com esse vídeo em mãos.
 2. Popular o cadastro de produção antes do cliente operar pra valer.
+3. **Criptografia do token do WhatsApp implementada mas não ativada em produção** (ver "Estado atual 2026-09-03"): falta gerar `TOKEN_ENCRYPTION_KEY`, configurar na Vercel, e rodar `scripts/criptografar-tokens-whatsapp.ts` contra o banco real — aguardando confirmação do usuário antes de mexer em credencial de produção.
 
 ## Sessão de 2026-08-27 — resumo
 
