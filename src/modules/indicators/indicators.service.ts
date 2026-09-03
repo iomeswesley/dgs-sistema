@@ -112,3 +112,59 @@ export async function getMessagesPerDay(from: Date, to: Date): Promise<DailyMess
     toBrasiliaDateString(to)
   );
 }
+
+function percentCell(value: number | null): string {
+  return value === null ? "" : `${(value * 100).toFixed(1).replace(".", ",")}%`;
+}
+
+function moneyCell(value: number | null): string {
+  return value === null ? "" : value.toFixed(2).replace(".", ",");
+}
+
+/**
+ * Linhas do CSV de exportação — extraído de indicators.routes.ts pra ser
+ * reaproveitado também pelo export de admin (indicadores de outro cliente,
+ * ver admin.routes.ts), sem duplicar a lista de colunas nos dois lugares.
+ */
+export function buildIndicatorsCsvRows(report: IndicatorReport): { header: string[]; rows: (string | number)[][] } {
+  return {
+    header: [
+      "Recorte",
+      "Planejados",
+      "Contatáveis",
+      "Confirmados",
+      "Recusados",
+      "Sem resposta",
+      "Sem telefone",
+      "Atendidos",
+      "Encaixes",
+      "Pagos",
+      "% Confirmação",
+      "% Comparecimento",
+      "% Aproveitamento",
+      "Divergência",
+      "Repasse ao médico",
+      "Faturamento",
+      "Margem",
+    ],
+    rows: report.breakdown.map((row) => [
+      row.label,
+      row.planned,
+      row.contactable,
+      row.confirmed,
+      row.refused,
+      row.noAnswer,
+      row.unreachable,
+      row.attended ?? "",
+      row.extras,
+      row.paid ?? "",
+      percentCell(row.confirmationRate),
+      percentCell(row.attendanceRate),
+      percentCell(row.utilizationRate),
+      percentCell(row.divergenceRate),
+      moneyCell(row.doctorPayout),
+      moneyCell(row.cityBilling),
+      moneyCell(row.margin),
+    ]),
+  };
+}

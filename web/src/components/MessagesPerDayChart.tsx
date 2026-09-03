@@ -38,8 +38,12 @@ function formatFullDate(iso: string): string {
  * próprio (semana/mês/3 meses ou intervalo livre), independente do filtro de
  * De/Até que já existe na página pro recorte por médico/município/mês
  * (pedido do usuário em 2026-09-01).
+ *
+ * `clientId`: só quando quem está vendo é super admin escolhendo outro
+ * cliente que não o da própria sessão (Indicadores.tsx) — nesse caso busca
+ * via `/api/admin/indicators/...` em vez do endpoint normal (Fase 4).
  */
-export function MessagesPerDayChart() {
+export function MessagesPerDayChart({ clientId }: { clientId?: number }) {
   const [preset, setPreset] = useState<string | null>("30");
   const [from, setFrom] = useState(daysAgo(30));
   const [to, setTo] = useState(localDateString());
@@ -50,8 +54,9 @@ export function MessagesPerDayChart() {
     setTo(localDateString());
   }
 
-  const query = new URLSearchParams({ from, to });
-  const data = useApi<{ series: DailyCount[] }>(`/api/indicators/messages-per-day?${query}`, [from, to]);
+  const query = new URLSearchParams({ from, to, ...(clientId ? { clientId: String(clientId) } : {}) });
+  const path = clientId ? `/api/admin/indicators/messages-per-day?${query}` : `/api/indicators/messages-per-day?${query}`;
+  const data = useApi<{ series: DailyCount[] }>(path, [path]);
   const series = data.data?.series ?? [];
   const total = series.reduce((sum, point) => sum + point.count, 0);
 
@@ -61,8 +66,11 @@ export function MessagesPerDayChart() {
         <div>
           <p className="eyebrow">Mensagens enviadas por dia</p>
           {!data.loading && series.length > 0 && (
-            <p className="mt-0.5 text-sm text-ink-muted">
-              {total} mensagens no período · {formatFullDate(from)} a {formatFullDate(to)}
+            <p className="mt-0.5">
+              <span className="text-2xl font-bold tabular tracking-tight text-ink">{total}</span>{" "}
+              <span className="text-sm text-ink-muted">
+                mensagens no período · {formatFullDate(from)} a {formatFullDate(to)}
+              </span>
             </p>
           )}
         </div>

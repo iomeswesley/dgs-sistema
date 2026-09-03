@@ -3,6 +3,7 @@ import { EmptyState, PageHeader } from "../components/AppShell";
 import { MessagesPerDayChart } from "../components/MessagesPerDayChart";
 import { ErrorNote, Field, Spinner, Stat, Table, Td, Th } from "../components/ui";
 import { useApi } from "../lib/useApi";
+import { useSession } from "../lib/session";
 import { daysAgo, formatMoney, formatPercent, localDateString } from "../lib/format";
 
 interface Totals {
@@ -37,16 +38,30 @@ const GROUP_LABEL: Record<string, string> = {
 };
 
 export function Indicadores() {
+  const { user, clients } = useSession();
   const [from, setFrom] = useState(daysAgo(30));
   const [to, setTo] = useState(localDateString());
   const [groupBy, setGroupBy] = useState("doctor");
+  // Só super admin escolhe outro cliente — pedido do usuário em
+  // 2026-09-02: ver os indicadores de qualquer cliente sem trocar o
+  // cliente ativo da própria sessão. Começa no cliente ativo de quem
+  // está vendo; `clients` (useSession) é só os que ELA tem acesso, então
+  // usamos a lista de todos via /api/admin/clients pra super admin.
+  const [viewingClientId, setViewingClientId] = useState<number | undefined>(user?.activeClientId);
+  const adminClients = useApi<{ clients: { id: number; name: string }[] }>(
+    user?.isSuperAdmin ? "/api/admin/clients" : null
+  );
 
-  const query = new URLSearchParams({ from, to, groupBy });
-  const data = useApi<{ totals: Totals; breakdown: Breakdown[] }>(`/api/indicators?${query}`, [
+  const scopedClientId = user?.isSuperAdmin ? viewingClientId : undefined;
+  const query = new URLSearchParams({
     from,
     to,
     groupBy,
-  ]);
+    ...(scopedClientId ? { clientId: String(scopedClientId) } : {}),
+  });
+  const indicatorsPath = scopedClientId ? `/api/admin/indicators?${query}` : `/api/indicators?${query}`;
+  const exportPath = scopedClientId ? `/api/admin/indicators/export?${query}` : `/api/indicators/export?${query}`;
+  const data = useApi<{ totals: Totals; breakdown: Breakdown[] }>(indicatorsPath, [indicatorsPath]);
 
   const totals = data.data?.totals;
 
@@ -57,13 +72,31 @@ export function Indicadores() {
         title="Indicadores"
         description="As mesmas taxas para qualquer recorte: por médico, município, procedimento ou mês."
         actions={
-          <a className="btn btn-quiet" href={`/api/indicators/export?${query}`}>
+          <a className="btn btn-quiet" href={exportPath}>
             Exportar Excel
           </a>
         }
       />
 
-      <MessagesPerDayChart />
+      {user?.isSuperAdmin && (
+        <div className="card mb-5 p-5">
+          <Field label="Cliente" hint="Só você vê isso — é o admin global escolhendo qual cliente olhar.">
+            <select
+              className="field"
+              value={viewingClientId ?? ""}
+              onChange={(e) => setViewingClientId(Number(e.target.value))}
+            >
+              {(adminClients.data?.clients ?? clients).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      )}
+
+      <MessagesPerDayChart clientId={scopedClientId} />
 
       <div className="card mb-5 p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
