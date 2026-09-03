@@ -36,7 +36,8 @@ export async function extractAndStage(listId: number): Promise<void> {
     const { result } = await extractList(Buffer.from(list.fileData), list.mimeType);
     const mapped = mapExtraction(result);
     const unitCheck = await checkUnit(list.agendaId, mapped.executingUnit);
-    result.warnings = [...result.warnings, ...unitCheckWarnings(unitCheck)];
+    const doctorCheck = await checkDoctorMatch(list.agendaId, mapped.doctor);
+    result.warnings = [...result.warnings, ...unitCheckWarnings(unitCheck), ...doctorCheckWarnings(doctorCheck)];
 
     await prisma.$transaction(
       async (tx) => {
@@ -45,7 +46,15 @@ export async function extractAndStage(listId: number): Promise<void> {
         await tx.appointment.deleteMany({ where: { listId } });
 
         for (const draft of mapped.drafts) {
-          await createAppointmentFromDraft(tx, listId, list.municipalityId, list.agendaId, draft, mapped);
+          await createAppointmentFromDraft(
+            tx,
+            listId,
+            list.municipalityId,
+            list.agendaId,
+            doctorCheck.agendaDoctorId,
+            draft,
+            mapped
+          );
         }
 
         await tx.list.update({
@@ -141,21 +150,85 @@ function unitCheckWarnings(check: UnitCheck): string[] {
   return warnings;
 }
 
+export interface DoctorCheck {
+  agendaDoctorId: number | null;
+  agendaDoctorName: string | null;
+  pdfDoctor: string | null;
+  mismatch: boolean;
+  noAgenda: boolean;
+}
+
+/**
+ * Compara o médico que o PDF trouxe com o médico da Agenda já vinculada à
+ * lista — achado real em 2026-09-03: duas listas (agenda do Reinaldo e do
+ * Mariston pra 04/09) foram extraídas de um PDF cujo cabeçalho trazia
+ * "Profissional Executante: Todos" (a secretaria gerou o relatório sem
+ * filtrar por médico), e o sistema criou um médico "Todos" no cadastro e
+ * atribuiu TODOS os agendamentos a ele — em vez do médico da Agenda que a
+ * equipe já tinha escolhido ao vincular a lista. 105 confirmações do
+ * Reinaldo e 10 do Mariston ficaram invisíveis em qualquer tela filtrada
+ * por médico, sem nenhum dado perdido (só mal atribuído). Corrigido nos
+ * dados de produção via script (`scripts/corrigir-medico-todos.ts`) e na
+ * raiz aqui: `resolveCatalog` agora usa sempre o médico da Agenda quando
+ * ela existe (`agendaDoctorId`), nunca cria/reaproveita um médico
+ * diferente a partir do texto do PDF nesse caso — o texto do PDF só decide
+ * o médico quando a lista não tem agenda nenhuma vinculada. Esta função
+ * roda mesmo assim, pra avisar a equipe em Revisão quando os dois nomes
+ * não batem (pode ser um erro real de agenda escolhida, mesmo o sistema já
+ * tendo corrigido sozinho pro médico certo).
+ */
+export async function checkDoctorMatch(agendaId: number | null, pdfDoctor: string | null): Promise<DoctorCheck> {
+  if (!agendaId) {
+    return { agendaDoctorId: null, agendaDoctorName: null, pdfDoctor, mismatch: false, noAgenda: true };
+  }
+
+  const agenda = await prisma.agenda.findUnique({ where: { id: agendaId }, include: { doctor: true } });
+  if (!agenda) {
+    return { agendaDoctorId: null, agendaDoctorName: null, pdfDoctor, mismatch: false, noAgenda: false };
+  }
+
+  return {
+    agendaDoctorId: agenda.doctorId,
+    agendaDoctorName: agenda.doctor.name,
+    pdfDoctor,
+    mismatch: !!pdfDoctor && !namesMatch(pdfDoctor, agenda.doctor.name),
+    noAgenda: false,
+  };
+}
+
+function doctorCheckWarnings(check: DoctorCheck): string[] {
+  if (check.noAgenda || !check.mismatch || !check.agendaDoctorName) return [];
+  return [
+    `Médico lido no arquivo ("${check.pdfDoctor}") não bate com o médico da agenda vinculada ("${check.agendaDoctorName}") — os agendamentos foram atribuídos ao médico da agenda; confira se a agenda certa foi escolhida.`,
+  ];
+}
+
 type TxClient = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 /** Resolve nome de médico/procedimento/unidade em cadastro, criando se preciso. */
 async function resolveCatalog(
   tx: TxClient,
   municipalityId: number,
-  draft: AppointmentDraft
+  draft: AppointmentDraft,
+  // Médico da Agenda já vinculada à lista, pré-calculado uma vez por
+  // `checkDoctorMatch` (não por linha) — quando existe, é sempre ele quem
+  // decide o médico do agendamento, nunca o texto solto do PDF (ver
+  // comentário em `checkDoctorMatch` acima pro caso real que motivou isso).
+  agendaDoctorId: number | null
 ): Promise<{ doctorId: number; procedureId: number; requestingUnitId: number | null }> {
   // A lista traz nomes livres; o cadastro precisa de ids. Criar na hora evita
   // travar a extração por cadastro faltando — a equipe ajusta depois em
   // Configurações, e o vínculo já fica feito.
-  const doctorName = (draft.doctor ?? "Não informado").trim();
-  const doctor =
-    (await tx.doctor.findFirst({ where: { name: { equals: doctorName, mode: "insensitive" } } })) ??
-    (await tx.doctor.create({ data: { name: doctorName, clientId: requireActiveClientId() } }));
+  let doctorId: number;
+  if (agendaDoctorId !== null) {
+    doctorId = agendaDoctorId;
+  } else {
+    const doctorName = (draft.doctor ?? "Não informado").trim();
+    const doctor =
+      (await tx.doctor.findFirst({ where: { name: { equals: doctorName, mode: "insensitive" } } })) ??
+      (await tx.doctor.create({ data: { name: doctorName, clientId: requireActiveClientId() } }));
+    doctorId = doctor.id;
+  }
 
   const procedureName = (draft.procedure ?? "Não informado").trim();
   const procedure =
@@ -175,7 +248,7 @@ async function resolveCatalog(
     requestingUnitId = unit.id;
   }
 
-  return { doctorId: doctor.id, procedureId: procedure.id, requestingUnitId };
+  return { doctorId, procedureId: procedure.id, requestingUnitId };
 }
 
 /** Encontra ou cria o paciente, deduplicando por CNS e depois por telefone. */
@@ -253,10 +326,11 @@ async function createAppointmentFromDraft(
   listId: number,
   municipalityId: number,
   agendaId: number | null,
+  agendaDoctorId: number | null,
   draft: AppointmentDraft,
   mapped: ReturnType<typeof mapExtraction>
 ) {
-  const { doctorId, procedureId, requestingUnitId } = await resolveCatalog(tx, municipalityId, draft);
+  const { doctorId, procedureId, requestingUnitId } = await resolveCatalog(tx, municipalityId, draft, agendaDoctorId);
   const patient = await resolvePatient(tx, draft);
 
   return tx.appointment.create({
@@ -624,6 +698,10 @@ export async function importAdditionalPatients(
 
   const { result } = await extractList(file, mimeType);
   const mapped = mapExtraction(result);
+  // Mesma correção de 2026-09-03 do fluxo principal (`extractAndStage`):
+  // lista já vinculada a uma Agenda usa sempre o médico dela, nunca o
+  // texto solto do PDF importado — ver `checkDoctorMatch`.
+  const doctorCheck = await checkDoctorMatch(list.agendaId, mapped.doctor);
 
   const dispatchNow = list.status !== "EM_REVISAO";
   const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
@@ -638,7 +716,12 @@ export async function importAdditionalPatients(
   // paciente + cria agendamento + enfileira).
   for (const draft of mapped.drafts) {
     await prisma.$transaction(async (tx) => {
-      const { doctorId, procedureId, requestingUnitId } = await resolveCatalog(tx, list.municipalityId, draft);
+      const { doctorId, procedureId, requestingUnitId } = await resolveCatalog(
+        tx,
+        list.municipalityId,
+        draft,
+        doctorCheck.agendaDoctorId
+      );
       const patient = await resolvePatient(tx, draft);
 
       const alreadyInList = await tx.appointment.findFirst({
