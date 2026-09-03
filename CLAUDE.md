@@ -76,6 +76,14 @@ Pedido do usuário depois de estranhar o número da "% Confirmação" em Indicad
 - CSV de export ganhou 2 colunas novas ("Templates de confirmação enviados", "Confirmados (fluxo de confirmação)") pra transparência da nova fórmula.
 - Testes novos cobrindo a fórmula corrigida (inclusive os 2 casos que motivaram a mudança: PENDENTE nunca tentado e VAGA_ABERTA excluído) e o agrupamento por template/fluxo. `npm run typecheck` e `npm test` limpos (160 testes), commit `272a43d`, deploy em produção no mesmo dia.
 
+## Sessão de 2026-09-03 (7) — bug: telefone selecionado não acompanhava o reenvio automático
+
+Achado pelo usuário testando o modal de conversa novo (seção (6) abaixo): clicar no nome da Juliete Caetano abria a conversa do número que **falhou**, não do número novo que o reenvio automático usou com sucesso (e que ela respondeu "Não poderei ir" de verdade).
+
+**Causa raiz**: `processQueue()` (`queue.service.ts`) nunca sincronizava `Appointment.selectedPhone` com o telefone de verdade usado no envio — só marcava `status: "ENVIADO"`. Diferente do reenvio MANUAL (`retryFailedAppointments()`, "Reenviar pra quem falhou" em Revisão/Cancelamento), que já atualizava `selectedPhone` certinho. Essa é a MESMA causa raiz do bug de resposta perdida corrigido na sessão (5) — já tinha sido coberta do lado da BUSCA (`findAppointmentForPhone()` passou a casar por qualquer telefone em `Appointment.phones`, não só o selecionado), mas o CAMPO `selectedPhone` em si continuava desatualizado, o que ainda quebra qualquer tela que mostra a conversa PELO `selectedPhone` — exatamente o modal novo da sessão (6).
+
+**Corrigido na raiz**: `processQueue()` agora grava `selectedPhone: job.phone` junto do status `ENVIADO`, só no sucesso do envio (nunca na falha — não faz sentido "selecionar" um número que acabou de falhar). `scripts/auditar-telefone-selecionado.ts` corrige o que já tinha ficado desatualizado — pra cada agendamento, acha o envio bem-sucedido mais recente e corrige `selectedPhone` se divergir. Juliete (appointment 1900) corrigida manualmente na hora; auditoria completa do sistema rodada na sequência.
+
 ## Sessão de 2026-09-03 (6) — corte no fim do dia, "Respondido" em Revisão, conversa direto da lista
 
 Continuação da (5) abaixo, mesma investigação (o usuário pediu conferência manual da lista do Mariston, achou mais casos, perguntou sobre limite de tempo):
