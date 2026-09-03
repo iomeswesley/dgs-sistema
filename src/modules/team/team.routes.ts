@@ -207,6 +207,43 @@ teamRouter.patch(
   })
 );
 
+/**
+ * Exclui a pessoa da equipe deste cliente — diferente de desativar
+ * (`PATCH .../active`), que só pausa reversível mantendo a pessoa visível
+ * na lista como inativa. Excluir tira o vínculo (`UserClient`) com o
+ * cliente ativo por completo; ela some da lista. A conta (`User`) e todo
+ * o histórico dela (auditoria, listas que aprovou, contatos que fez etc.)
+ * continuam existindo — só o acesso a ESTE cliente é removido. Se for o
+ * único cliente que a pessoa tinha, ela deixa de conseguir logar em
+ * qualquer lugar, mas a conta em si não é apagada (pedido explícito do
+ * usuário: "excluir", não só "desativar" — diferente do endpoint
+ * equivalente em admin.routes.ts, que bloqueia esse caso e sugere
+ * desativar; aqui é decisão deliberada de permitir).
+ */
+teamRouter.delete(
+  "/api/team/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    await requireTeamMember(id);
+    if (id === currentUserId(req)) {
+      throw new AppError("Você não pode excluir a própria conta.", 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { id }, select: { email: true } });
+    await prisma.userClient.deleteMany({ where: { userId: id, clientId: requireActiveClientId() } });
+
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "remove_team_member",
+      entity: "User",
+      entityId: id,
+      newValue: user?.email ?? null,
+    });
+
+    res.json({ ok: true });
+  })
+);
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8, "A nova senha precisa de pelo menos 8 caracteres"),

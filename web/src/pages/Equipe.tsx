@@ -76,6 +76,7 @@ export function Equipe() {
   );
   const [resetting, setResetting] = useState<TeamUser | null>(null);
   const [toggling, setToggling] = useState<TeamUser | null>(null);
+  const [removing, setRemoving] = useState<TeamUser | null>(null);
   const [editing, setEditing] = useState<TeamUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "" });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -127,6 +128,23 @@ export function Equipe() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao alterar.");
       setToggling(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMember() {
+    if (!removing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.delete(`/api/team/${removing.id}`);
+      setRemoving(null);
+      team.reload();
+      audit.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao excluir.");
+      setRemoving(null);
     } finally {
       setBusy(false);
     }
@@ -269,6 +287,13 @@ export function Equipe() {
                       onClick={() => setToggling(user)}
                     >
                       {user.active ? "Desativar" : "Reativar"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => setRemoving(user)}
+                    >
+                      Excluir
                     </button>
                   </div>
                 </Td>
@@ -431,6 +456,17 @@ export function Equipe() {
         busy={busy}
         onConfirm={toggleActive}
         onCancel={() => setToggling(null)}
+      />
+
+      <ConfirmModal
+        open={removing !== null}
+        title={`Excluir ${removing?.name ?? ""} da equipe?`}
+        description="Diferente de desativar: a pessoa some da lista (não fica marcada como inativa). O login e o histórico dela continuam existindo — se este for o único cliente que ela tinha acesso, ela deixa de conseguir entrar em qualquer lugar."
+        confirmLabel="Excluir"
+        danger
+        busy={busy}
+        onConfirm={removeMember}
+        onCancel={() => setRemoving(null)}
       />
     </>
   );
