@@ -302,9 +302,28 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
             sentAt: new Date(),
           },
         }),
+        // `selectedPhone` acompanha o telefone de verdade usado no envio —
+        // achado pelo usuário em 2026-09-03 (Juliete Caetano): o reenvio
+        // automático por telefone alternativo (`enqueueRetries()`, quando o
+        // primeiro número falha) manda a mensagem pra um número novo, mas
+        // `Appointment.selectedPhone` nunca era atualizado — continuava
+        // apontando pro número velho que tinha falhado. Além do bug de
+        // resposta perdida já corrigido hoje (findAppointmentForPhone
+        // agora casa por qualquer telefone tentado, não só o selecionado),
+        // isso também fazia a conversa abrir no número ERRADO em qualquer
+        // tela que mostra a conversa por `selectedPhone` (o modal de
+        // conversa da Revisão, novo hoje). Sincronizar aqui, no único
+        // lugar que sabe com certeza que o envio pra `job.phone` funcionou,
+        // resolve os dois de uma vez — nunca sincroniza na falha (não faz
+        // sentido "selecionar" um número que acabou de falhar).
         ...(isCancellation
           ? []
-          : [prisma.appointment.update({ where: { id: job.appointmentId }, data: { status: "ENVIADO" } })]),
+          : [
+              prisma.appointment.update({
+                where: { id: job.appointmentId },
+                data: { status: "ENVIADO", selectedPhone: job.phone },
+              }),
+            ]),
       ]);
       sent++;
     } catch (err) {
