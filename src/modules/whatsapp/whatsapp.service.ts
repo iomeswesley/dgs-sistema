@@ -45,17 +45,20 @@ import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
  * resposta "contava" (a segunda não achava agendamento pra vincular,
  * porque ele já não estava mais ENVIADO/ENTREGUE) — a equipe só descobriu
  * a intenção real dias depois, revendo a conversa na mão. Pedido explícito
- * do usuário: vale sempre a ÚLTIMA resposta. CANCELADO fica de fora de
- * propósito — agenda cancelada é fato consumado (mesma regra que
- * `queue.service.ts` já aplica pro envio do template CANCELAMENTO:
- * resposta do paciente ali é só registrada, nunca reabre o agendamento).
+ * do usuário: vale sempre a ÚLTIMA resposta. `FALHA` entra pelo mesmo
+ * motivo — status de envio malsucedido não deveria travar uma resposta
+ * genuína que ainda assim chegou. Só dois ficam de fora, os dois de
+ * propósito: `PENDENTE`/`SEM_TELEFONE` nunca tiveram envio nenhum pra
+ * responder, e `CANCELADO` é fato consumado — agenda cancelada não reabre
+ * (mesma regra que `queue.service.ts` já aplica pro envio do template
+ * CANCELAMENTO: resposta do paciente ali é só registrada).
  */
 async function findAppointmentForPhone(phone: string) {
   const candidates = phoneCandidates(phone);
   return prisma.appointment.findFirst({
     where: {
       OR: [{ selectedPhone: { in: candidates } }, { phones: { hasSome: candidates } }],
-      status: { in: ["ENVIADO", "ENTREGUE", "CONFIRMADO", "RECUSADO", "SEM_RESPOSTA"] },
+      status: { in: ["ENVIADO", "ENTREGUE", "CONFIRMADO", "RECUSADO", "SEM_RESPOSTA", "FALHA"] },
     },
     orderBy: { scheduledAt: "asc" },
     include: { patient: true },
