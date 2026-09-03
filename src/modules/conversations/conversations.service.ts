@@ -2,6 +2,7 @@ import type { TemplateKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
 import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { normalizePhone, phoneCandidates, formatPhone } from "@/lib/phone.js";
+import { normalizeForMatch } from "@/lib/text-match.js";
 import { sendTemplate, sendText, type TemplateComponentParams } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
@@ -176,15 +177,19 @@ export async function listConversations(limit = 200, search?: string): Promise<C
   }
 
   const digits = query.replace(/\D/g, "");
-  const patients = await prisma.patient.findMany({
-    where: {
-      OR: [
-        { name: { contains: query, mode: "insensitive" } },
-        ...(digits.length >= 4 ? [{ phones: { hasSome: phoneCandidates(digits) } }] : []),
-      ],
-    },
-    select: { phones: true },
-  });
+  // Casa nome ignorando acento (achado pelo usuário em 2026-09-03: "José"/
+  // "Márcia" etc. não batiam — `contains, mode: insensitive` do Prisma só
+  // ignora caixa, não acento, no Postgres). Busca todo o cadastro (~2 mil
+  // pacientes hoje, consulta leve, só nome+telefone) e compara em JS com o
+  // mesmo normalizador usado no resto do sistema pra nome livre
+  // (`normalizeForMatch`, já usado no preview de upload de lista).
+  const normalizedQuery = normalizeForMatch(query);
+  const allPatients = await prisma.patient.findMany({ select: { name: true, phones: true } });
+  const patients = allPatients.filter(
+    (p) =>
+      normalizeForMatch(p.name).includes(normalizedQuery) ||
+      (digits.length >= 4 && p.phones.some((phone) => phone.includes(digits)))
+  );
   const candidatePhones = new Set(patients.flatMap((p) => p.phones.flatMap((phone) => phoneCandidates(phone))));
 
   // Nem paciente cadastrado bateu, nem dígito suficiente pra buscar direto

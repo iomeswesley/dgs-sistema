@@ -20,12 +20,26 @@ import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
   Tudo é idempotente por `wamid` — a Meta reentrega o mesmo evento sem aviso.
 */
 
-/** Encontra o agendamento mais recente que espera resposta desse telefone. */
+/**
+ * Encontra o agendamento que essa resposta deve valer. Inclui CONFIRMADO/
+ * RECUSADO/SEM_RESPOSTA, não só ENVIADO/ENTREGUE (quem ainda não tinha
+ * resposta nenhuma) — achado pelo usuário em 2026-09-03, caso real: um
+ * paciente clicou "Sim, vou comparecer" e 14 segundos depois "Não poderei
+ * ir" (arrependimento ou toque errado). Antes, só a PRIMEIRA resposta
+ * "contava" (a segunda não achava agendamento nenhum pra vincular, porque
+ * ele já não estava mais ENVIADO/ENTREGUE) — a equipe só descobriu a
+ * intenção real dias depois, revendo a conversa na mão, e teve que corrigir
+ * manualmente. Pedido explícito do usuário: vale sempre a ÚLTIMA resposta.
+ * CANCELADO fica de fora de propósito — agenda cancelada é fato consumado
+ * (mesma regra que `queue.service.ts` já aplica pro envio do template
+ * CANCELAMENTO: resposta do paciente ali é só registrada, nunca reabre o
+ * agendamento).
+ */
 async function findAppointmentForPhone(phone: string) {
   return prisma.appointment.findFirst({
     where: {
       selectedPhone: { in: phoneCandidates(phone) },
-      status: { in: ["ENVIADO", "ENTREGUE"] },
+      status: { in: ["ENVIADO", "ENTREGUE", "CONFIRMADO", "RECUSADO", "SEM_RESPOSTA"] },
     },
     orderBy: { scheduledAt: "asc" },
     include: { patient: true },

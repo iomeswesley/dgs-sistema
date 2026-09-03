@@ -218,16 +218,16 @@ export function Conversas() {
   const selected = conversations.data?.conversations.find((c) => c.phone === selectedPhone);
   const selectedName = thread.data?.patientName ?? selected?.phoneFormatted ?? selectedPhone ?? "";
 
-  // Busca por nome (parcial, sem acento/caixa) ou telefone (só os dígitos)
-  // — mesmo padrão já usado em Revisão.
-  const searchDigits = search.replace(/\D/g, "");
-  const searchName = search.trim().toLocaleLowerCase("pt-BR");
-  const filteredConversations = (conversations.data?.conversations ?? []).filter((c) => {
-    if (!searchName) return true;
-    const nameMatch = (c.patientName ?? "").toLocaleLowerCase("pt-BR").includes(searchName);
-    const phoneMatch = searchDigits.length > 0 && c.phone.includes(searchDigits);
-    return nameMatch || phoneMatch;
-  });
+  // A busca já é feita no servidor (`GET /api/conversations?search=`, ver
+  // conversations.service.ts) — sem acento/caixa, no histórico inteiro, não
+  // só nas ~200 conversas mais recentes carregadas aqui. Achado pelo
+  // usuário em 2026-09-03: um segundo filtro client-side (leftover de antes
+  // da busca no servidor existir) filtrava de novo em cima do resultado já
+  // filtrado, com uma comparação mais fraca (não ignorava acento) e usando
+  // `search` instantâneo em vez do `debouncedSearch` que disparou a busca
+  // — nomes com acento (José, Márcia…) podiam bater no servidor e sumir de
+  // novo aqui. Removido: o resultado do servidor já é a lista certa.
+  const filteredConversations = conversations.data?.conversations ?? [];
 
   function selectConversation(c: ConversationSummary) {
     setSelectedPhone(c.phone);
