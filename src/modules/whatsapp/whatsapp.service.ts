@@ -21,24 +21,40 @@ import { classifyReplyWithAI } from "@/modules/replies/replies.service.js";
 */
 
 /**
- * Encontra o agendamento que essa resposta deve valer. Inclui CONFIRMADO/
- * RECUSADO/SEM_RESPOSTA, não só ENVIADO/ENTREGUE (quem ainda não tinha
- * resposta nenhuma) — achado pelo usuário em 2026-09-03, caso real: um
- * paciente clicou "Sim, vou comparecer" e 14 segundos depois "Não poderei
- * ir" (arrependimento ou toque errado). Antes, só a PRIMEIRA resposta
- * "contava" (a segunda não achava agendamento nenhum pra vincular, porque
- * ele já não estava mais ENVIADO/ENTREGUE) — a equipe só descobriu a
- * intenção real dias depois, revendo a conversa na mão, e teve que corrigir
- * manualmente. Pedido explícito do usuário: vale sempre a ÚLTIMA resposta.
- * CANCELADO fica de fora de propósito — agenda cancelada é fato consumado
- * (mesma regra que `queue.service.ts` já aplica pro envio do template
- * CANCELAMENTO: resposta do paciente ali é só registrada, nunca reabre o
- * agendamento).
+ * Encontra o agendamento que essa resposta deve valer.
+ *
+ * Casa por `phones` (TODOS os números que já tentamos pra esse
+ * agendamento), não só `selectedPhone` (o último escolhido) — achado pelo
+ * usuário em 2026-09-03, caso real: Juliete Caetano respondeu "Não poderei
+ * ir" de um número que o reenvio automático (`enqueueRetries()`, telefone
+ * alternativo quando o primeiro falha) já tinha usado com sucesso — mas só
+ * o `MessageJob`/`WhatsappMessage` daquele envio foram pro número novo,
+ * `Appointment.selectedPhone` continuou apontando pro número antigo (que
+ * tinha falhado). A resposta dela chegou do número novo, não achou
+ * agendamento nenhum casando com `selectedPhone` (o velho), e ficou sem
+ * aplicar — a lista mostrava "Entregue" pra sempre, escondendo a recusa
+ * real. `Appointment.phones` guarda todos os números tentados desde a
+ * extração (é a mesma lista que `enqueueRetries()` usa pra escolher o
+ * próximo a tentar), então cobre esse caso sem precisar manter
+ * `selectedPhone` sincronizado toda vez que um envio muda de número.
+ *
+ * Também inclui CONFIRMADO/RECUSADO/SEM_RESPOSTA, não só ENVIADO/ENTREGUE
+ * (quem ainda não tinha resposta nenhuma) — outro achado do usuário no
+ * mesmo dia: um paciente clicou "Sim, vou comparecer" e 14 segundos depois
+ * "Não poderei ir" (arrependimento ou toque errado). Antes, só a PRIMEIRA
+ * resposta "contava" (a segunda não achava agendamento pra vincular,
+ * porque ele já não estava mais ENVIADO/ENTREGUE) — a equipe só descobriu
+ * a intenção real dias depois, revendo a conversa na mão. Pedido explícito
+ * do usuário: vale sempre a ÚLTIMA resposta. CANCELADO fica de fora de
+ * propósito — agenda cancelada é fato consumado (mesma regra que
+ * `queue.service.ts` já aplica pro envio do template CANCELAMENTO:
+ * resposta do paciente ali é só registrada, nunca reabre o agendamento).
  */
 async function findAppointmentForPhone(phone: string) {
+  const candidates = phoneCandidates(phone);
   return prisma.appointment.findFirst({
     where: {
-      selectedPhone: { in: phoneCandidates(phone) },
+      OR: [{ selectedPhone: { in: candidates } }, { phones: { hasSome: candidates } }],
       status: { in: ["ENVIADO", "ENTREGUE", "CONFIRMADO", "RECUSADO", "SEM_RESPOSTA"] },
     },
     orderBy: { scheduledAt: "asc" },
@@ -164,20 +180,39 @@ export async function handleStatusUpdate(update: StatusUpdate): Promise<void> {
 
   if (!message.appointmentId) return;
 
-  const appointment = await prisma.appointment.findUnique({ where: { id: message.appointmentId } });
-  if (!appointment) return;
-
   // O status do agendamento só acompanha enquanto o paciente não respondeu.
   // Depois de CONFIRMADO/RECUSADO, entrega não muda mais nada.
+  //
+  // Bug real achado pelo usuário em 2026-09-03 (Gisele Padilha: respondeu
+  // "Sim" por texto livre, `respondedAt` bate certinho com o horário da
+  // resposta — prova de que `handleInboundReply()` classificou e gravou
+  // CONFIRMADO — mas a lista continuava mostrando "Entregue"). Causa: aqui
+  // embaixo fazia `findUnique` (lê o status) e só DEPOIS decidia se
+  // escrevia — ler e escrever em passos separados, sem transação nem
+  // condição no próprio UPDATE. A Meta manda o evento de entrega e a
+  // resposta do paciente quase juntos; em serverless (invocações
+  // concorrentes) o evento de entrega podia ler o agendamento ainda
+  // ENTREGUE, a resposta gravar CONFIRMADO por cima, e o evento de entrega
+  // — com o dado velho na mão — regravar ENTREGUE de novo, apagando a
+  // confirmação sem ninguém perceber. `updateMany` com o status elegível
+  // dentro do próprio WHERE fecha a corrida: a condição é avaliada pelo
+  // Postgres no mesmo instante da escrita, não antes dela — se a resposta
+  // já tiver mudado o status nesse meio tempo, esta escrita não acha mais
+  // nenhuma linha e não faz nada, em vez de sobrescrever com dado velho.
   const openStatuses: AppointmentStatus[] = ["ENVIADO", "ENTREGUE", "FALHA"];
-  if (!openStatuses.includes(appointment.status)) return;
 
   if (update.status === "failed") {
-    await prisma.appointment.update({ where: { id: appointment.id }, data: { status: "FALHA" } });
+    await prisma.appointment.updateMany({
+      where: { id: message.appointmentId, status: { in: openStatuses } },
+      data: { status: "FALHA" },
+    });
     return;
   }
   if (update.status === "delivered" || update.status === "read") {
-    await prisma.appointment.update({ where: { id: appointment.id }, data: { status: "ENTREGUE" } });
+    await prisma.appointment.updateMany({
+      where: { id: message.appointmentId, status: { in: openStatuses } },
+      data: { status: "ENTREGUE" },
+    });
   }
 }
 
