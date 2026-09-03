@@ -78,7 +78,7 @@ listsRouter.get(
         approvedAt: true,
         dispatchedAt: true,
         municipality: { select: { id: true, name: true } },
-        agenda: { select: { id: true, date: true } },
+        agenda: { select: { id: true, date: true, doctor: { select: { id: true, name: true } } } },
         uploadedBy: { select: { name: true } },
         approvedBy: { select: { name: true } },
       },

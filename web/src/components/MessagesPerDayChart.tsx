@@ -21,8 +21,10 @@ const PRESETS = [
 // Empilhado por template — pedido do usuário em 2026-09-03: antes a barra só
 // mostrava o total do dia, sem dizer que tipo de mensagem era (confirmação,
 // lembrete, vaga aberta, cancelamento). Cor por identidade de template
-// (paleta categórica dedicada, `--chart-*` em index.css — nunca as cores de
-// status verde/amarelo/vermelho/cinza, reservadas a status de paciente).
+// (`--chart-*` em index.css) — por pedido explícito do usuário, essas cores
+// reaproveitam de propósito o mesmo verde/amarelo/vermelho do marca-texto de
+// status (cancelamento=vermelho, confirmação=verde, lembrete=amarelo), com
+// azul novo só pra vaga aberta.
 const TEMPLATES: { key: TemplateKind; label: string; color: string }[] = [
   { key: "CONFIRMACAO", label: "Confirmação", color: "var(--chart-confirmacao)" },
   { key: "LEMBRETE", label: "Lembrete", color: "var(--chart-lembrete)" },

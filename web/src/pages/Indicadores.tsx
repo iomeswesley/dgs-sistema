@@ -142,7 +142,7 @@ export function Indicadores() {
                 <p className="mt-2 text-sm text-ink-muted">Nenhum template de confirmação enviado no período.</p>
               ) : (
                 <div className="mt-3">
-                  <StatusBand counts={toBandCounts(received.confirmacao)} />
+                  <StatusBand counts={toBandCounts(received.confirmacao)} showPercent />
                 </div>
               )}
             </div>
@@ -153,7 +153,7 @@ export function Indicadores() {
                 <p className="mt-2 text-sm text-ink-muted">Nenhuma lista complementar disparada no período.</p>
               ) : (
                 <div className="mt-3">
-                  <StatusBand counts={toBandCounts(received.vagaAberta)} />
+                  <StatusBand counts={toBandCounts(received.vagaAberta)} showPercent />
                 </div>
               )}
             </div>
@@ -165,7 +165,7 @@ export function Indicadores() {
                 <p className="mt-2 text-sm text-ink-muted">Nenhum cancelamento disparado no período.</p>
               ) : (
                 <div className="mt-3">
-                  <StatusBand counts={received.cancelamento} segments={CANCELLATION_SEGMENTS} />
+                  <StatusBand counts={received.cancelamento} segments={CANCELLATION_SEGMENTS} showPercent />
                 </div>
               )}
             </div>

@@ -62,11 +62,21 @@ export const CANCELLATION_SEGMENTS: StatusSegment[] = [
 export function StatusBand({
   counts,
   showLegend = true,
+  showPercent = false,
   unrecognizedCount = 0,
   segments = SEGMENTS,
 }: {
   counts: Record<string, number>;
   showLegend?: boolean;
+  /**
+   * Mostra "· NN%" ao lado de cada número na legenda, além do valor bruto
+   * — pedido do usuário em 2026-09-03 (Indicadores → Mensagens recebidas):
+   * "837 confirmados" sozinho não diz se é 90% ou 20% do total. `false`
+   * por padrão pra não mudar a aparência de todo santo lugar que já usa
+   * `StatusBand` (Listas, Acompanhamento, Revisão, Cancelamento) sem
+   * ninguém ter pedido isso lá.
+   */
+  showPercent?: boolean;
   /**
    * Linhas que a leitura nem conseguiu transformar em agendamento nenhum
    * ("Registro não reconhecido") — não são `Appointment`, não entram na
@@ -128,6 +138,9 @@ export function StatusBand({
               <span className="text-ink-muted">{segment.label}</span>
               <span className="tabular font-semibold text-ink">
                 {counts[segment.key] ?? 0}
+                {showPercent && total > 0 && (
+                  <span className="font-normal text-ink-muted"> · {Math.round(((counts[segment.key] ?? 0) / total) * 100)}%</span>
+                )}
                 {segment.key === "semTelefone" && unrecognizedCount > 0 && (
                   <>
                     {" "}

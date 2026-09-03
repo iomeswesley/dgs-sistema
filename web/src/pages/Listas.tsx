@@ -19,7 +19,7 @@ interface ListSummary {
   extractionError: string | null;
   createdAt: string;
   municipality: { id: number; name: string };
-  agenda: { id: number; date: string } | null;
+  agenda: { id: number; date: string; doctor: { id: number; name: string } } | null;
   uploadedBy: { name: string };
   counts: Record<string, number>;
   /** Todos os agendamentos dessa lista foram cancelados (a lista foi feita pra isso, ou a agenda dela foi cancelada depois) — muda o rótulo/faixa de status, ver abaixo. */
@@ -123,6 +123,16 @@ export function Listas() {
   const [removing, setRemoving] = useState<ListSummary | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
 
+  // Filtro da listagem — pedido do usuário em 2026-09-03: com dezenas de
+  // listas acumuladas, achar a de um médico/dia específico exigia rolar a
+  // página toda. Município e médico vêm só do que já apareceu na página
+  // (não de todo o cadastro) — filtrar por um médico que não tem lista
+  // nenhuma não faria sentido. Médico é o da Agenda vinculada; lista sem
+  // agenda não aparece nesse filtro (não tem um médico único pra mostrar).
+  const [filterMunicipalityId, setFilterMunicipalityId] = useState<string>("");
+  const [filterDoctorId, setFilterDoctorId] = useState<string>("");
+  const [filterDate, setFilterDate] = useState<string>("");
+
   // Preview: lê o arquivo na hora (rápido, local, sem IA) assim que
   // escolhido, pra sugerir município/agenda antes do envio de verdade.
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -178,6 +188,26 @@ export function Listas() {
   const unitMismatch =
     !!selectedAgenda?.unit && !!pdfExecutingUnit && !unitNamesLikelyMatch(pdfExecutingUnit, selectedAgenda.unit.name);
 
+  const allLists = lists.data?.lists ?? [];
+  // Opções dos filtros vêm só do que já apareceu na listagem, não do
+  // cadastro inteiro — não faz sentido oferecer filtrar por um município
+  // ou médico sem nenhuma lista.
+  const filterMunicipalityOptions = [...new Map(allLists.map((l) => [l.municipality.id, l.municipality])).values()].sort(
+    (a, b) => a.name.localeCompare(b.name)
+  );
+  const filterDoctorOptions = [
+    ...new Map(
+      allLists.filter((l) => l.agenda).map((l) => [l.agenda!.doctor.id, l.agenda!.doctor])
+    ).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  const filteredLists = allLists.filter((list) => {
+    if (filterMunicipalityId && String(list.municipality.id) !== filterMunicipalityId) return false;
+    if (filterDoctorId && String(list.agenda?.doctor.id ?? "") !== filterDoctorId) return false;
+    if (filterDate && list.agenda?.date.slice(0, 10) !== filterDate) return false;
+    return true;
+  });
+  const hasActiveFilter = !!filterMunicipalityId || !!filterDoctorId || !!filterDate;
 
   function resetUploadForm() {
     if (fileRef.current) fileRef.current.value = "";
@@ -632,10 +662,85 @@ export function Listas() {
       {lists.loading && <Spinner />}
       {lists.error && <ErrorNote message={lists.error} />}
 
-      {lists.data?.lists.length === 0 && !lists.loading && (
+      {allLists.length === 0 && !lists.loading && (
         <EmptyState
           title="Nenhuma lista ainda"
           description="Envie o PDF da agenda acima. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
+        />
+      )}
+
+      {/* Filtro da listagem, pedido do usuário em 2026-09-03 — só aparece
+          quando já existe alguma lista (filtrar uma lista vazia não faz
+          sentido). Médico só oferece quem tem alguma lista com agenda
+          vinculada; lista sem agenda não desaparece do filtro de
+          município/data, só não bate com um filtro de médico ativo (não
+          tem um médico único pra comparar). */}
+      {allLists.length > 0 && (
+        <div className="card mb-3 p-4">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Field label="Município">
+              <select
+                className="field"
+                value={filterMunicipalityId}
+                onChange={(event) => setFilterMunicipalityId(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {filterMunicipalityOptions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Médico">
+              <select
+                className="field"
+                value={filterDoctorId}
+                onChange={(event) => setFilterDoctorId(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {filterDoctorOptions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Data da agenda">
+              <input
+                type="date"
+                className="field"
+                value={filterDate}
+                onChange={(event) => setFilterDate(event.target.value)}
+              />
+            </Field>
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="btn btn-quiet w-full"
+                disabled={!hasActiveFilter}
+                onClick={() => {
+                  setFilterMunicipalityId("");
+                  setFilterDoctorId("");
+                  setFilterDate("");
+                }}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+          {hasActiveFilter && (
+            <p className="mt-2 text-xs text-ink-muted">
+              {filteredLists.length} de {allLists.length} lista(s)
+            </p>
+          )}
+        </div>
+      )}
+
+      {allLists.length > 0 && filteredLists.length === 0 && (
+        <EmptyState
+          title="Nenhuma lista bate com esse filtro"
+          description="Ajuste ou limpe os filtros acima."
         />
       )}
 
@@ -648,7 +753,7 @@ export function Listas() {
           o formulário de upload acima — fora desse grid — não). O utilitário
           `grid-cols-1` do Tailwind já usa `minmax(0, 1fr)`, que corrige isso. */}
       <div className="grid grid-cols-1 gap-3">
-        {lists.data?.lists.map((list) => {
+        {filteredLists.map((list) => {
           const total = Object.values(list.counts).reduce((sum, value) => sum + value, 0);
           const canDelete = list.status !== "DISPARADA" && list.status !== "CONCLUIDA";
           return (
