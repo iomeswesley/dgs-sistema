@@ -79,13 +79,13 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
         },
       },
       { type: "FOOTER", text: "DGS - D'Artibale Gestão em Saúde" },
-      {
-        type: "BUTTONS",
-        buttons: [
-          { type: "QUICK_REPLY", text: "Confirmado, estarei lá" },
-          { type: "QUICK_REPLY", text: "Não poderei mais ir" },
-        ],
-      },
+      // Sem botões, por decisão do usuário em 2026-09-02: o paciente já
+      // confirmou antes (template `confirmacao_consulta`), então
+      // "Confirmado, estarei lá" era redundante — e junto foi tirado
+      // também "Não poderei mais ir", mesmo esse tendo um uso real
+      // documentado (captava desistência de última hora, 24h antes, pra
+      // secretaria repor a vaga). Se um dia quiser reintroduzir só a
+      // desistência, era só esse segundo botão que valia a pena manter.
     ],
   },
   {

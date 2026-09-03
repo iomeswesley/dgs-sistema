@@ -101,13 +101,14 @@ Preparo: {{6}}. Qualquer dúvida, procure a unidade de saúde.
 DGS - D'Artibale Gestão em Saúde
 ```
 
-**Botões** (Resposta rápida)
-- `Confirmado, estarei lá`
-- `Não poderei mais ir`
+**Botões**: nenhum (removidos em 2026-09-02, decisão do usuário). Tinha
+`Confirmado, estarei lá` (redundante — o paciente já confirmou antes, no
+`confirmacao_consulta`) e `Não poderei mais ir` (esse tinha uso real:
+capturava desistência de última hora, 24h antes, tempo da secretaria
+repor a vaga — removido junto por simplicidade, mesmo assim; reintroduzir
+só esse segundo é uma opção se fizer falta).
 
 **Variáveis**: `{{1}}` nome · `{{2}}` data · `{{3}}` hora · `{{4}}` procedimento · `{{5}}` local · `{{6}}` `procedures.preparation_instructions` (jejum, bexiga cheia, etc. — quando o procedimento não tiver preparo, preencher com `Nenhum preparo especial necessário`, porque a Meta **não aceita variável vazia**). `{{6}}` vem embrulhada em `Preparo: {{6}}. Qualquer dúvida, procure a unidade de saúde.` no body — a Meta rejeita variável na primeira ou na última posição do texto (erro `Leading or Trailing Params Not Allowed`), e **só pontuação depois da variável não basta** (testado: `{{6}}.` sozinho ainda foi rejeitado, precisou de palavras reais depois).
-
-O botão "Não poderei mais ir" aqui é valioso: pega a desistência de última hora com 24h de antecedência, tempo suficiente pra secretaria repor a vaga.
 
 ---
 
