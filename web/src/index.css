@@ -49,6 +49,18 @@
   --accent-hover: #0b626a;
   --accent-soft: #e0f1f2;
 
+  /* Identidade de TEMPLATE de mensagem (gráfico "mensagens enviadas por
+     dia" em Indicadores, 2026-09-03) — paleta categórica, não de status:
+     cada template é sempre a mesma cor, não importa quantos aparecem no
+     recorte. Deliberadamente fora do marca-texto verde/amarelo/vermelho/
+     cinza (reservado a status de paciente) pra nunca ser confundido com
+     ele. Ordem e tons validados com o script de acessibilidade da skill de
+     dataviz (CVD ΔE >= 8 adjacente, ok pra pilha empilhada) nos dois temas. */
+  --chart-confirmacao: #2a78d6;
+  --chart-lembrete: #eb6834;
+  --chart-vaga-aberta: #1baf7a;
+  --chart-cancelamento: #4a3aa7;
+
   /* Exceção deliberada à regra "sem cor decorativa": a tela de Conversas
      imita a janela do WhatsApp de propósito (pedido do usuário, 2026-08-25,
      mesmo padrão visual do barbearia-saas/odonto-saas) — cores do próprio
@@ -99,6 +111,11 @@
   --accent-hover: #38b9c4;
   --accent-soft: #10303a;
 
+  --chart-confirmacao: #3987e5;
+  --chart-lembrete: #d95926;
+  --chart-vaga-aberta: #199e70;
+  --chart-cancelamento: #9085e9;
+
   /* WhatsApp Web tema escuro. */
   --wa-header: #202c33;
   --wa-bg: #0b141a;
@@ -138,6 +155,11 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+
+  --color-chart-confirmacao: var(--chart-confirmacao);
+  --color-chart-lembrete: var(--chart-lembrete);
+  --color-chart-vaga-aberta: var(--chart-vaga-aberta);
+  --color-chart-cancelamento: var(--chart-cancelamento);
 
   --color-wa-header: var(--wa-header);
   --color-wa-bg: var(--wa-bg);

@@ -1,8 +1,25 @@
 import { prisma } from "@/lib/prisma.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
-import { buildIndicatorsCore, buildMessagesPerDaySeries, type DailyMessageCount, type GroupBy, type IndicatorReport } from "./indicators.js";
+import {
+  buildIndicatorsCore,
+  buildMessagesPerDaySeries,
+  buildReceivedFlowBreakdown,
+  type DailyMessageCount,
+  type GroupBy,
+  type IndicatorReport,
+  type ReceivedFlowBreakdown,
+  type TemplateKindKey,
+} from "./indicators.js";
 
-export type { GroupBy, IndicatorReport, IndicatorTotals, IndicatorBreakdown, DailyMessageCount } from "./indicators.js";
+export type {
+  GroupBy,
+  IndicatorReport,
+  IndicatorTotals,
+  IndicatorBreakdown,
+  DailyMessageCount,
+  ReceivedFlowBreakdown,
+  StatusCounts,
+} from "./indicators.js";
 
 export interface IndicatorFilters {
   from: Date;
@@ -31,16 +48,38 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
   const appointments = await prisma.appointment.findMany({
     where,
     select: {
+      id: true,
       doctorId: true,
       municipalityId: true,
       procedureId: true,
       scheduledAt: true,
       status: true,
+      contactedById: true,
       doctor: { select: { name: true } },
       municipality: { select: { name: true } },
       procedure: { select: { name: true } },
+      list: { select: { isComplementary: true } },
     },
   });
+
+  // Quem teve pelo menos 1 envio de verdade do template CONFIRMACAO —
+  // achado em 2026-09-03 (ver comentário em indicators.ts): sem isso, a
+  // "% Confirmação" contava agendamento que nunca foi nem tentado
+  // (PENDENTE, lista ainda não disparada) no mesmo denominador de
+  // confirmação perdida de verdade.
+  const confirmationSentIds = new Set(
+    (
+      await prisma.whatsappMessage.findMany({
+        where: {
+          direction: "ENVIADA",
+          template: "CONFIRMACAO",
+          appointmentId: { in: appointments.map((a) => a.id) },
+        },
+        select: { appointmentId: true },
+        distinct: ["appointmentId"],
+      })
+    ).map((m) => m.appointmentId)
+  );
 
   const closings = await prisma.dailyClosing.findMany({
     where: {
@@ -71,6 +110,9 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
       doctorName: appointment.doctor.name,
       municipalityName: appointment.municipality.name,
       procedureName: appointment.procedure.name,
+      isComplementary: appointment.list?.isComplementary ?? false,
+      confirmationTemplateSent: confirmationSentIds.has(appointment.id),
+      manuallyContacted: appointment.contactedById !== null,
     })),
     closings.map((closing) => ({
       doctorId: closing.doctorId,
@@ -95,6 +137,30 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
 }
 
 /**
+ * Desfecho de quem recebeu mensagem, por fluxo (confirmação de consulta vs.
+ * reposição de vaga) — pro gráfico "mensagens recebidas" de Indicadores
+ * (pedido do usuário em 2026-09-03). Mesmo filtro de `buildIndicators`
+ * (exclui CANCELADO — nunca teve chance real de responder), consulta
+ * enxuta, só os 2 campos que `buildReceivedFlowBreakdown` usa.
+ */
+export async function getReceivedFlowBreakdown(filters: IndicatorFilters): Promise<ReceivedFlowBreakdown> {
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      scheduledAt: { gte: filters.from, lte: filters.to },
+      doctorId: filters.doctorId,
+      municipalityId: filters.municipalityId,
+      procedureId: filters.procedureId,
+      status: { not: "CANCELADO" },
+    },
+    select: { status: true, list: { select: { isComplementary: true } } },
+  });
+
+  return buildReceivedFlowBreakdown(
+    appointments.map((a) => ({ status: a.status, isComplementary: a.list?.isComplementary ?? false }))
+  );
+}
+
+/**
  * Série de mensagens ENVIADAS por dia, pro gráfico de colunas em Indicadores
  * — busca só o timestamp (não o conteúdo, nem o telefone) de cada envio no
  * intervalo, agrega em Brasília. `to` já vem como fim do dia (23:59:59.999),
@@ -103,11 +169,11 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
 export async function getMessagesPerDay(from: Date, to: Date): Promise<DailyMessageCount[]> {
   const messages = await prisma.whatsappMessage.findMany({
     where: { direction: "ENVIADA", createdAt: { gte: from, lte: to } },
-    select: { createdAt: true },
+    select: { createdAt: true, template: true },
   });
 
   return buildMessagesPerDaySeries(
-    messages.map((m) => toBrasiliaDateString(m.createdAt)),
+    messages.map((m) => ({ dayKey: toBrasiliaDateString(m.createdAt), template: m.template as TemplateKindKey | null })),
     toBrasiliaDateString(from),
     toBrasiliaDateString(to)
   );
@@ -139,6 +205,8 @@ export function buildIndicatorsCsvRows(report: IndicatorReport): { header: strin
       "Atendidos",
       "Encaixes",
       "Pagos",
+      "Templates de confirmação enviados",
+      "Confirmados (fluxo de confirmação)",
       "% Confirmação",
       "% Comparecimento",
       "% Aproveitamento",
@@ -158,6 +226,8 @@ export function buildIndicatorsCsvRows(report: IndicatorReport): { header: strin
       row.attended ?? "",
       row.extras,
       row.paid ?? "",
+      row.confirmationBase,
+      row.confirmationConfirmed,
       percentCell(row.confirmationRate),
       percentCell(row.attendanceRate),
       percentCell(row.utilizationRate),

@@ -3,7 +3,14 @@ import { z } from "zod";
 import { asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { dateOnlySchema, parseDateOnly, parseQuery } from "@/lib/http.js";
-import { buildIndicators, buildIndicatorsCsvRows, getMessagesPerDay, type GroupBy } from "./indicators.service.js";
+import {
+  buildIndicators,
+  buildIndicatorsCsvRows,
+  getMessagesPerDay,
+  getReceivedFlowBreakdown,
+  type GroupBy,
+} from "./indicators.service.js";
+import { getCancellationReceivedBreakdown } from "@/modules/cancellations/cancellations.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { buildListReportCsv } from "@/modules/lists/list-report.js";
 import { generateListReportPdf } from "@/modules/lists/lists.pdf.js";
@@ -34,8 +41,13 @@ indicatorsRouter.get(
   "/api/indicators",
   asyncHandler(async (req, res) => {
     const query = parseQuery(req, filterSchema);
-    const report = await buildIndicators(buildFilters(query), query.groupBy as GroupBy);
-    res.json(report);
+    const filters = buildFilters(query);
+    const [report, byFlow, cancelamento] = await Promise.all([
+      buildIndicators(filters, query.groupBy as GroupBy),
+      getReceivedFlowBreakdown(filters),
+      getCancellationReceivedBreakdown(filters.from, filters.to, filters),
+    ]);
+    res.json({ ...report, receivedBreakdown: { ...byFlow, cancelamento } });
   })
 );
 

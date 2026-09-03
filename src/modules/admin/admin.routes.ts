@@ -19,8 +19,10 @@ import {
   buildIndicators,
   buildIndicatorsCsvRows,
   getMessagesPerDay,
+  getReceivedFlowBreakdown,
   type GroupBy,
 } from "@/modules/indicators/indicators.service.js";
+import { getCancellationReceivedBreakdown } from "@/modules/cancellations/cancellations.service.js";
 import { toCsv } from "@/lib/csv.js";
 
 export const adminRouter = Router();
@@ -213,8 +215,14 @@ adminRouter.get(
       from: parseDateOnly(query.from),
       to: new Date(parseDateOnly(query.to).getTime() + 86_400_000 - 1),
     };
-    const report = await runWithClient(query.clientId, () => buildIndicators(filters, query.groupBy as GroupBy));
-    res.json(report);
+    const [report, byFlow, cancelamento] = await runWithClient(query.clientId, () =>
+      Promise.all([
+        buildIndicators(filters, query.groupBy as GroupBy),
+        getReceivedFlowBreakdown(filters),
+        getCancellationReceivedBreakdown(filters.from, filters.to),
+      ])
+    );
+    res.json({ ...report, receivedBreakdown: { ...byFlow, cancelamento } });
   })
 );
 

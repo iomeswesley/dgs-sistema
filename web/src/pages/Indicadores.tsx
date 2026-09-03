@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { EmptyState, PageHeader } from "../components/AppShell";
 import { MessagesPerDayChart } from "../components/MessagesPerDayChart";
+import { CANCELLATION_SEGMENTS, StatusBand } from "../components/StatusBand";
 import { ErrorNote, Field, Spinner, Stat, Table, Td, Th } from "../components/ui";
 import { useApi } from "../lib/useApi";
 import { useSession } from "../lib/session";
-import { daysAgo, formatMoney, formatPercent, localDateString } from "../lib/format";
+import { daysAgo, formatMoney, formatPercent, localDateString, toBandCounts } from "../lib/format";
 
 interface Totals {
   planned: number;
@@ -16,6 +17,8 @@ interface Totals {
   attended: number | null;
   paid: number | null;
   extras: number;
+  confirmationBase: number;
+  confirmationConfirmed: number;
   confirmationRate: number | null;
   attendanceRate: number | null;
   utilizationRate: number | null;
@@ -28,6 +31,28 @@ interface Totals {
 interface Breakdown extends Totals {
   key: string;
   label: string;
+}
+
+interface StatusCounts {
+  [key: string]: number;
+  PENDENTE: number;
+  ENVIADO: number;
+  ENTREGUE: number;
+  CONFIRMADO: number;
+  RECUSADO: number;
+  SEM_RESPOSTA: number;
+  SEM_TELEFONE: number;
+  FALHA: number;
+}
+
+interface ReceivedBreakdown {
+  confirmacao: StatusCounts;
+  vagaAberta: StatusCounts;
+  cancelamento: { cientes: number; enviados: number; precisaDeAcao: number };
+}
+
+function sumStatusCounts(counts: StatusCounts): number {
+  return Object.values(counts).reduce((sum, n) => sum + n, 0);
 }
 
 const GROUP_LABEL: Record<string, string> = {
@@ -61,9 +86,13 @@ export function Indicadores() {
   });
   const indicatorsPath = scopedClientId ? `/api/admin/indicators?${query}` : `/api/indicators?${query}`;
   const exportPath = scopedClientId ? `/api/admin/indicators/export?${query}` : `/api/indicators/export?${query}`;
-  const data = useApi<{ totals: Totals; breakdown: Breakdown[] }>(indicatorsPath, [indicatorsPath]);
+  const data = useApi<{ totals: Totals; breakdown: Breakdown[]; receivedBreakdown: ReceivedBreakdown }>(
+    indicatorsPath,
+    [indicatorsPath]
+  );
 
   const totals = data.data?.totals;
+  const received = data.data?.receivedBreakdown;
 
   return (
     <>
@@ -98,6 +127,52 @@ export function Indicadores() {
 
       <MessagesPerDayChart clientId={scopedClientId} />
 
+      {received && (
+        <div className="card mb-5 p-5">
+          <p className="eyebrow">Mensagens recebidas</p>
+          <p className="mt-0.5 text-sm text-ink-muted">
+            O que o paciente respondeu, separado por template — mesmo recorte de datas do restante da página (De/Até
+            abaixo).
+          </p>
+
+          <div className="mt-4 grid gap-5 sm:grid-cols-3">
+            <div>
+              <p className="text-sm font-semibold text-ink">Confirmação de consulta</p>
+              {sumStatusCounts(received.confirmacao) === 0 ? (
+                <p className="mt-2 text-sm text-ink-muted">Nenhum template de confirmação enviado no período.</p>
+              ) : (
+                <div className="mt-3">
+                  <StatusBand counts={toBandCounts(received.confirmacao)} />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-ink">Vaga aberta (reposição)</p>
+              {sumStatusCounts(received.vagaAberta) === 0 ? (
+                <p className="mt-2 text-sm text-ink-muted">Nenhuma lista complementar disparada no período.</p>
+              ) : (
+                <div className="mt-3">
+                  <StatusBand counts={toBandCounts(received.vagaAberta)} />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-ink">Cancelamento</p>
+              {received.cancelamento.cientes + received.cancelamento.enviados + received.cancelamento.precisaDeAcao ===
+              0 ? (
+                <p className="mt-2 text-sm text-ink-muted">Nenhum cancelamento disparado no período.</p>
+              ) : (
+                <div className="mt-3">
+                  <StatusBand counts={received.cancelamento} segments={CANCELLATION_SEGMENTS} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card mb-5 p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="De">
@@ -127,7 +202,11 @@ export function Indicadores() {
             <Stat
               label="Confirmação"
               value={formatPercent(totals.confirmationRate)}
-              detail={`${totals.confirmed} de ${totals.contactable} contatáveis`}
+              detail={
+                totals.confirmationBase === 0
+                  ? "nenhum template de confirmação enviado ainda"
+                  : `${totals.confirmationConfirmed} de ${totals.confirmationBase} templates de confirmação enviados`
+              }
             />
             <Stat
               label="Comparecimento"

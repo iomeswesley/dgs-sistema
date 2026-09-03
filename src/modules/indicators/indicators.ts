@@ -27,6 +27,15 @@ export interface AppointmentInput {
   doctorName: string;
   municipalityName: string;
   procedureName: string | null;
+  // Os 3 campos abaixo só alimentam a "% Confirmação" corrigida em
+  // 2026-09-03 (ver comentário em `finalize`) — não entram em mais
+  // nenhuma outra taxa.
+  /** Veio de uma lista de reposição de vaga (template VAGA_ABERTA, não CONFIRMACAO) — fluxo diferente, fora do escopo dessa taxa. */
+  isComplementary: boolean;
+  /** Teve pelo menos 1 WhatsappMessage ENVIADA com template CONFIRMACAO. */
+  confirmationTemplateSent: boolean;
+  /** Equipe registrou contato manual (ligou), independente de mensagem ter saído. */
+  manuallyContacted: boolean;
 }
 
 export interface ClosingInput {
@@ -59,6 +68,19 @@ export interface IndicatorTotals {
   attended: number | null;
   paid: number | null;
   extras: number;
+  // Achado pelo usuário em 2026-09-03: a "% Confirmação" antiga (confirmed
+  // ÷ contactable) misturava agendamento nunca disparado ainda (PENDENTE,
+  // ninguém tentou nada) e reposição de vaga (VAGA_ABERTA, fluxo
+  // diferente) no mesmo denominador de "confirmação de consulta" —
+  // distorcia a taxa pra baixo sem representar confirmação perdida de
+  // verdade. Substituído por um par dedicado: `confirmationBase` conta só
+  // quem teve uma tentativa REAL de confirmar (template CONFIRMACAO
+  // enviado OU contato manual da equipe), excluindo sempre reposição de
+  // vaga; `confirmationConfirmed` é quantos desses viraram CONFIRMADO —
+  // não importa se veio do clique "Sim" ou do contato manual, os dois
+  // contam igual (pedido explícito do usuário).
+  confirmationBase: number;
+  confirmationConfirmed: number;
   /** null quando não há base para calcular — nunca 0 disfarçado. */
   confirmationRate: number | null;
   attendanceRate: number | null;
@@ -79,26 +101,47 @@ export interface IndicatorBreakdown extends IndicatorTotals {
 
 export type GroupBy = "doctor" | "municipality" | "procedure" | "month";
 
+// As 4 chaves de TemplateKind (schema.prisma) — repetido aqui como union
+// literal (não importado do Prisma) pra este arquivo continuar puro, sem
+// dependência de `@prisma/client` (mesma escolha de `AppointmentInput.status`
+// ser `string`, não o enum).
+export type TemplateKindKey = "CONFIRMACAO" | "LEMBRETE" | "VAGA_ABERTA" | "CANCELAMENTO";
+
 export interface DailyMessageCount {
   date: string; // YYYY-MM-DD, Brasília
   count: number;
+  byTemplate: Record<TemplateKindKey, number>;
+}
+
+function emptyTemplateCounts(): Record<TemplateKindKey, number> {
+  return { CONFIRMACAO: 0, LEMBRETE: 0, VAGA_ABERTA: 0, CANCELAMENTO: 0 };
 }
 
 /**
- * Agrupa timestamps de mensagens ENVIADAS por dia (Brasília), preenchendo com
- * 0 os dias sem envio dentro do intervalo — sem isso o gráfico de colunas
- * teria buracos silenciosos em vez de barras zeradas, difícil de distinguir
- * de "não carregou ainda". `dayKeyOf` já vem calculado pelo chamador (mesma
- * separação timestamp-de-verdade vs `@db.Date` do resto do arquivo).
+ * Agrupa mensagens ENVIADAS por dia (Brasília) e por template, preenchendo
+ * com 0 os dias sem envio dentro do intervalo — sem isso o gráfico de
+ * colunas teria buracos silenciosos em vez de barras zeradas, difícil de
+ * distinguir de "não carregou ainda". `dayKey` já vem calculado pelo
+ * chamador (mesma separação timestamp-de-verdade vs `@db.Date` do resto do
+ * arquivo). `template: null` (mensagem avulsa, fora dos 4 modelos padrão —
+ * hoje só acontece por `sendReply`/texto livre em Conversas) soma no total
+ * do dia mas não em nenhuma barra do empilhado, pra não inventar uma 5ª
+ * categoria rara que ninguém pediria pra distinguir visualmente.
  */
 export function buildMessagesPerDaySeries(
-  sentDayKeys: string[],
+  sent: { dayKey: string; template: TemplateKindKey | null }[],
   fromDayKey: string,
   toDayKey: string
 ): DailyMessageCount[] {
-  const counts = new Map<string, number>();
-  for (const key of sentDayKeys) {
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+  const counts = new Map<string, { count: number; byTemplate: Record<TemplateKindKey, number> }>();
+  for (const { dayKey, template } of sent) {
+    let entry = counts.get(dayKey);
+    if (!entry) {
+      entry = { count: 0, byTemplate: emptyTemplateCounts() };
+      counts.set(dayKey, entry);
+    }
+    entry.count++;
+    if (template) entry.byTemplate[template]++;
   }
 
   const series: DailyMessageCount[] = [];
@@ -106,10 +149,53 @@ export function buildMessagesPerDaySeries(
   const end = new Date(`${toDayKey}T00:00:00Z`);
   while (cursor.getTime() <= end.getTime()) {
     const key = cursor.toISOString().slice(0, 10);
-    series.push({ date: key, count: counts.get(key) ?? 0 });
+    const entry = counts.get(key);
+    series.push({ date: key, count: entry?.count ?? 0, byTemplate: entry?.byTemplate ?? emptyTemplateCounts() });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return series;
+}
+
+export interface StatusCounts {
+  PENDENTE: number;
+  ENVIADO: number;
+  ENTREGUE: number;
+  CONFIRMADO: number;
+  RECUSADO: number;
+  SEM_RESPOSTA: number;
+  SEM_TELEFONE: number;
+  FALHA: number;
+}
+
+function emptyStatusCounts(): StatusCounts {
+  return { PENDENTE: 0, ENVIADO: 0, ENTREGUE: 0, CONFIRMADO: 0, RECUSADO: 0, SEM_RESPOSTA: 0, SEM_TELEFONE: 0, FALHA: 0 };
+}
+
+export interface ReceivedFlowBreakdown {
+  confirmacao: StatusCounts;
+  vagaAberta: StatusCounts;
+}
+
+/**
+ * Desfecho de quem recebeu mensagem, separado por fluxo (confirmação de
+ * consulta vs. reposição de vaga) — pedido do usuário em 2026-09-03: um
+ * gráfico por template, mostrando quem confirmou/recusou/não respondeu.
+ * Cancelamento fica de fora daqui (schema de status diferente, "Ciente" não
+ * é `AppointmentStatus` nenhum) — ver `getCancellationReceivedBreakdown`
+ * em cancellations.service.ts.
+ */
+export function buildReceivedFlowBreakdown(
+  appointments: { status: string; isComplementary: boolean }[]
+): ReceivedFlowBreakdown {
+  const confirmacao = emptyStatusCounts();
+  const vagaAberta = emptyStatusCounts();
+  for (const appointment of appointments) {
+    const bucket = appointment.isComplementary ? vagaAberta : confirmacao;
+    if (appointment.status in bucket) {
+      bucket[appointment.status as keyof StatusCounts]++;
+    }
+  }
+  return { confirmacao, vagaAberta };
 }
 
 export interface IndicatorReport {
@@ -146,6 +232,8 @@ function emptyTotals(): IndicatorTotals {
     attended: null,
     paid: null,
     extras: 0,
+    confirmationBase: 0,
+    confirmationConfirmed: 0,
     confirmationRate: null,
     attendanceRate: null,
     utilizationRate: null,
@@ -159,7 +247,7 @@ function emptyTotals(): IndicatorTotals {
 function finalize(totals: IndicatorTotals): IndicatorTotals {
   return {
     ...totals,
-    confirmationRate: rate(totals.confirmed, totals.contactable),
+    confirmationRate: rate(totals.confirmationConfirmed, totals.confirmationBase),
     attendanceRate: totals.attended === null ? null : rate(totals.attended, totals.confirmed),
     utilizationRate: totals.attended === null ? null : rate(totals.attended, totals.planned),
     divergenceRate:
@@ -236,6 +324,11 @@ export function buildIndicatorsCore(
       if (appointment.status === "CONFIRMADO") target.confirmed++;
       else if (appointment.status === "RECUSADO") target.refused++;
       else if (appointment.status === "SEM_RESPOSTA" || appointment.status === "FALHA") target.noAnswer++;
+
+      if (!appointment.isComplementary && (appointment.confirmationTemplateSent || appointment.manuallyContacted)) {
+        target.confirmationBase++;
+        if (appointment.status === "CONFIRMADO") target.confirmationConfirmed++;
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import type { AppointmentStatus } from "@prisma/client";
+import type { AppointmentStatus, DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma.js";
 import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
@@ -495,16 +495,20 @@ export interface CancellationStatusSummary {
  * agendamentos da lista viram `CANCELADO` do mesmo jeito. Olhar direto pro
  * `cancellationBatchId` de cada agendamento cobre os dois casos.
  */
-export async function getCancellationStatusSummary(listId: number): Promise<CancellationStatusSummary | null> {
-  const appointments = await prisma.appointment.findMany({
-    where: { listId, cancellationBatchId: { not: null } },
-    select: {
-      selectedPhone: true,
-      messages: { where: { template: "CANCELAMENTO" }, orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
-    },
-  });
-  if (appointments.length === 0) return null;
+type CancellationTallyInput = {
+  selectedPhone: string | null;
+  messages: { status: DeliveryStatus }[];
+};
 
+/**
+ * Conta cientes/enviados/precisaDeAcao a partir de agendamentos já
+ * buscados — extraído em 2026-09-03 de dentro de `getCancellationStatusSummary`
+ * pra reaproveitar também em `getCancellationReceivedBreakdown` (mesma
+ * classificação, escopo por período em vez de por lista).
+ */
+async function tallyCancellationStatus(
+  appointments: CancellationTallyInput[]
+): Promise<CancellationStatusSummary> {
   const phones = appointments.map((a) => a.selectedPhone).filter((p): p is string => !!p);
   const candidateSet = [...new Set(phones.flatMap((p) => phoneCandidates(p)))];
   const repliedPhones = new Set(
@@ -530,4 +534,49 @@ export async function getCancellationStatusSummary(listId: number): Promise<Canc
   }
 
   return { cientes, enviados, precisaDeAcao };
+}
+
+export async function getCancellationStatusSummary(listId: number): Promise<CancellationStatusSummary | null> {
+  const appointments = await prisma.appointment.findMany({
+    where: { listId, cancellationBatchId: { not: null } },
+    select: {
+      selectedPhone: true,
+      messages: { where: { template: "CANCELAMENTO" }, orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+    },
+  });
+  if (appointments.length === 0) return null;
+
+  return tallyCancellationStatus(appointments);
+}
+
+/**
+ * Mesma classificação (ciente/enviado/precisa de ação), mas por período em
+ * vez de por lista — pro gráfico "mensagens recebidas: Cancelamento" em
+ * Indicadores (pedido do usuário em 2026-09-03). Filtra por
+ * `Appointment.canceledAt` (quando o cancelamento aconteceu de verdade),
+ * não `scheduledAt` (quando a consulta cancelada estava marcada) — é o
+ * aviso em si que queremos medir nesse recorte de data, igual o resto dos
+ * gráficos de "mensagens enviadas/recebidas" da página.
+ */
+export async function getCancellationReceivedBreakdown(
+  from: Date,
+  to: Date,
+  filters?: { doctorId?: number; municipalityId?: number; procedureId?: number }
+): Promise<CancellationStatusSummary> {
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      cancellationBatchId: { not: null },
+      canceledAt: { gte: from, lte: to },
+      doctorId: filters?.doctorId,
+      municipalityId: filters?.municipalityId,
+      procedureId: filters?.procedureId,
+    },
+    select: {
+      selectedPhone: true,
+      messages: { where: { template: "CANCELAMENTO" }, orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+    },
+  });
+  if (appointments.length === 0) return { cientes: 0, enviados: 0, precisaDeAcao: 0 };
+
+  return tallyCancellationStatus(appointments);
 }

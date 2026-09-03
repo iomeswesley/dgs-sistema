@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi } from "../lib/useApi";
 import { daysAgo, localDateString } from "../lib/format";
 import { ErrorNote, Spinner } from "./ui";
 
+type TemplateKind = "CONFIRMACAO" | "LEMBRETE" | "VAGA_ABERTA" | "CANCELAMENTO";
+
 interface DailyCount {
   date: string; // YYYY-MM-DD, Brasília — nunca passar por `new Date()` direto, ver formatShortDate abaixo
   count: number;
+  byTemplate: Record<TemplateKind, number>;
 }
 
 const PRESETS = [
@@ -14,6 +17,18 @@ const PRESETS = [
   { key: "30", label: "Último mês", days: 30 },
   { key: "90", label: "Últimos 3 meses", days: 90 },
 ] as const;
+
+// Empilhado por template — pedido do usuário em 2026-09-03: antes a barra só
+// mostrava o total do dia, sem dizer que tipo de mensagem era (confirmação,
+// lembrete, vaga aberta, cancelamento). Cor por identidade de template
+// (paleta categórica dedicada, `--chart-*` em index.css — nunca as cores de
+// status verde/amarelo/vermelho/cinza, reservadas a status de paciente).
+const TEMPLATES: { key: TemplateKind; label: string; color: string }[] = [
+  { key: "CONFIRMACAO", label: "Confirmação", color: "var(--chart-confirmacao)" },
+  { key: "LEMBRETE", label: "Lembrete", color: "var(--chart-lembrete)" },
+  { key: "VAGA_ABERTA", label: "Vaga aberta", color: "var(--chart-vaga-aberta)" },
+  { key: "CANCELAMENTO", label: "Cancelamento", color: "var(--chart-cancelamento)" },
+];
 
 /**
  * `date` já vem como string "YYYY-MM-DD" resolvida em Brasília pelo backend
@@ -34,10 +49,11 @@ function formatFullDate(iso: string): string {
 }
 
 /**
- * Gráfico de colunas "mensagens enviadas por dia" em Indicadores — filtro
- * próprio (semana/mês/3 meses ou intervalo livre), independente do filtro de
- * De/Até que já existe na página pro recorte por médico/município/mês
- * (pedido do usuário em 2026-09-01).
+ * Gráfico de colunas empilhadas "mensagens enviadas por dia" em
+ * Indicadores — filtro próprio (semana/mês/3 meses ou intervalo livre),
+ * independente do filtro de De/Até que já existe na página pro recorte por
+ * médico/município/mês (pedido do usuário em 2026-09-01). Empilhado por
+ * template desde 2026-09-03.
  *
  * `clientId`: só quando quem está vendo é super admin escolhendo outro
  * cliente que não o da própria sessão (Indicadores.tsx) — nesse caso busca
@@ -59,6 +75,9 @@ export function MessagesPerDayChart({ clientId }: { clientId?: number }) {
   const data = useApi<{ series: DailyCount[] }>(path, [path]);
   const series = data.data?.series ?? [];
   const total = series.reduce((sum, point) => sum + point.count, 0);
+  // Recharts precisa de campos soltos no dado, não aninhados em
+  // `byTemplate`, pra cada `<Bar dataKey="CONFIRMACAO">` achar o valor.
+  const chartData = series.map((point) => ({ date: point.date, ...point.byTemplate }));
 
   return (
     <div className="card mb-5 p-5">
@@ -119,9 +138,9 @@ export function MessagesPerDayChart({ clientId }: { clientId?: number }) {
         {data.loading && <Spinner />}
         {data.error && <ErrorNote message={data.error} />}
         {!data.loading && !data.error && series.length > 0 && total > 0 && (
-          <div className="h-64 w-full">
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={series} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--rule)" vertical={false} />
                 <XAxis
                   dataKey="date"
@@ -150,9 +169,32 @@ export function MessagesPerDayChart({ clientId }: { clientId?: number }) {
                     fontSize: 13,
                   }}
                   labelFormatter={(value) => formatFullDate(String(value))}
-                  formatter={(value) => [`${value} mensagens`, ""]}
+                  // Some template com 0 nesse dia não aparece na lista do tooltip.
+                  formatter={(value, name) => (Number(value) > 0 ? [`${value} mensagens`, name] : undefined)}
                 />
-                <Bar dataKey="count" name="Enviadas" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                <Legend
+                  formatter={(value) => <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>{value}</span>}
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{ paddingTop: 8 }}
+                />
+                {TEMPLATES.map((t, i) => (
+                  <Bar
+                    key={t.key}
+                    dataKey={t.key}
+                    name={t.label}
+                    stackId="templates"
+                    fill={t.color}
+                    maxBarSize={28}
+                    // Só o segmento do topo da pilha arredonda — os demais
+                    // ficam quadrados, com um traço fino da cor do fundo
+                    // entre eles (o "espaçamento" que separa cada segmento
+                    // visualmente, já que barra empilhada não tem gap real).
+                    radius={i === TEMPLATES.length - 1 ? [3, 3, 0, 0] : 0}
+                    stroke="var(--sheet)"
+                    strokeWidth={2}
+                  />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>

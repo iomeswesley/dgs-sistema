@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildIndicatorsCore,
   buildMessagesPerDaySeries,
+  buildReceivedFlowBreakdown,
   type AppointmentInput,
   type ClosingInput,
   type FeeInput,
@@ -17,6 +18,12 @@ function appointment(overrides: Partial<AppointmentInput> = {}): AppointmentInpu
     doctorName: "Dra. Exemplo",
     municipalityName: "Camboriú",
     procedureName: "Consulta",
+    // Por padrão, "teve o template de confirmação enviado" — a maioria dos
+    // testes acima não se importa com a taxa de confirmação especificamente
+    // e não deveria precisar declarar isso toda vez.
+    isComplementary: false,
+    confirmationTemplateSent: true,
+    manuallyContacted: false,
     ...overrides,
   };
 }
@@ -56,16 +63,49 @@ describe("buildIndicatorsCore", () => {
     expect(totals.noAnswer).toBe(2);
   });
 
-  it("% Confirmação = confirmados ÷ contatáveis, ignorando quem não tem telefone", () => {
+  it("% Confirmação = confirmados ÷ templates de confirmação enviados (ou contato manual), não ÷ contatáveis", () => {
+    // Achado pelo usuário em 2026-09-03: a fórmula antiga (confirmados ÷
+    // contatáveis) misturava quem nunca teve NENHUMA tentativa de
+    // confirmar no denominador — derrubava a taxa sem representar
+    // confirmação perdida de verdade.
     const appointments = [
-      appointment({ status: "CONFIRMADO" }),
-      appointment({ status: "CONFIRMADO" }),
-      appointment({ status: "SEM_RESPOSTA" }),
-      appointment({ status: "SEM_TELEFONE" }), // não entra no denominador
+      appointment({ status: "CONFIRMADO", confirmationTemplateSent: true }),
+      appointment({ status: "CONFIRMADO", confirmationTemplateSent: true }),
+      appointment({ status: "SEM_RESPOSTA", confirmationTemplateSent: true }),
+      // Nunca foi disparada (lista ainda em revisão) — tem telefone (é
+      // "contatável"), mas nenhuma tentativa real de confirmar ainda.
+      // Não pode entrar no denominador, senão a taxa cai por causa de algo
+      // que nem foi tentado.
+      appointment({ status: "PENDENTE", confirmationTemplateSent: false, manuallyContacted: false }),
     ];
     const { totals } = buildIndicatorsCore(appointments, [], [], "doctor");
 
+    expect(totals.confirmationBase).toBe(3);
+    expect(totals.confirmationConfirmed).toBe(2);
     expect(totals.confirmationRate).toBeCloseTo(2 / 3);
+  });
+
+  it("contato manual da equipe conta como tentativa de confirmar, mesmo sem template enviado", () => {
+    const appointments = [
+      appointment({ status: "CONFIRMADO", confirmationTemplateSent: false, manuallyContacted: true }),
+      appointment({ status: "SEM_TELEFONE", confirmationTemplateSent: false, manuallyContacted: false }),
+    ];
+    const { totals } = buildIndicatorsCore(appointments, [], [], "doctor");
+
+    expect(totals.confirmationBase).toBe(1);
+    expect(totals.confirmationConfirmed).toBe(1);
+    expect(totals.confirmationRate).toBe(1);
+  });
+
+  it("agendamento de reposição de vaga (VAGA_ABERTA) fica fora da % Confirmação — fluxo diferente", () => {
+    const appointments = [
+      appointment({ status: "CONFIRMADO", isComplementary: true, confirmationTemplateSent: false }),
+      appointment({ status: "CONFIRMADO", isComplementary: false, confirmationTemplateSent: true }),
+    ];
+    const { totals } = buildIndicatorsCore(appointments, [], [], "doctor");
+
+    expect(totals.confirmationBase).toBe(1);
+    expect(totals.confirmationConfirmed).toBe(1);
   });
 
   it("taxas ficam null (não zero) sem base pra calcular", () => {
@@ -160,23 +200,59 @@ describe("buildIndicatorsCore", () => {
   });
 });
 
+const NO_TEMPLATES = { CONFIRMACAO: 0, LEMBRETE: 0, VAGA_ABERTA: 0, CANCELAMENTO: 0 };
+
 describe("buildMessagesPerDaySeries", () => {
-  it("preenche com 0 os dias sem envio dentro do intervalo", () => {
+  it("preenche com 0 os dias sem envio dentro do intervalo, e soma por template", () => {
     const series = buildMessagesPerDaySeries(
-      ["2026-06-01", "2026-06-01", "2026-06-03"],
+      [
+        { dayKey: "2026-06-01", template: "CONFIRMACAO" },
+        { dayKey: "2026-06-01", template: "LEMBRETE" },
+        { dayKey: "2026-06-03", template: "CONFIRMACAO" },
+      ],
       "2026-06-01",
       "2026-06-03"
     );
 
     expect(series).toEqual([
-      { date: "2026-06-01", count: 2 },
-      { date: "2026-06-02", count: 0 },
-      { date: "2026-06-03", count: 1 },
+      { date: "2026-06-01", count: 2, byTemplate: { ...NO_TEMPLATES, CONFIRMACAO: 1, LEMBRETE: 1 } },
+      { date: "2026-06-02", count: 0, byTemplate: NO_TEMPLATES },
+      { date: "2026-06-03", count: 1, byTemplate: { ...NO_TEMPLATES, CONFIRMACAO: 1 } },
     ]);
   });
 
   it("intervalo de um único dia devolve um único ponto", () => {
-    const series = buildMessagesPerDaySeries(["2026-06-01"], "2026-06-01", "2026-06-01");
-    expect(series).toEqual([{ date: "2026-06-01", count: 1 }]);
+    const series = buildMessagesPerDaySeries(
+      [{ dayKey: "2026-06-01", template: "VAGA_ABERTA" }],
+      "2026-06-01",
+      "2026-06-01"
+    );
+    expect(series).toEqual([
+      { date: "2026-06-01", count: 1, byTemplate: { ...NO_TEMPLATES, VAGA_ABERTA: 1 } },
+    ]);
+  });
+
+  it("mensagem sem template (texto livre avulso) soma no total do dia, mas em nenhuma barra", () => {
+    const series = buildMessagesPerDaySeries([{ dayKey: "2026-06-01", template: null }], "2026-06-01", "2026-06-01");
+    expect(series).toEqual([{ date: "2026-06-01", count: 1, byTemplate: NO_TEMPLATES }]);
+  });
+});
+
+describe("buildReceivedFlowBreakdown", () => {
+  it("separa confirmação de consulta e reposição de vaga, contando por status", () => {
+    const { confirmacao, vagaAberta } = buildReceivedFlowBreakdown([
+      { status: "CONFIRMADO", isComplementary: false },
+      { status: "RECUSADO", isComplementary: false },
+      { status: "CONFIRMADO", isComplementary: true },
+      { status: "SEM_RESPOSTA", isComplementary: true },
+    ]);
+
+    expect(confirmacao.CONFIRMADO).toBe(1);
+    expect(confirmacao.RECUSADO).toBe(1);
+    expect(vagaAberta.CONFIRMADO).toBe(1);
+    expect(vagaAberta.SEM_RESPOSTA).toBe(1);
+    // Não vaza entre os dois fluxos.
+    expect(confirmacao.SEM_RESPOSTA).toBe(0);
+    expect(vagaAberta.RECUSADO).toBe(0);
   });
 });
