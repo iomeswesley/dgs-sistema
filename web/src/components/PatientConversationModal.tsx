@@ -76,7 +76,7 @@ export function PatientConversationModal({
 
   if (!open || !appointment) return null;
 
-  async function setOutcome(outcome: "CONFIRMADO" | "RECUSADO") {
+  async function setOutcome(outcome: "CONFIRMADO" | "RECUSADO" | "SEM_RESPOSTA") {
     setBusy(true);
     setError(null);
     try {
@@ -173,6 +173,16 @@ export function PatientConversationModal({
                 onClick={() => void setOutcome("RECUSADO")}
               >
                 ✕ Recusar
+              </button>
+              <button
+                type="button"
+                className="btn btn-quiet px-3 py-1.5 text-sm"
+                style={{ color: "var(--mark-gray)" }}
+                disabled={busy}
+                title="Desfaz um Confirmar/Recusar clicado sem querer, ou marca que a resposta não ficou clara — volta pra 'sem resposta', sem confirmação nenhuma."
+                onClick={() => void setOutcome("SEM_RESPOSTA")}
+              >
+                ↺ Sem confirmação
               </button>
             </div>
           </div>
