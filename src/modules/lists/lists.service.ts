@@ -857,7 +857,17 @@ export async function retryFailedAppointments(
     await prisma.$transaction([
       prisma.appointment.update({
         where: { id: appointment.id },
-        data: { selectedPhone: normalized.e164, status: "PENDENTE" },
+        data: {
+          selectedPhone: normalized.e164,
+          status: "PENDENTE",
+          // Sem isso, "telefone inválido"/"sem telefone" ficavam presos pra
+          // sempre na revisão mesmo depois do telefone corrigido por aqui —
+          // só `editAppointment` ("Corrigir" completo, só em EM_REVISAO)
+          // limpava; "Corrigir telefone"/"Reenviar pra quem falhou" (o
+          // caminho que continua funcionando depois do disparo) nunca
+          // chamava isso (achado em produção, 2026-09-04).
+          rawLine: clearResolvedIssues(appointment.rawLine, { selectedPhone: normalized.e164 }),
+        },
       }),
       prisma.messageJob.create({
         data: {
