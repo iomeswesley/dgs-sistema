@@ -79,6 +79,7 @@ export const STATUS_LABEL: Record<string, string> = {
   RECUSADO: "Recusou",
   SEM_RESPOSTA: "Sem resposta",
   SEM_TELEFONE: "Sem telefone",
+  SEM_DATA: "Sem data",
   FALHA: "Falha no envio",
   CANCELADO: "Cancelado pela DGS",
   // Não é um `Appointment.status` de verdade — filtro sintético (Revisão,
@@ -113,6 +114,6 @@ export function toBandCounts(counts: Record<string, number>) {
     recusados: counts.RECUSADO ?? 0,
     aguardando: (counts.PENDENTE ?? 0) + (counts.ENVIADO ?? 0) + (counts.ENTREGUE ?? 0),
     semTelefone:
-      (counts.SEM_TELEFONE ?? 0) + (counts.SEM_RESPOSTA ?? 0) + (counts.FALHA ?? 0),
+      (counts.SEM_TELEFONE ?? 0) + (counts.SEM_DATA ?? 0) + (counts.SEM_RESPOSTA ?? 0) + (counts.FALHA ?? 0),
   };
 }

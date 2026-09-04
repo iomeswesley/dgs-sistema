@@ -8,6 +8,7 @@ export const STATUS_LABEL: Record<string, string> = {
   RECUSADO: "Recusou",
   SEM_RESPOSTA: "Sem resposta",
   SEM_TELEFONE: "Não contatável (sem telefone)",
+  SEM_DATA: "Não contatável (sem data)",
   FALHA: "Falha na entrega",
   CANCELADO: "Cancelado pela DGS",
 };
@@ -38,6 +39,7 @@ export const STATUS_EXPLANATION: Record<string, string> = {
   RECUSADO: "O paciente respondeu que não vai comparecer.",
   SEM_RESPOSTA: "Chegou, mas o paciente não respondeu dentro do prazo — fechado automaticamente.",
   SEM_TELEFONE: "O cadastro não tem nenhum número válido — nunca chegou a ser tentado.",
+  SEM_DATA: "O PDF não trazia data/horário pra essa consulta — nunca chegou a ser tentado. Complete a data na revisão antes de disparar.",
   FALHA: "Não chegou — na prática, quase sempre número sem WhatsApp, inválido ou inalcançável.",
   CANCELADO: "A agenda inteira foi cancelada pela equipe (módulo de Cancelamento), não depende de resposta do paciente.",
 };
@@ -57,6 +59,7 @@ export const STATUS_ORDER = [
   "ENVIADO",
   "ENTREGUE",
   "SEM_TELEFONE",
+  "SEM_DATA",
   "SEM_RESPOSTA",
   "FALHA",
   "CANCELADO",
@@ -70,6 +73,7 @@ export const STATUS_COLOR: Record<string, { fg: string; bg: string }> = {
   ENVIADO: { fg: "#e0a800", bg: "#fdf3d8" },
   ENTREGUE: { fg: "#e0a800", bg: "#fdf3d8" },
   SEM_TELEFONE: { fg: "#94a3b0", bg: "#eef1f4" },
+  SEM_DATA: { fg: "#94a3b0", bg: "#eef1f4" },
   SEM_RESPOSTA: { fg: "#94a3b0", bg: "#eef1f4" },
   FALHA: { fg: "#d64545", bg: "#fbe7e7" },
   CANCELADO: { fg: "#94a3b0", bg: "#eef1f4" },

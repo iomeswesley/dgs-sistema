@@ -777,6 +777,11 @@ enum AppointmentStatus {
   RECUSADO
   SEM_RESPOSTA
   SEM_TELEFONE
+  // A extração não achou horário (às vezes nem data) pra esse paciente no
+  // PDF de origem — nunca deve entrar na fila de envio com uma data
+  // inventada (ver `UNKNOWN_SCHEDULED_AT` em lists.service.ts). Some
+  // paciente virar "Corrigir" (revisão) sozinho quando alguém completar.
+  SEM_DATA
   FALHA
   // Cancelado pela DGS (médico indisponível) — diferente de RECUSADO, que é
   // o paciente dizendo que não vai. Terminal: não volta pra fila de novo.

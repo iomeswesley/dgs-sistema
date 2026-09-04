@@ -23,6 +23,23 @@ import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 */
 
 /**
+ * Placeholder pro `Appointment.scheduledAt` (coluna `NOT NULL`) quando a
+ * extração não achou horário nenhum pra esse paciente no PDF de origem.
+ *
+ * Bug real achado em produção (2026-09-04): antes disso, esse caso caía no
+ * fallback `new Date()` — o instante em que a lista foi processada — e o
+ * agendamento nascia PENDENTE normal, entrando na fila de disparo com uma
+ * data/hora que não existe (mensagem real chegou a sair com "04/09 09h06"
+ * pra uma consulta que era só dia 10/09). Data de 1970 nunca cai dentro de
+ * nenhum filtro de período real (Indicadores/Fechamento/cadência sempre
+ * filtram por intervalo de data) — junto com o status `SEM_DATA` abaixo
+ * (nunca elegível pra fila, só `PENDENTE` é), garante que esse agendamento
+ * fica invisível pra qualquer coisa automática até alguém completar a data
+ * de verdade na revisão.
+ */
+const UNKNOWN_SCHEDULED_AT = new Date("1970-01-01T00:00:00-03:00");
+
+/**
  * Roda a extração e grava os agendamentos como rascunho.
  *
  * Erro de extração não perde o arquivo: a lista fica em ERRO com a mensagem,
@@ -343,13 +360,16 @@ async function createAppointmentFromDraft(
       doctorId,
       procedureId,
       requestingUnitId,
-      scheduledAt: draft.scheduledAt ? parseBrasiliaDateTime(draft.scheduledAt) : new Date(),
+      scheduledAt: draft.scheduledAt ? parseBrasiliaDateTime(draft.scheduledAt) : UNKNOWN_SCHEDULED_AT,
       isFirstVisit: draft.isFirstVisit,
       phones: draft.phones,
       selectedPhone: draft.dispatchPhone,
-      // Paciente sem celular já nasce como não contatável: ele continua no
-      // relatório devolvido à secretaria, mas nunca entra na fila de envio.
-      status: draft.dispatchPhone ? "PENDENTE" : "SEM_TELEFONE",
+      // Sem data reconhecida, nasce SEM_DATA (nunca entra na fila) mesmo que
+      // o telefone esteja ok — não dá pra mandar confirmação de consulta sem
+      // saber quando é. Paciente sem celular (com data ok) nasce como não
+      // contatável: continua no relatório devolvido à secretaria, mas
+      // também nunca entra na fila de envio.
+      status: !draft.scheduledAt ? "SEM_DATA" : draft.dispatchPhone ? "PENDENTE" : "SEM_TELEFONE",
       extractionConfidence: draft.confidence,
       rawLine: {
         issues: draft.issues,
@@ -446,9 +466,17 @@ export async function editAppointment(
         procedureId: edit.procedureId,
         isFirstVisit: edit.isFirstVisit,
         manuallyEdited: true,
-        // Corrigido à mão deixa de ser "sem telefone" se ganhou um número.
-        status:
-          edit.selectedPhone && appointment.status === "SEM_TELEFONE" ? "PENDENTE" : undefined,
+        // Corrigido à mão deixa de ser "sem telefone"/"sem data" quando a
+        // informação que faltava chega. Data resolvida: PENDENTE se já tem
+        // telefone válido (o telefone pode ter sido salvo na extração
+        // mesmo com o agendamento SEM_DATA, ver createAppointmentFromDraft),
+        // senão vira SEM_TELEFONE — mesma situação de sempre, só que agora
+        // com data certa.
+        status: edit.scheduledAt && appointment.status === "SEM_DATA"
+          ? (edit.selectedPhone ?? appointment.selectedPhone) ? "PENDENTE" : "SEM_TELEFONE"
+          : edit.selectedPhone && appointment.status === "SEM_TELEFONE"
+            ? "PENDENTE"
+            : undefined,
         // Sem isso, o aviso ("telefone inválido" etc.) ficava preso pra
         // sempre na revisão mesmo depois de corrigido — rawLine.issues é
         // um retrato de quando a extração rodou, nunca era atualizado.
@@ -743,11 +771,12 @@ export async function importAdditionalPatients(
           doctorId,
           procedureId,
           requestingUnitId,
-          scheduledAt: draft.scheduledAt ? parseBrasiliaDateTime(draft.scheduledAt) : new Date(),
+          scheduledAt: draft.scheduledAt ? parseBrasiliaDateTime(draft.scheduledAt) : UNKNOWN_SCHEDULED_AT,
           isFirstVisit: draft.isFirstVisit,
           phones: draft.phones,
           selectedPhone: draft.dispatchPhone,
-          status: draft.dispatchPhone ? "PENDENTE" : "SEM_TELEFONE",
+          // Mesma regra de `createAppointmentFromDraft` — ver comentário lá.
+          status: !draft.scheduledAt ? "SEM_DATA" : draft.dispatchPhone ? "PENDENTE" : "SEM_TELEFONE",
           extractionConfidence: draft.confidence,
           rawLine: {
             issues: draft.issues,
@@ -759,7 +788,9 @@ export async function importAdditionalPatients(
       });
       added++;
 
-      if (dispatchNow && draft.dispatchPhone && !patient.optedOut) {
+      // `draft.scheduledAt` também precisa estar presente — sem isso o
+      // agendamento nasceu SEM_DATA acima e não pode ser mandado agora.
+      if (dispatchNow && draft.scheduledAt && draft.dispatchPhone && !patient.optedOut) {
         await tx.messageJob.create({
           data: {
             clientId: requireActiveClientId(),

@@ -60,6 +60,7 @@ const STATUS_FILTER_OPTIONS = [
   "RECUSADO",
   "SEM_RESPOSTA",
   "SEM_TELEFONE",
+  "SEM_DATA",
   "FALHA",
 ] as const;
 
@@ -143,6 +144,7 @@ const STATUS_EXPLANATION: { status: string; text: string }[] = [
   { status: "RECUSADO", text: "O paciente respondeu que não vai comparecer." },
   { status: "SEM_RESPOSTA", text: "Chegou, mas o paciente não respondeu dentro do prazo — fechado automaticamente." },
   { status: "SEM_TELEFONE", text: "O cadastro não tem nenhum número válido — nunca chegou a ser tentado. Use \"Reenviar\" pra completar o telefone." },
+  { status: "SEM_DATA", text: "O PDF não trazia data/horário pra essa consulta — nunca chegou a ser tentado. Use \"Corrigir\" pra completar a data (só funciona com a lista em revisão)." },
   { status: "FALHA", text: "Não chegou — na prática, quase sempre número sem WhatsApp, inválido ou inalcançável." },
   { status: "CANCELADO", text: "A agenda inteira foi cancelada pela equipe (módulo de Cancelamento), não depende de resposta do paciente." },
 ];
@@ -487,10 +489,16 @@ export function Revisao() {
       // explícito é obrigatório — não pode depender do fuso do computador
       // de quem está editando (achado em 2026-08-25, mesmo problema do
       // parsing no backend, ver lib/timezone.ts).
-      scheduledAt: new Date(appointment.scheduledAt)
-        .toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" })
-        .slice(0, 16)
-        .replace(" ", "T"),
+      // SEM_DATA nasce com um placeholder de 1970 que nunca deve aparecer
+      // pra ninguém (ver UNKNOWN_SCHEDULED_AT no backend) — campo começa
+      // vazio pra forçar quem está corrigindo a digitar a data de verdade.
+      scheduledAt:
+        appointment.status === "SEM_DATA"
+          ? ""
+          : new Date(appointment.scheduledAt)
+              .toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" })
+              .slice(0, 16)
+              .replace(" ", "T"),
     });
   }
 
@@ -1097,6 +1105,8 @@ export function Revisao() {
                         value={draft.scheduledAt}
                         onChange={(event) => setDraft({ ...draft, scheduledAt: event.target.value })}
                       />
+                    ) : appointment.status === "SEM_DATA" ? (
+                      <span className="text-mark-red">Sem data</span>
                     ) : (
                       formatDateTime(appointment.scheduledAt)
                     )}

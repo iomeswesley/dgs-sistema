@@ -399,12 +399,14 @@ export function Cancelamentos() {
                           <tr key={p.appointmentId}>
                             <Td>{p.patientName}</Td>
                             <Td muted>{p.procedureName}</Td>
-                            <Td muted>{formatDateTime(p.scheduledAt)}</Td>
+                            <Td muted>{p.status === "SEM_DATA" ? "Sem data" : formatDateTime(p.scheduledAt)}</Td>
                             <Td align="right">
                               {p.notifiable ? (
                                 <span className="text-ink-faint">Sim</span>
                               ) : (
-                                <span className="text-mark-red">Sem telefone</span>
+                                <span className="text-mark-red">
+                                  {p.status === "SEM_DATA" ? "Sem data" : "Sem telefone"}
+                                </span>
                               )}
                             </Td>
                           </tr>

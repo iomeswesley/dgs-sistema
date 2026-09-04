@@ -28,9 +28,11 @@ export type CancellationSource = { agendaId: number } | { listId: number };
 
 // Quem NÃO recebe o aviso: já recusou antes (não faz sentido reavisar quem
 // já disse que não ia), já foi cancelado (idempotência — não duplica se
-// alguém tentar cancelar a mesma agenda/lista duas vezes) ou não tem
-// telefone. Opt-out (LGPD) é filtrado à parte, pelo paciente, não pelo status.
-const EXCLUDED_STATUSES: AppointmentStatus[] = ["RECUSADO", "CANCELADO", "SEM_TELEFONE"];
+// alguém tentar cancelar a mesma agenda/lista duas vezes), não tem
+// telefone, ou não tem nem data reconhecida (SEM_DATA — não dá pra avisar
+// do cancelamento de uma consulta cuja data a gente nem sabe qual é). Opt-out
+// (LGPD) é filtrado à parte, pelo paciente, não pelo status.
+const EXCLUDED_STATUSES: AppointmentStatus[] = ["RECUSADO", "CANCELADO", "SEM_TELEFONE", "SEM_DATA"];
 
 function sourceWhere(source: CancellationSource) {
   return "agendaId" in source ? { agendaId: source.agendaId } : { listId: source.listId };
@@ -50,18 +52,20 @@ async function eligibleAppointments(source: CancellationSource) {
 }
 
 /**
- * Quem não tem telefone nenhum — não dá pra notificar, mas o agendamento
- * ainda precisa virar CANCELADO e ficar visível no lote (achado em
- * 2026-08-26: antes desse fix, esse paciente nunca era tocado — status
+ * Quem não tem telefone nenhum, ou não tem data reconhecida (SEM_DATA) —
+ * não dá pra notificar nos dois casos, mas o agendamento ainda precisa
+ * virar CANCELADO e ficar visível no lote (achado em 2026-08-26 pro caso
+ * de telefone: antes desse fix, esse paciente nunca era tocado — status
  * ficava travado em SEM_TELEFONE pra sempre, sem nunca aparecer em
  * nenhuma tela de cancelamento, um "limbo" sem jeito de encontrar depois
- * ou de completar o telefone e reenviar).
+ * ou de completar o telefone e reenviar; SEM_DATA entrou no mesmo balde
+ * em 2026-09-04, mesma lógica).
  */
 async function noPhoneAppointments(source: CancellationSource) {
   return prisma.appointment.findMany({
     where: {
       ...sourceWhere(source),
-      status: "SEM_TELEFONE",
+      status: { in: ["SEM_TELEFONE", "SEM_DATA"] },
       patient: { optedOut: false },
     },
     orderBy: { scheduledAt: "asc" },
