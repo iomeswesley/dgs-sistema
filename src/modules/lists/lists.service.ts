@@ -402,8 +402,13 @@ interface RawLine {
  * sem isso "telefone inválido"/"sem data" etc. ficam mostrando pra sempre
  * na revisão, mesmo depois de corrigido, porque `rawLine` é um retrato de
  * quando a extração rodou, nunca atualizado depois.
+ *
+ * Exportada — reaproveitada por qualquer código que corrige telefone/data
+ * fora do fluxo normal de revisão (achado em produção, 2026-09-04: o mesmo
+ * "reenviar pra quem falhou" do módulo de Cancelamento tinha o mesmo bug,
+ * ver `retryFailedMessages` em cancellations.service.ts).
  */
-function clearResolvedIssues(rawLine: Prisma.JsonValue, edit: AppointmentEdit): Prisma.InputJsonValue | undefined {
+export function clearResolvedIssues(rawLine: Prisma.JsonValue, edit: AppointmentEdit): Prisma.InputJsonValue | undefined {
   if (!rawLine || typeof rawLine !== "object" || Array.isArray(rawLine)) return undefined;
   const current = rawLine as unknown as RawLine;
   const issues = new Set(current.issues ?? []);

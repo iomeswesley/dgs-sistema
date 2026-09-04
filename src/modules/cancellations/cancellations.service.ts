@@ -6,6 +6,7 @@ import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
 import { phoneCandidates, normalizePhoneList, pickAlternatePhone } from "@/lib/phone.js";
+import { clearResolvedIssues } from "@/modules/lists/lists.service.js";
 
 /*
   Cancelamento de agenda inteira — o médico não vai poder atender (cirurgia,
@@ -440,7 +441,13 @@ export async function retryFailedMessages(
     await prisma.$transaction([
       prisma.appointment.update({
         where: { id: appointment.id },
-        data: { selectedPhone: normalized.e164 },
+        data: {
+          selectedPhone: normalized.e164,
+          // Mesmo bug já corrigido em lists.service.ts (2026-09-04): sem
+          // isso, "telefone inválido"/"sem telefone" ficavam presos pra
+          // sempre mesmo depois do telefone corrigido por aqui.
+          rawLine: clearResolvedIssues(appointment.rawLine, { selectedPhone: normalized.e164 }),
+        },
       }),
       prisma.messageJob.create({
         data: {
