@@ -188,7 +188,31 @@ const TIME_BUDGET_MS = 45_000;
  * sobra (não o padrão de 45s), senão arrisca a função ser morta no meio do
  * envio, exatamente o que a reserva atômica (abaixo) já foi feita pra evitar.
  */
+// Um job só fica "ENVIANDO" entre o claim atômico e o fim do processamento
+// dessa mensagem — nunca mais que alguns segundos numa invocação normal.
+// Um que ficou ENVIANDO por mais tempo que isso só pode ser resto de uma
+// invocação anterior que foi cortada no meio (pelo orçamento de tempo, ou
+// morta pelo limite de 60s da Vercel) — sem isso, esse job fica travado
+// pra sempre, porque só job PENDENTE é reclamado de novo.
+//
+// Achado real em produção (2026-09-08): 443 jobs presos assim, o mais
+// antigo de 9 dias atrás (227 confirmação + 216 lembrete) — explicava o
+// "trava em 20 e poucos por dia, mas precisa mandar muito mais" relatado
+// pelo cliente. 10 minutos dá bastante margem contra falso positivo de uma
+// invocação concorrente ainda em andamento (nenhuma dura mais que ~1min).
+const STUCK_ENVIANDO_THRESHOLD_MS = 10 * 60 * 1000;
+
+async function reclaimStuckJobs(): Promise<number> {
+  const cutoff = new Date(Date.now() - STUCK_ENVIANDO_THRESHOLD_MS);
+  const result = await prisma.messageJob.updateMany({
+    where: { status: "ENVIANDO", updatedAt: { lt: cutoff } },
+    data: { status: "PENDENTE" },
+  });
+  return result.count;
+}
+
 export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promise<ProcessResult> {
+  await reclaimStuckJobs();
   const capacity = await queueCapacity();
   if (capacity.remaining === 0) {
     return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0 };
@@ -248,8 +272,16 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
   let failed = 0;
   const start = Date.now();
 
-  for (const job of jobs) {
-    if (Date.now() - start > timeBudgetMs) break;
+  for (const [index, job] of jobs.entries()) {
+    if (Date.now() - start > timeBudgetMs) {
+      // Devolve pra PENDENTE o resto do lote que já tinha sido reservado
+      // (ENVIANDO) mas não deu tempo de processar nessa invocação — sem
+      // isso ficava preso pra sempre (ver `reclaimStuckJobs` acima; esse
+      // release imediato evita até precisar esperar os 10 minutos dele).
+      const leftover = jobs.slice(index).map((j) => j.id);
+      await prisma.messageJob.updateMany({ where: { id: { in: leftover } }, data: { status: "PENDENTE" } });
+      break;
+    }
 
     // Segunda camada de segurança, independente da trava acima — pedida
     // pelo usuário depois do incidente de 2026-09-01: nunca manda duas
@@ -290,6 +322,28 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
           status: "CANCELADO",
           processedAt: new Date(),
           lastError: "Lembrete atrasado — a fila não processou a tempo e a consulta já é hoje (ou já passou). Cancelado pra não mandar 'amanhã' errado.",
+        },
+      });
+      continue;
+    }
+
+    // Confirmação/reposição de vaga atrasada demais — a consulta que se
+    // pedia pra confirmar já passou. Achado junto com o de cima (mesmos
+    // 443 jobs presos): 25 confirmações travadas eram de consultas já
+    // ocorridas. Pedir "confirme sua presença" pra uma data que já foi
+    // não faz sentido nenhum pro paciente. LEMBRETE já tem sua própria
+    // checagem acima (mais rígida — nem no mesmo dia pode); CANCELAMENTO
+    // continua saindo sempre, é fato decidido pela equipe, não pergunta.
+    if (
+      (job.template === "CONFIRMACAO" || job.template === "VAGA_ABERTA") &&
+      job.appointment.scheduledAt.getTime() < Date.now()
+    ) {
+      await prisma.messageJob.update({
+        where: { id: job.id },
+        data: {
+          status: "CANCELADO",
+          processedAt: new Date(),
+          lastError: "Atrasado demais — a consulta já passou. Cancelado em vez de pedir confirmação de algo que já aconteceu.",
         },
       });
       continue;
