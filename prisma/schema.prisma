@@ -803,6 +803,10 @@ enum TemplateKind {
   LEMBRETE
   VAGA_ABERTA
   CANCELAMENTO
+  // Cliente corrigiu a data/hora de um agendamento já disparado (ex.: lista
+  // subiu com horário errado) — reabre a confirmação pro horário certo.
+  // Ver "Reagendar" em Revisão, 2026-09-08.
+  REAGENDAMENTO
 }
 
 enum JobStatus {

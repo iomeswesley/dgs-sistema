@@ -897,6 +897,74 @@ export async function retryFailedAppointments(
   return { queued };
 }
 
+/**
+ * Corrige a data/hora de UM agendamento já disparado e reabre a
+ * confirmação pro horário certo — pedido do usuário em 2026-09-08: quando
+ * a lista sobe com horário errado (esquecimento de quem revisa antes de
+ * aprovar) e já foi disparada, não dá mais pra usar `editAppointment`
+ * ("Corrigir", só em EM_REVISAO) nem faz sentido subir a lista de novo
+ * (duplicaria o agendamento e pediria confirmação do zero pra quem já
+ * respondeu, ver conversa que motivou isso). Mesma dinâmica de
+ * `retryFailedAppointments`: funciona em qualquer status da lista, direto
+ * na linha.
+ *
+ * Diferente de só corrigir `scheduledAt` no banco (o que não avisa
+ * ninguém): manda o template REAGENDAMENTO, que explica que o horário
+ * mudou (em vez de reenviar CONFIRMACAO, que pareceria uma segunda
+ * pergunta do nada pra quem já tinha respondido) e reseta o status pra
+ * PENDENTE — a resposta antiga (pro horário errado) deixa de valer,
+ * precisa reconfirmar pro horário novo.
+ */
+export async function rescheduleAppointment(
+  listId: number,
+  appointmentId: number,
+  scheduledAt: string,
+  userId: number
+): Promise<void> {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: { list: true },
+  });
+  if (!appointment || appointment.listId !== listId) throw new AppError("Agendamento não encontrado", 404);
+  if (appointment.status === "CANCELADO") {
+    throw new AppError("Esse agendamento foi cancelado — reagendar não se aplica.", 409);
+  }
+  if (!appointment.selectedPhone) {
+    throw new AppError("Sem telefone cadastrado — corrija o telefone antes de reagendar.", 400);
+  }
+
+  const newScheduledAt = parseBrasiliaDateTime(scheduledAt);
+  const template = appointment.list.isComplementary ? "VAGA_ABERTA" : "REAGENDAMENTO";
+
+  await prisma.$transaction([
+    prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        scheduledAt: newScheduledAt,
+        status: "PENDENTE",
+        manuallyEdited: true,
+        rawLine: clearResolvedIssues(appointment.rawLine, { scheduledAt }),
+      },
+    }),
+    prisma.messageJob.create({
+      data: {
+        clientId: requireActiveClientId(),
+        appointmentId,
+        template,
+        phone: appointment.selectedPhone,
+      },
+    }),
+  ]);
+
+  await recordAudit({
+    userId,
+    action: "reschedule",
+    entity: "Appointment",
+    entityId: appointmentId,
+    metadata: { from: appointment.scheduledAt.toISOString(), to: newScheduledAt.toISOString() },
+  });
+}
+
 export interface MessagePreview {
   template: "CONFIRMACAO" | "VAGA_ABERTA";
   text: string;

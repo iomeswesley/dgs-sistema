@@ -529,6 +529,15 @@ export function buildTemplateParams(template: TemplateKind, appointment: JobAppo
     };
   }
 
+  if (template === "REAGENDAMENTO") {
+    // Mesmas 6 variáveis do CONFIRMACAO (data/hora já são as corrigidas,
+    // porque rescheduleAppointment() grava o scheduledAt novo antes de
+    // enfileirar) — só o texto do template muda, avisando da alteração.
+    return {
+      body: [firstName, appointment.municipality.name, date, time, appointment.procedure.name, local],
+    };
+  }
+
   return {
     header: [appointment.municipality.name],
     body: [firstName, appointment.municipality.name, date, time, appointment.procedure.name, local],

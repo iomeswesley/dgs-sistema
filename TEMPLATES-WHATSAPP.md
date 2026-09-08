@@ -182,6 +182,40 @@ uma pergunta só, sobe taxa de resposta).
 
 ---
 
+## Template 5 — Reagendamento (2026-09-08)
+
+- **Nome**: `reagendamento_consulta`
+- **Categoria**: `UTILITY`
+- **Idioma**: Português (BR) — `pt_BR`
+
+**Body**
+```
+Olá, {{1}}! Aqui é a DGS, que organiza os atendimentos da Secretaria de Saúde de {{2}}.
+
+Houve uma alteração no horário da sua consulta. O novo horário é:
+
+Data: {{3}} às {{4}}
+Procedimento: {{5}}
+Local: {{6}}
+
+Podemos confirmar sua presença nesse novo horário?
+```
+
+**Footer**
+```
+DGS - D'Artibale Gestão em Saúde
+```
+
+**Botões** (Resposta rápida) — mesmos textos do Template 1 de propósito, `classifyReply()` já reconhece
+- `Sim, vou comparecer`
+- `Não poderei ir`
+
+**Variáveis**: mesma ordem/origem do Template 1 (nome, município, data, hora, procedimento, local) — só o texto muda.
+
+**Quando usa**: botão "Reagendar" em Revisão, ao lado de "Corrigir telefone" — corrige a data/hora de UM agendamento já disparado (ex.: a secretaria subiu a lista com horário errado) e reabre a confirmação pro horário certo. Reseta o status pra `PENDENTE`: a resposta antiga (pro horário errado) deixa de valer. Diferente de reenviar o Template 1 (`confirmacao_consulta`) puro e simples: reenviar o mesmo texto de sempre pareceria uma segunda pergunta do nada pra quem já tinha respondido — esse template avisa explicitamente que houve mudança.
+
+---
+
 ## Práticas de envio que protegem o número
 
 - **Opt-out honrado de verdade**: quem responder "SAIR"/"PARE"/"NÃO QUERO RECEBER" entra em `patients.opted_out` e nunca mais recebe nada. É a defesa mais barata contra denúncia.
@@ -198,3 +232,4 @@ uma pergunta só, sobe taxa de resposta).
 - [ ] Template 1 submetido com exemplos preenchidos (a Meta rejeita se os exemplos vierem em branco ou com `XXXX`).
 - [ ] Template 2 submetido.
 - [ ] Template 3 submetido (pode ser depois, é fase 2).
+- [ ] Template 5 (`reagendamento_consulta`) submetido — sem ele o botão "Reagendar" na Revisão fica sem template aprovado pra enviar.

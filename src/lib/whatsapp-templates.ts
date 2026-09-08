@@ -132,6 +132,48 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  {
+    // Cliente corrigiu a data/hora de um agendamento já disparado — avisa
+    // explicitamente que houve mudança (em vez de reenviar o
+    // confirmacao_consulta comum, que pareceria uma segunda pergunta do
+    // nada pra quem já tinha respondido) e pede confirmação de novo pro
+    // horário certo. Mesmos textos de botão do confirmacao_consulta de
+    // propósito — classifyReply já reconhece "sim, vou comparecer"/"não
+    // poderei ir" sem precisar de nenhuma mudança.
+    name: "reagendamento_consulta",
+    category: "UTILITY",
+    language: "pt_BR",
+    components: [
+      {
+        type: "BODY",
+        text:
+          "Olá, {{1}}! Aqui é a DGS, que organiza os atendimentos da Secretaria de Saúde de {{2}}.\n\n" +
+          "Houve uma alteração no horário da sua consulta. O novo horário é:\n\n" +
+          "Data: {{3}} às {{4}}\nProcedimento: {{5}}\nLocal: {{6}}\n\n" +
+          "Podemos confirmar sua presença nesse novo horário?",
+        example: {
+          body_text: [
+            [
+              "Arthur",
+              "Penha",
+              "23/07/2026",
+              "09:15",
+              "Ultrassonografia obstétrica",
+              "Policlínica - Av. Eugênio Krause, 2265, Centro",
+            ],
+          ],
+        },
+      },
+      { type: "FOOTER", text: "DGS - D'Artibale Gestão em Saúde" },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "Sim, vou comparecer" },
+          { type: "QUICK_REPLY", text: "Não poderei ir" },
+        ],
+      },
+    ],
+  },
 ];
 
 export interface TemplateStatus {

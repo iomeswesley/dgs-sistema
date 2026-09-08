@@ -192,6 +192,18 @@ export function Revisao() {
   const [quickFixPhone, setQuickFixPhone] = useState("");
   const [quickFixBusy, setQuickFixBusy] = useState(false);
   const [quickFixError, setQuickFixError] = useState<string | null>(null);
+  // Reagendar UM paciente já disparado — pedido do usuário em 2026-09-08:
+  // lista subiu com horário errado (esqueceram de revisar antes de
+  // aprovar) e já tinha sido disparada. Diferente de subir a lista de novo
+  // (duplicaria o agendamento e pediria confirmação do zero de quem já
+  // respondeu), corrige a mesma linha e avisa da mudança com um template
+  // dedicado (REAGENDAMENTO) — reseta a resposta antiga, pede confirmação
+  // de novo pro horário certo.
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+  const [rescheduleDateTime, setRescheduleDateTime] = useState("");
+  const [rescheduleBusy, setRescheduleBusy] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [rescheduleNotice, setRescheduleNotice] = useState<string | null>(null);
   // Prévia da mensagem de verdade (já com as variáveis preenchidas) do
   // primeiro paciente, antes de aprovar — pedido do usuário em 2026-08-27:
   // o comparativo de unidade/endereço já existia, mas era abstrato; agora
@@ -384,6 +396,54 @@ export function Revisao() {
       setQuickFixError(err instanceof Error ? err.message : "Falha ao corrigir e reenviar.");
     } finally {
       setQuickFixBusy(false);
+    }
+  }
+
+  function openReschedule(appointment: Appointment) {
+    setRescheduleTarget(appointment);
+    // Mesmo formato/timeZone explícito do "Corrigir" normal (startEdit) —
+    // datetime-local exige AAAA-MM-DDTHH:MM sem fuso, e não pode depender
+    // do fuso do computador de quem está reagendando.
+    setRescheduleDateTime(
+      new Date(appointment.scheduledAt)
+        .toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" })
+        .slice(0, 16)
+        .replace(" ", "T")
+    );
+    setRescheduleError(null);
+  }
+
+  /**
+   * Corrige a data/hora e reenvia — template REAGENDAMENTO, que avisa
+   * explicitamente da mudança (em vez do CONFIRMACAO comum, que pareceria
+   * uma segunda pergunta do nada pra quem já respondeu pro horário errado).
+   */
+  async function submitReschedule() {
+    if (!rescheduleTarget) return;
+    if (!rescheduleDateTime) {
+      setRescheduleError("Informe a data e hora novas.");
+      return;
+    }
+    setRescheduleBusy(true);
+    setRescheduleError(null);
+    try {
+      await api.post(`/api/lists/${list.id}/reschedule`, {
+        appointmentId: rescheduleTarget.id,
+        scheduledAt: rescheduleDateTime,
+      });
+      setRescheduleTarget(null);
+      setRescheduleNotice("Horário corrigido — avisando o paciente...");
+      const finished = await runQueueUntilDone(({ sent, failed }) => {
+        setRescheduleNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.`);
+      });
+      setRescheduleNotice(
+        `Aviso enviado — ${finished.sent} enviada(s)` + (finished.failed > 0 ? `, ${finished.failed} falharam` : "") + "."
+      );
+      detail.reload();
+    } catch (err) {
+      setRescheduleError(err instanceof Error ? err.message : "Falha ao reagendar.");
+    } finally {
+      setRescheduleBusy(false);
     }
   }
 
@@ -775,6 +835,11 @@ export function Revisao() {
       {retryNotice && (
         <div className="mb-4">
           <Callout>{retryNotice}</Callout>
+        </div>
+      )}
+      {rescheduleNotice && (
+        <div className="mb-4">
+          <Callout>{rescheduleNotice}</Callout>
         </div>
       )}
       {error && (
@@ -1180,16 +1245,26 @@ export function Revisao() {
                       </span>
                     ) : (
                       // Lista já disparada: a edição completa não vale mais
-                      // (mensagem já saiu), mas o telefone pode estar
-                      // errado mesmo assim — corrige e reenvia na hora,
-                      // pra qualquer situação (não só falha/sem telefone).
-                      <button
-                        type="button"
-                        className="btn btn-quiet px-2 py-1 text-xs"
-                        onClick={() => openQuickFix(appointment)}
-                      >
-                        Corrigir telefone
-                      </button>
+                      // (mensagem já saiu), mas telefone e horário podem
+                      // estar errados mesmo assim — corrige e reenvia na
+                      // hora, pra qualquer situação (não só falha/sem
+                      // telefone).
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          className="btn btn-quiet px-2 py-1 text-xs"
+                          onClick={() => openQuickFix(appointment)}
+                        >
+                          Corrigir telefone
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-quiet px-2 py-1 text-xs"
+                          onClick={() => openReschedule(appointment)}
+                        >
+                          Reagendar
+                        </button>
+                      </div>
                     )}
                   </Td>
                 </tr>
@@ -1422,6 +1497,32 @@ export function Revisao() {
             placeholder="(47) 99999-9999"
             value={quickFixPhone}
             onChange={(e) => setQuickFixPhone(e.target.value)}
+          />
+        </Field>
+      </FormModal>
+
+      <FormModal
+        open={rescheduleTarget !== null}
+        title="Reagendar consulta"
+        description={
+          rescheduleTarget
+            ? `${rescheduleTarget.patient.name} — horário atual: ${formatDateTime(
+                rescheduleTarget.scheduledAt
+              )}. O paciente recebe um aviso da mudança e é convidado a confirmar de novo pro horário certo — a resposta anterior deixa de valer.`
+            : ""
+        }
+        submitLabel="Reagendar e avisar"
+        busy={rescheduleBusy}
+        error={rescheduleError}
+        onSubmit={submitReschedule}
+        onCancel={() => setRescheduleTarget(null)}
+      >
+        <Field label="Data e hora certas">
+          <input
+            className="field"
+            type="datetime-local"
+            value={rescheduleDateTime}
+            onChange={(e) => setRescheduleDateTime(e.target.value)}
           />
         </Field>
       </FormModal>

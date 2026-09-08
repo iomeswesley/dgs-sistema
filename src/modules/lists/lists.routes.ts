@@ -18,6 +18,7 @@ import {
   getMessagePreview,
   importAdditionalPatients,
   removeAppointment,
+  rescheduleAppointment,
   retryFailedAppointments,
 } from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
@@ -502,6 +503,26 @@ listsRouter.post(
     // resto, se não couber, o frontend completa sozinho (runQueueUntilDone).
     await processQueue();
     res.status(201).json(result);
+  })
+);
+
+const rescheduleSchema = z.object({
+  appointmentId: z.number().int().positive(),
+  scheduledAt: z.string().trim().min(1, "Data/hora vazia"),
+});
+
+/**
+ * Corrige a data/hora de UM agendamento já disparado e reenvia — avisa o
+ * paciente que houve alteração (template REAGENDAMENTO) e reabre a
+ * confirmação pro horário certo. Ver rescheduleAppointment().
+ */
+listsRouter.post(
+  "/api/lists/:id/reschedule",
+  asyncHandler(async (req, res) => {
+    const { appointmentId, scheduledAt } = parseBody(req, rescheduleSchema);
+    await rescheduleAppointment(routeId(req), appointmentId, scheduledAt, currentUserId(req));
+    await processQueue();
+    res.status(201).json({ ok: true });
   })
 );
 
