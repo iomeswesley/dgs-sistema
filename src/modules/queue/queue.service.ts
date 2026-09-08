@@ -278,7 +278,18 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
     // appointment.status já virou CANCELADO ali, independente do envio da
     // mensagem funcionar. Aqui só registra a mensagem em si, sem mexer no
     // status: sucesso ou falha de entrega não desfaz o cancelamento.
-    const isCancellation = job.template === "CANCELAMENTO";
+    //
+    // LEMBRETE é a mesma história por um motivo diferente: `enqueueReminders`
+    // (cadence.service.ts) só manda esse template pra quem JÁ está
+    // CONFIRMADO — é só o preparo do exame pra véspera, não pede confirmação
+    // de novo. Bug sério achado em produção (2026-09-08, relatado pelo
+    // cliente como "confirmados sumiram" — 24→18 numa lista, 9→0 noutra):
+    // antes desse fix, TODO envio bem-sucedido (menos cancelamento) escrevia
+    // `status: "ENVIADO"` incondicionalmente — sobrescrevendo o CONFIRMADO
+    // que era pré-requisito pro lembrete ter sido mandado, todo santo dia que
+    // o cron de lembrete rodava. A equipe vinha corrigindo isso na mão,
+    // paciente por paciente, sem saber a causa raiz.
+    const preservesStatus = job.template === "CANCELAMENTO" || job.template === "LEMBRETE";
     const params = buildTemplateParams(job.template, job.appointment);
 
     try {
@@ -316,12 +327,16 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
         // lugar que sabe com certeza que o envio pra `job.phone` funcionou,
         // resolve os dois de uma vez — nunca sincroniza na falha (não faz
         // sentido "selecionar" um número que acabou de falhar).
-        ...(isCancellation
+        ...(job.template === "CANCELAMENTO"
           ? []
           : [
               prisma.appointment.update({
                 where: { id: job.appointmentId },
-                data: { status: "ENVIADO", selectedPhone: job.phone },
+                // LEMBRETE sincroniza o telefone (mesmo motivo de sempre —
+                // ver comentário acima) mas nunca mexe no status.
+                data: preservesStatus
+                  ? { selectedPhone: job.phone }
+                  : { status: "ENVIADO", selectedPhone: job.phone },
               }),
             ]),
       ]);
@@ -349,7 +364,10 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
             failedAt: new Date(),
           },
         }),
-        ...(isCancellation
+        // Mesma regra do sucesso acima: LEMBRETE nunca mexe no status,
+        // nem quando falha (paciente continua CONFIRMADO — só o lembrete
+        // em si não chegou).
+        ...(preservesStatus
           ? []
           : [prisma.appointment.update({ where: { id: job.appointmentId }, data: { status: "FALHA" } })]),
       ]);
