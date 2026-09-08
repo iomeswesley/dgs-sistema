@@ -8,6 +8,7 @@ import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
+import { toBrasiliaDateString } from "@/lib/timezone.js";
 
 /*
   Fila de envio.
@@ -269,6 +270,27 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
       await prisma.messageJob.update({
         where: { id: job.id },
         data: { status: "CANCELADO", processedAt: new Date(), lastError: "Duplicado — esse template já tinha sido enviado pra esse agendamento." },
+      });
+      continue;
+    }
+
+    // Lembrete atrasado (fila do dia não drenou a tempo — achado real em
+    // produção, 2026-09-07/08: só 24 de ~200 jobs do dia saíram no orçamento
+    // de tempo do cron, o resto ficou PENDENTE até o cron do dia seguinte)
+    // NUNCA deve sair — o texto do template sempre diz "amanhã" (frase fixa,
+    // não recalculada no envio), e mandar isso no dia da consulta, ou pior,
+    // DEPOIS do horário dela, é mentira que pode fazer o paciente achar que
+    // ainda tem um dia de folga. Cancela em vez de mandar errado; a
+    // confirmação em si (CONFIRMACAO) já saiu antes, o paciente não fica
+    // sem nenhum aviso.
+    if (job.template === "LEMBRETE" && toBrasiliaDateString(job.appointment.scheduledAt) <= toBrasiliaDateString(new Date())) {
+      await prisma.messageJob.update({
+        where: { id: job.id },
+        data: {
+          status: "CANCELADO",
+          processedAt: new Date(),
+          lastError: "Lembrete atrasado — a fila não processou a tempo e a consulta já é hoje (ou já passou). Cancelado pra não mandar 'amanhã' errado.",
+        },
       });
       continue;
     }
