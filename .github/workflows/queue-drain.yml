@@ -1,0 +1,29 @@
+name: Drenar fila de WhatsApp
+
+# Chama a mesma rota que o cron da Vercel usa (/api/cron/queue), só que de
+# 10 em 10 minutos em vez de só 2x/dia — o plano Hobby da Vercel só permite
+# até 2 cron jobs, 1x/dia cada, e isso nunca deu conta do volume real
+# (achado em produção, 2026-09-08: fila de ~200 mensagens/dia, só uns 80-100
+# saindo via cron, o resto empilhando dia após dia). GitHub Actions não tem
+# essa limitação de frequência e é de graça pra repositório privado com
+# esse volume de uso.
+#
+# Seguro rodar com essa frequência: toda a cadência já é idempotente por
+# dia (não reenfileira quem já foi tocado hoje) e o envio em si é protegido
+# contra duplicata (claim atômico + checagem de template já enviado) — ver
+# queue.service.ts. Se a rota já estiver processando (outra chamada em
+# andamento), essa apenas não acha nada pendente pra reservar.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # permite rodar na mão pelo GitHub, pra testar
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar /api/cron/queue
+        run: |
+          curl --fail --silent --show-error --max-time 70 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://sistema-dgs.vercel.app/api/cron/queue
