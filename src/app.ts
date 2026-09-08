@@ -136,11 +136,24 @@ export function createApp() {
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
   /*
-    Cron do Vercel (ver vercel.json), uma vez por dia — cabe no plano Hobby
-    (que só roda cron até 1x/dia, por isso nunca dava pra ter o cron
-    horário que a fila pedia). Decisão do usuário em 2026-08-15: só
+    Cron do Vercel (ver vercel.json) — cabe no plano Hobby, que permite até
+    2 cron jobs, cada um disparando 1x/dia (não dá pra ter um único cron de
+    hora em hora nesse plano). Decisão do usuário em 2026-08-15: só
     automatizar o lembrete de véspera (D-1) pro paciente — o resumo diário
     pro gestor foi removido de vez (era um cron separado às 18h).
+
+    Rodava só 1x/dia (7h Brasília) até 2026-09-08, quando um dia com ~200
+    lembretes/reenvios estourou o orçamento de tempo de uma única invocação
+    (só 24 saíram, o resto ficou pra o dia seguinte — e como o texto do
+    lembrete tem "amanhã" fixo no template, saiu errado; ver fix separado em
+    queue.service.ts que cancela lembrete atrasado em vez de mandar errado).
+    Segundo horário (16h Brasília) adicionado no mesmo dia — usa o segundo
+    slot que o Hobby permite pra dar mais uma chance de drenar o que sobrou
+    da manhã, sem esperar o cron do dia seguinte. Seguro rodar 2x: toda a
+    cadência (enqueueReminders/enqueueRetries/processQueue) já é idempotente
+    por dia — é o mesmo caminho que "Rodar cadência" (POST
+    /api/queue/run-cadence) já usa pra forçar uma rodada extra na mão.
+
     O Vercel manda "Authorization: Bearer <CRON_SECRET>" automaticamente
     quando a variável está configurada no projeto, e sempre por GET — não
     POST (é assim que o Vercel Cron invoca, sem exceção).
