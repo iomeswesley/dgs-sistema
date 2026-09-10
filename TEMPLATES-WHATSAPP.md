@@ -227,9 +227,13 @@ DGS - D'Artibale Gestão em Saúde
 
 ## Checklist de submissão à Meta
 
-- [ ] Número dedicado da DGS registrado na Cloud API, com verificação do negócio concluída.
-- [ ] Perfil do WhatsApp Business preenchido (nome "DGS - D'Artibale Gestão em Saúde", foto, descrição, endereço) — perfil vazio prejudica a aprovação e a confiança do paciente.
-- [ ] Template 1 submetido com exemplos preenchidos (a Meta rejeita se os exemplos vierem em branco ou com `XXXX`).
-- [ ] Template 2 submetido.
-- [ ] Template 3 submetido (pode ser depois, é fase 2).
-- [ ] Template 5 (`reagendamento_consulta`) submetido — sem ele o botão "Reagendar" na Revisão fica sem template aprovado pra enviar.
+**Estado da WABA ativa da DGS (`2046188346288778`), conferido em 2026-09-10 — tudo abaixo já está feito**, fica documentado pra não perder de vista e como referência pra qualquer WABA nova (cliente novo do multi-cliente, ou failover):
+
+- [x] Número registrado na Cloud API (`registerPhoneNumber()`) e billing configurado (cartão cadastrado — sem isso todo envio falha com erro 131042).
+- [x] Perfil do WhatsApp Business preenchido ("DGS - D'Artibale Gestão em Saúde").
+- [x] Templates 1-5 (`confirmacao_consulta`, `lembrete_vespera`, `convite_vaga_aberta`, `cancelamento_consulta`, `reagendamento_consulta`) — todos `APPROVED`. Confira o status ao vivo com `npx tsx --env-file=.env scripts/submeter-template-reagendamento.ts` (apesar do nome, ele lista o status dos 5).
+- [x] Webhook assinado no campo `messages` (+ campos extras de coexistência: `history`, `smb_app_state_sync`, `smb_message_echoes`).
+- [x] Token de acesso criptografado em repouso no banco (`TOKEN_ENCRYPTION_KEY`, ver Estado atual 2026-09-03 no CLAUDE.md).
+- [ ] **Coexistência (número que já usa o app WhatsApp Business) continua travada** — não é um checklist de template, é a revisão `business_management` da Meta parada num erro que só ela resolve (`#1690130`). Não bloqueia número novo/limpo, só o caso de reaproveitar um número que já tem histórico no app. Ver "Pendências abertas" no topo do CLAUDE.md pra sequência certa de retomar isso.
+
+**Numa WABA nova (cliente novo conectando pela tela), o registro e a submissão dos 5 templates acontecem sozinhos** dentro de `POST /api/whatsapp/signup/callback` (`registerPhoneNumber()` + `submitDefaultTemplates()`, `lib/whatsapp-templates.ts`) — só billing e perfil do WhatsApp Business continuam manuais, feitos direto no Business Manager da Meta.

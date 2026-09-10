@@ -4,7 +4,7 @@ import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { extractList } from "@/modules/extraction/extraction.service.js";
 import { mapExtraction, type AppointmentDraft } from "@/modules/extraction/extraction.mapper.js";
-import { normalizePhoneList } from "@/lib/phone.js";
+import { describePhoneIssue, normalizePhoneList } from "@/lib/phone.js";
 import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { parseBrasiliaDateTime } from "@/lib/timezone.js";
@@ -452,7 +452,7 @@ export async function editAppointment(
 
   if (edit.selectedPhone !== undefined && edit.selectedPhone !== null) {
     const [normalized] = normalizePhoneList([edit.selectedPhone]);
-    if (!normalized) throw new AppError("Telefone inválido", 400);
+    if (!normalized) throw new AppError(describePhoneIssue(edit.selectedPhone), 400);
     if (normalized.kind !== "mobile") throw new AppError("Só celular recebe WhatsApp.", 400);
     edit.selectedPhone = normalized.e164;
   }
@@ -597,7 +597,7 @@ export async function addManualAppointment(
   if (!list) throw new AppError("Lista não encontrada", 404);
 
   const [normalized] = normalizePhoneList([input.phone]);
-  if (!normalized) throw new AppError("Telefone inválido.", 400);
+  if (!normalized) throw new AppError(describePhoneIssue(input.phone), 400);
   if (normalized.kind !== "mobile") throw new AppError("Só celular recebe confirmação por WhatsApp.", 400);
 
   // Antes da revisão, a mensagem sai junto com o disparo normal da lista —
@@ -855,8 +855,11 @@ export async function retryFailedAppointments(
     if (!appointment) continue; // não pertence a essa lista — ignora em silêncio
 
     const [normalized] = normalizePhoneList([update.phone]);
-    if (!normalized || normalized.kind !== "mobile") {
-      throw new AppError(`Telefone inválido pro paciente do agendamento ${update.appointmentId}.`, 400);
+    if (!normalized) {
+      throw new AppError(`Telefone do agendamento ${update.appointmentId}: ${describePhoneIssue(update.phone)}`, 400);
+    }
+    if (normalized.kind !== "mobile") {
+      throw new AppError(`Telefone do agendamento ${update.appointmentId}: só celular recebe WhatsApp.`, 400);
     }
 
     await prisma.$transaction([

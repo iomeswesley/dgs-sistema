@@ -8,7 +8,7 @@ import { asyncHandler } from "@/middleware/errorHandler.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { requireAuth, currentUserId } from "@/middleware/auth.js";
 import { parseBody } from "@/lib/http.js";
-import { normalizePhoneList } from "@/lib/phone.js";
+import { describePhoneIssue, normalizePhoneList } from "@/lib/phone.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import {
@@ -218,7 +218,7 @@ whatsappSignupRouter.post(
     const { phone, template } = parseBody(req, testSendSchema);
 
     const [normalized] = normalizePhoneList([phone]);
-    if (!normalized) throw new AppError("Telefone inválido.", 400);
+    if (!normalized) throw new AppError(describePhoneIssue(phone), 400);
     if (normalized.kind !== "mobile") throw new AppError("Só celular recebe WhatsApp.", 400);
 
     const params = buildTestParams(template);

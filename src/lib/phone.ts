@@ -87,6 +87,56 @@ export function isWhatsappCapable(phone: NormalizedPhone | null): boolean {
 }
 
 /**
+ * Mesma validação de `normalizePhone()`, mas devolve o motivo específico da
+ * rejeição em vez de só "inválido" — usado nos pontos onde é uma PESSOA
+ * digitando o telefone na hora (equipe corrigindo, ou o cliente por WhatsApp
+ * pedindo pra corrigir), não um dado vindo direto da extração do PDF. Achado
+ * real em produção (2026-09-10): a equipe digitou um número com um dígito a
+ * mais e não tinha como saber o motivo, só "Telefone inválido pro paciente
+ * do agendamento X" — sem dizer o quê estava errado nem como corrigir.
+ */
+export function describePhoneIssue(raw: string | null | undefined): string {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (!digits) return "Telefone vazio.";
+
+  let national = digits;
+  if (national.startsWith(BR_COUNTRY_CODE) && (national.length === 12 || national.length === 13)) {
+    national = national.slice(BR_COUNTRY_CODE.length);
+  }
+
+  if (national.length < 10) {
+    return (
+      `Telefone com só ${national.length} dígito(s) — falta número. ` +
+      "Celular completo tem 11 dígitos (DDD + 9), fixo tem 10 (DDD + 8)."
+    );
+  }
+  if (national.length > 11) {
+    return (
+      `Telefone com ${national.length} dígitos — ${national.length - 11} a mais do que um celular ` +
+      "(DDD + 9 dígitos = 11 no total). Confira se não duplicou algum número na digitação."
+    );
+  }
+
+  const areaCode = Number(national.slice(0, 2));
+  if (!VALID_AREA_CODES.has(areaCode)) {
+    return `DDD "${national.slice(0, 2)}" não existe no Brasil — confira os 2 primeiros números.`;
+  }
+
+  const subscriber = national.slice(2);
+  const first = subscriber[0];
+  if (subscriber.length === 9 && first !== "9") {
+    return `Celular de 9 dígitos precisa começar com 9 logo depois do DDD — esse começa com "${first}".`;
+  }
+  if (subscriber.length === 8 && !(first && first >= "2" && first <= "9")) {
+    return `Número de 8 dígitos começando com "${first}" não é celular nem fixo válido no Brasil.`;
+  }
+
+  // Não deveria chegar aqui se `normalizePhone()` já rejeitou o mesmo raw —
+  // mensagem genérica só como rede de segurança.
+  return "Telefone inválido — confira o DDD e a quantidade de dígitos.";
+}
+
+/**
  * Normaliza a lista de telefones de um paciente, remove duplicados e ordena
  * pelo melhor candidato a WhatsApp: celular antes de fixo, preservando a
  * ordem original dentro de cada grupo (a lista costuma trazer o número

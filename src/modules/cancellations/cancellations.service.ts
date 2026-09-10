@@ -5,7 +5,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
-import { phoneCandidates, normalizePhoneList, pickAlternatePhone } from "@/lib/phone.js";
+import { describePhoneIssue, phoneCandidates, normalizePhoneList, pickAlternatePhone } from "@/lib/phone.js";
 import { clearResolvedIssues } from "@/modules/lists/lists.service.js";
 
 /*
@@ -434,8 +434,11 @@ export async function retryFailedMessages(
     if (!appointment) continue; // não pertence a esse lote — ignora em silêncio
 
     const [normalized] = normalizePhoneList([update.phone]);
-    if (!normalized || normalized.kind !== "mobile") {
-      throw new AppError(`Telefone inválido pro paciente do agendamento ${update.appointmentId}.`, 400);
+    if (!normalized) {
+      throw new AppError(`Telefone do agendamento ${update.appointmentId}: ${describePhoneIssue(update.phone)}`, 400);
+    }
+    if (normalized.kind !== "mobile") {
+      throw new AppError(`Telefone do agendamento ${update.appointmentId}: só celular recebe WhatsApp.`, 400);
     }
 
     await prisma.$transaction([
