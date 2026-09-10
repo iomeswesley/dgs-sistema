@@ -23,7 +23,7 @@ catalogRouter.use("/api/catalog", requireAuth);
 
 const municipalitySchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  state: z.string().length(2).default("SC"),
+  state: z.string().length(2, "Use a sigla do estado, com 2 letras (ex.: SC)").default("SC"),
   notes: z.string().nullish(),
   active: z.boolean().optional(),
 });
