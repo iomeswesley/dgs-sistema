@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma.js";
 import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { getSettings } from "@/modules/settings/settings.service.js";
+import { startOfBrasiliaDay } from "@/lib/timezone.js";
 
 /*
   Cadência das mensagens:
@@ -17,13 +18,9 @@ import { getSettings } from "@/modules/settings/settings.service.js";
   importunado bloqueia o número.
 */
 
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
 /** Já saiu (ou está prestes a sair) alguma mensagem hoje para este agendamento? */
 async function alreadyTouchedToday(appointmentId: number, phone: string): Promise<boolean> {
-  const today = startOfDay(new Date());
+  const today = startOfBrasiliaDay(new Date());
 
   const [sent, queued] = await Promise.all([
     prisma.whatsappMessage.count({
@@ -51,7 +48,7 @@ export interface CadenceResult {
  * secretaria repor a vaga.
  */
 export async function enqueueReminders(): Promise<CadenceResult> {
-  const tomorrow = startOfDay(new Date());
+  const tomorrow = startOfBrasiliaDay(new Date());
   tomorrow.setDate(tomorrow.getDate() + 1);
   const dayAfter = new Date(tomorrow);
   dayAfter.setDate(dayAfter.getDate() + 1);

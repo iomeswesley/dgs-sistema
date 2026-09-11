@@ -62,3 +62,22 @@ export function toBrasiliaDateString(date: Date): string {
 export function endOfBrasiliaDay(date: Date): Date {
   return parseBrasiliaDateTime(`${toBrasiliaDateString(date)}T23:59:59.999`);
 }
+
+/**
+ * 00:00:00.000 de Brasília do mesmo dia local de `date` — par simétrico de
+ * `endOfBrasiliaDay()`. Existe pra `cadence.service.ts` parar de calcular
+ * "hoje"/"amanhã" com `new Date(y, m, d)` (fuso local do PROCESSO, não de
+ * Brasília — a mesma classe de bug de 2026-08-25/26, `process.env.TZ`
+ * setado em runtime não é confiável o bastante na Vercel).
+ *
+ * Achado real em produção (2026-09-11): entre ~21h e meia-noite de
+ * Brasília, o processo já enxerga o dia seguinte em UTC — `enqueueReminders()`
+ * calculava "amanhã" com 1 dia a mais nesse intervalo, criava (e mandava na
+ * hora) o lembrete de véspera 2 dias antes da consulta, dizendo "amanhã"
+ * pra uma consulta que era daqui a 2 dias. E como já existia um `MessageJob`
+ * LEMBRETE pra esse agendamento, o lembrete de véspera de verdade (no dia
+ * certo) nunca mais era criado — `alreadyReminded` bloqueava pra sempre.
+ */
+export function startOfBrasiliaDay(date: Date): Date {
+  return parseBrasiliaDateTime(`${toBrasiliaDateString(date)}T00:00:00.000`);
+}
