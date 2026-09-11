@@ -25,9 +25,9 @@ interface Appointment {
   contactNote: string | null;
   contactedAt: string | null;
   patient: { id: number; name: string; optedOut: boolean };
-  doctor: { name: string };
+  doctor: { id: number; name: string };
   procedure: { name: string };
-  municipality: { name: string };
+  municipality: { id: number; name: string };
   contactedBy: { name: string } | null;
   messages: {
     direction: string;
@@ -49,6 +49,14 @@ export function Hoje() {
   const [from, setFrom] = useState(localDateString());
   const [to, setTo] = useState(daysAgo(-7));
   const [statusFilter, setStatusFilter] = useState("");
+  // Filtro por Município/Médico, mesmo padrão de Listas (2026-09-03): opções
+  // vêm só de quem já apareceu na página, não do cadastro inteiro — filtrar
+  // por um médico sem nenhum atendimento no período não faria sentido. Aqui
+  // filtra no cliente (a página já carrega tudo do período de uma vez, com
+  // De/Até/Situação já resolvidos no servidor) — igual Listas, só que sem
+  // "Data da agenda" própria porque De/Até já cobre isso, mais amplo.
+  const [filterMunicipalityId, setFilterMunicipalityId] = useState("");
+  const [filterDoctorId, setFilterDoctorId] = useState("");
 
   const query = new URLSearchParams({ from, to, ...(statusFilter ? { status: statusFilter } : {}) });
   const data = useApi<{ appointments: Appointment[]; capacity: Capacity }>(
@@ -160,6 +168,19 @@ export function Hoje() {
   }
 
   const capacity = data.data?.capacity;
+  const allAppointments = data.data?.appointments ?? [];
+  const filterMunicipalityOptions = [
+    ...new Map(allAppointments.map((a) => [a.municipality.id, a.municipality])).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  const filterDoctorOptions = [...new Map(allAppointments.map((a) => [a.doctor.id, a.doctor])).values()].sort(
+    (a, b) => a.name.localeCompare(b.name)
+  );
+  const filteredAppointments = allAppointments.filter((appointment) => {
+    if (filterMunicipalityId && String(appointment.municipality.id) !== filterMunicipalityId) return false;
+    if (filterDoctorId && String(appointment.doctor.id) !== filterDoctorId) return false;
+    return true;
+  });
+  const hasActiveFilter = !!filterMunicipalityId || !!filterDoctorId;
 
   return (
     <>
@@ -228,7 +249,49 @@ export function Hoje() {
               <option value="FALHA">Falha no envio</option>
             </select>
           </Field>
+          <Field label="Município">
+            <select
+              className="field"
+              value={filterMunicipalityId}
+              onChange={(e) => setFilterMunicipalityId(e.target.value)}
+            >
+              <option value="">Todos</option>
+              {filterMunicipalityOptions.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Médico">
+            <select className="field" value={filterDoctorId} onChange={(e) => setFilterDoctorId(e.target.value)}>
+              <option value="">Todos</option>
+              {filterDoctorOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="flex items-end">
+            <button
+              type="button"
+              className="btn btn-quiet w-full"
+              disabled={!hasActiveFilter}
+              onClick={() => {
+                setFilterMunicipalityId("");
+                setFilterDoctorId("");
+              }}
+            >
+              Limpar filtros
+            </button>
+          </div>
         </div>
+        {hasActiveFilter && (
+          <p className="mt-2 text-xs text-ink-muted">
+            {filteredAppointments.length} de {allAppointments.length} atendimento(s)
+          </p>
+        )}
 
         {summary.data && (
           <div className="mt-5">
@@ -240,14 +303,21 @@ export function Hoje() {
       {data.loading && <Spinner />}
       {data.error && <ErrorNote message={data.error} />}
 
-      {data.data?.appointments.length === 0 && !data.loading && (
+      {allAppointments.length === 0 && !data.loading && (
         <EmptyState
           title="Nenhum atendimento no período"
           description="Ajuste as datas acima, ou dispare uma lista aprovada para as confirmações começarem a chegar aqui."
         />
       )}
 
-      {(data.data?.appointments.length ?? 0) > 0 && (
+      {allAppointments.length > 0 && filteredAppointments.length === 0 && (
+        <EmptyState
+          title="Nenhum atendimento bate com esse filtro"
+          description="Ajuste ou limpe o filtro de Município/Médico acima."
+        />
+      )}
+
+      {filteredAppointments.length > 0 && (
         <Table
           colgroup={
             // Largura fixa (não só esconder coluna) — sem isso "Registrar
@@ -277,7 +347,7 @@ export function Hoje() {
             </tr>
           }
         >
-          {data.data?.appointments.map((appointment) => {
+          {filteredAppointments.map((appointment) => {
             const lastError = appointment.messages.find((message) => message.errorMessage);
             const lastReply = appointment.messages.find(
               (message) => message.direction === "RECEBIDA" && message.body
