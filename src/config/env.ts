@@ -48,13 +48,16 @@ const envSchema = z.object({
   WHATSAPP_APP_ID: z.string().optional(),
   WHATSAPP_SIGNUP_CONFIG_ID: z.string().optional(),
   // Configuração do Embedded Signup a usar pro botão de coexistência
-  // (número que já tem WhatsApp Business App instalado) — só precisa ser
-  // diferente da de cima se a equipe criar uma configuração dedicada no
-  // WhatsApp Manager da Meta. Enquanto não existir uma separada,
-  // signup.routes.ts cai pra WHATSAPP_SIGNUP_CONFIG_ID mesmo — é o que já
-  // está configurado hoje (o config_id documentado no CLAUDE.md pro link
-  // de coexistência é literalmente o mesmo valor do WHATSAPP_SIGNUP_CONFIG_ID
-  // atual, então não tem uma config separada de verdade ainda).
+  // (número que já tem WhatsApp Business App instalado) — PRECISA ser uma
+  // Configuration diferente da de cima, criada do zero no App Dashboard da
+  // Meta (Configuration Builder não tem toggle de Coexistence dentro da
+  // mesma Configuration do fluxo padrão). Confirmado em 2026-09-12 contra o
+  // projeto irmão `barber`, que criou a Configuration separada e validou
+  // Coexistence ponta a ponta em produção sem precisar de aprovação nenhuma
+  // de `business_management` — ver CLAUDE.md. Enquanto essa var não apontar
+  // pra uma Configuration de verdade separada (cai pra WHATSAPP_SIGNUP_CONFIG_ID
+  // quando vazia), o popup de coexistência trata o login como se fosse
+  // número novo e trava.
   WHATSAPP_SIGNUP_CONFIG_ID_COEXISTENCE: z.string().optional(),
   // Teto de mensagens por dia — fallback quando a consulta à Graph API falha
   // ou não há conta conectada (sandbox/dev). Em produção, o limite real vem
