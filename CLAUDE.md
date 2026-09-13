@@ -2,6 +2,12 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-09-13 (2) — classificação de resposta ambígua trocada de Opus pra Haiku
+
+Usuário estranhou $0,13 de gasto na API da Anthropic num dia e perguntou quantas mensagens de WhatsApp isso representava — resposta: **nenhuma relação direta**. Envio de WhatsApp é cobrado pela Meta, não pela Anthropic; o único ponto do sistema que chama a API da Anthropic é `classifyReplyWithAI()` (`modules/replies`), e só quando uma resposta em texto livre é ambígua o bastante pra `classifyReply()` (determinístico, grátis) não resolver sozinha — a maioria das respostas nunca chega lá.
+
+**Achado real no caminho**: `replies.service.ts` rodava essa classificação de 3 categorias (confirm/refuse/unknown) em `claude-opus-5` — o modelo mais caro da linha ($5/$25 por milhão de tokens) — sem nunca setar o parâmetro `thinking`, o que no Opus 5 liga raciocínio adaptativo por padrão (cobrado como token de saída) numa tarefa que não precisa de raciocínio nenhum. Isso sozinho já explica um custo desproporcional por chamada. **Corrigido**: `MODEL` trocado pra `claude-haiku-4-5` (5x mais barato nos dois lados, sem thinking ligado por padrão) — o corte de confiança (`CONFIDENCE_THRESHOLD = 0.7`, resposta abaixo disso sempre vira "unknown" pra revisão humana) continua protegendo contra decisão errada, independente do modelo. `npm run typecheck` e `npm test` limpos (154/155 — a 1 falha é a mesma pré-existente de `indicators.test.ts` dependente do `TZ` do processo, sem relação com esta mudança).
+
 ## O que é
 
 Ferramenta **interna** da DGS (D'Artibale Gestão em Saúde), empresa que intermedia secretarias municipais de saúde e médicos contratados em SC. Recebe listas diárias de agendamento (PDF nativo gerado pelo SISREG ou CELK — nunca foto), extrai localmente sem IA, dispara confirmação por WhatsApp com botões Sim/Não e concilia o atendimento em três checagens.

@@ -5,7 +5,16 @@ import { REPLY_CLASSIFICATION_SYSTEM_PROMPT, buildReplyClassificationPrompt } fr
 
 export const aiClassificationConfigured = !!env.ANTHROPIC_API_KEY;
 
-const MODEL = "claude-opus-5";
+// Haiku 4.5 (não Opus) de propósito: é uma classificação de 3 categorias
+// (confirm/refuse/unknown), não uma tarefa que precise de raciocínio pesado
+// — e o prompt já pede pra errar pro lado seguro ("unknown") quando não tem
+// certeza, então o corte de confiança (CONFIDENCE_THRESHOLD) protege contra
+// decisão errada independente do modelo. Rodar isso em Opus custava 5x mais
+// caro nos dois lados (tokens de entrada e saída) e, sem `thinking` setado,
+// ainda ligava raciocínio adaptativo por padrão (cobrado como saída) numa
+// tarefa que não precisa disso — achado em 2026-09-13 investigando um gasto
+// de $0,13/dia na API da Anthropic que não tinha explicação óbvia.
+const MODEL = "claude-haiku-4-5";
 
 /** Abaixo disso o sistema trata como "unknown" mesmo que o modelo tenha decidido. */
 const CONFIDENCE_THRESHOLD = 0.7;
