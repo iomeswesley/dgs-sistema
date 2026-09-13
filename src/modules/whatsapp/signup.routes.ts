@@ -52,6 +52,10 @@ const callbackSchema = z.object({
   wabaId: z.string().min(1),
   phoneNumberId: z.string().min(1),
   businessName: z.string().nullish(),
+  // true quando o popup terminou com FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING
+  // (coexistência — número que já usa o WhatsApp Business App no celular),
+  // não o FINISH normal (número novo/limpo). Ver uso abaixo.
+  isCoexistence: z.boolean().optional().default(false),
 });
 
 /**
@@ -91,10 +95,18 @@ whatsappSignupRouter.post(
     // Falha aqui não desfaz a conexão — a equipe vê o status pendente na
     // tela e, se o registro do número falhar, o próximo envio real mostra
     // o erro (#133010) de novo, mas a conta já está visível/gerenciável.
-    try {
-      await registerPhoneNumber(body.phoneNumberId, accessToken);
-    } catch (err) {
-      console.error("[WHATSAPP SIGNUP] Falha ao registrar o número na Cloud API:", (err as Error).message);
+    //
+    // Coexistência é diferente: o número já está registrado na Cloud API
+    // pelo próprio WhatsApp Business App do celular do dono — chamar
+    // /register de novo é desnecessário e arriscaria derrubar a sessão do
+    // app no celular (mesmo cuidado já validado ponta a ponta no projeto
+    // irmão barber, ver CLAUDE.md).
+    if (!body.isCoexistence) {
+      try {
+        await registerPhoneNumber(body.phoneNumberId, accessToken);
+      } catch (err) {
+        console.error("[WHATSAPP SIGNUP] Falha ao registrar o número na Cloud API:", (err as Error).message);
+      }
     }
     try {
       await submitDefaultTemplates(body.wabaId, accessToken);

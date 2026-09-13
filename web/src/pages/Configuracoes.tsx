@@ -1512,6 +1512,11 @@ function WhatsappTab() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const signupData = useRef<{ wabaId: string; phoneNumberId: string; businessName: string | null } | null>(null);
+  // Setado só quando o evento FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING chega
+  // (coexistência) em vez do FINISH normal — precisa viajar até o backend
+  // pra ele decidir se pula o registro do número na Cloud API (ver
+  // isCoexistence em signup.routes.ts).
+  const signupIsCoexistence = useRef(false);
 
   function reloadAll() {
     data.reload();
@@ -1530,6 +1535,7 @@ function WhatsappTab() {
             phoneNumberId: payload.data?.phone_number_id,
             businessName: payload.data?.business_name ?? null,
           };
+          signupIsCoexistence.current = payload.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
         }
       } catch {
         // mensagens de outra origem/formato — ignora
@@ -1576,7 +1582,11 @@ function WhatsappTab() {
               return;
             }
             try {
-              await api.post("/api/whatsapp/signup/callback", { code, ...signupData.current });
+              await api.post("/api/whatsapp/signup/callback", {
+                code,
+                ...signupData.current,
+                isCoexistence: signupIsCoexistence.current,
+              });
               reloadAll();
             } catch (err) {
               setError(err instanceof Error ? err.message : "Falha ao concluir a conexão.");
