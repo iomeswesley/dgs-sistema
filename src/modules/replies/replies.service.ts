@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { env } from "@/config/env.js";
+import { captureError } from "@/lib/errorReporting.js";
 import { REPLY_CLASSIFICATION_SYSTEM_PROMPT, buildReplyClassificationPrompt } from "./replies.prompt.js";
 
 export const aiClassificationConfigured = !!env.ANTHROPIC_API_KEY;
@@ -92,9 +93,34 @@ export async function classifyReplyWithAI(text: string): Promise<AiClassificatio
       return { intent: "unknown", rawConfidence: 0, reasoning: "Resposta vazia do classificador.", usage };
     }
 
-    const parsed = resultSchema.safeParse(JSON.parse(textBlock.text));
+    // JSON.parse isolado do resto do try: se o modelo devolver algo que não
+    // é JSON válido, a chamada JÁ FOI COBRADA (temos `usage` acima) — sem
+    // isolar isso, o SyntaxError caía no catch genérico do fim da função e
+    // perdia esse `usage` de vista, contando como "sem custo" uma chamada
+    // que teve custo de verdade. Achado em 2026-09-13 investigando 772
+    // chamadas seguidas, todas com o mesmo erro genérico — sem saber se
+    // era isso ou falha de rede antes de qualquer cobrança.
+    let json: unknown;
+    try {
+      json = JSON.parse(textBlock.text);
+    } catch (parseErr) {
+      captureError(parseErr);
+      return {
+        intent: "unknown",
+        rawConfidence: 0,
+        reasoning: `JSON inválido devolvido pelo modelo: ${(parseErr as Error).message}`.slice(0, 300),
+        usage,
+      };
+    }
+
+    const parsed = resultSchema.safeParse(json);
     if (!parsed.success) {
-      return { intent: "unknown", rawConfidence: 0, reasoning: "Resposta fora do formato esperado.", usage };
+      return {
+        intent: "unknown",
+        rawConfidence: 0,
+        reasoning: `Resposta fora do formato esperado: ${parsed.error.message}`.slice(0, 300),
+        usage,
+      };
     }
 
     // O corte de confiança vale mesmo quando o modelo escolheu confirm/refuse:
@@ -103,12 +129,25 @@ export async function classifyReplyWithAI(text: string): Promise<AiClassificatio
 
     return { intent, rawConfidence: parsed.data.confidence, reasoning: parsed.data.reasoning, usage };
   } catch (err) {
+    // Vai pro Sentry agora (captureError), não só pro console — um
+    // console.error sozinho em serverless não fica retido por muito tempo
+    // e não gera alerta nenhum. Achado em 2026-09-13: essa falha rodou
+    // 100% das vezes por pelo menos um mês (772/772 chamadas de 03/08 a
+    // 01/09) sem ninguém notar, porque o único registro era esse console
+    // silencioso — o Sentry do projeto (lib/errorReporting.ts) nunca foi
+    // avisado. A mensagem real do erro (`err.message`) vai pro `reasoning`
+    // gravado, em vez do texto genérico de antes — é o que faltava pra
+    // saber a causa raiz sem precisar de acesso aos logs da Vercel.
+    captureError(err);
     console.error("[REPLIES] Falha na classificação por IA:", (err as Error).message);
-    // Erro de rede/API — a chamada pode não ter nem saído (sem cobrança) ou
-    // ter falhado depois de cobrar; sem `usage` na exceção do SDK, não dá
-    // pra saber qual dos dois. Tratado como sem custo (o caso mais comum:
-    // timeout, chave inválida, rate limit — nenhum chega a gerar tokens de
-    // saída cobráveis).
-    return { intent: "unknown", rawConfidence: 0, reasoning: "Falha ao consultar o classificador.", usage: null };
+    // Erro antes de qualquer resposta da Meta/Anthropic (rede, autenticação,
+    // parâmetro inválido — a esmagadora maioria dos erros de SDK) — não há
+    // `usage` porque a chamada nem chegou a gerar tokens de saída cobráveis.
+    return {
+      intent: "unknown",
+      rawConfidence: 0,
+      reasoning: `Falha ao consultar o classificador: ${(err as Error).message}`.slice(0, 300),
+      usage: null,
+    };
   }
 }

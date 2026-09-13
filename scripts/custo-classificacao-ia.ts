@@ -39,22 +39,30 @@ const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
   "claude-opus-5": { input: 5, output: 25 },
 };
 
-// As 5 mensagens de `reasoning` que `classifyReplyWithAI()` devolve quando a
-// chamada NÃO terminou numa decisão real do modelo (sem API key, formato
-// inesperado, recusa, erro de rede) — texto fixo, sempre exatamente igual.
-// Qualquer outro `reasoning` é texto livre gerado pelo modelo de verdade,
-// explicando por que ele mesmo achou a mensagem ambígua/incerta (isso É o
-// comportamento esperado, não falha). Separar os dois é o que decide se um
-// "unknown" foi decisão de verdade ou desperdício de chamada — achado em
-// 2026-09-13: 772/772 chamadas de 08/08 a 01/09 deram "unknown", precisa
-// saber quantas são falha técnica antes de julgar o resultado normal.
-const FAILURE_REASONINGS = new Set([
+// Prefixos fixos que `classifyReplyWithAI()` usa quando a chamada NÃO
+// terminou numa decisão real do modelo (sem API key, formato inesperado,
+// recusa, erro de rede/API — a partir de 2026-09-13 alguns desses ganharam a
+// mensagem de erro real anexada depois de ":", por isso é prefixo, não
+// igualdade exata). Qualquer outro `reasoning` é texto livre gerado pelo
+// modelo de verdade, explicando por que ele mesmo achou a mensagem
+// ambígua/incerta (isso É o comportamento esperado, não falha). Separar os
+// dois é o que decide se um "unknown" foi decisão de verdade ou desperdício
+// de chamada — achado em 2026-09-13: 772/772 chamadas de 03/08 a 01/09
+// deram "unknown", TODAS por "Falha ao consultar o classificador." (falha
+// técnica, não decisão do modelo) — motivo real só ficou visível depois do
+// fix que passou a incluir `err.message` nessa string.
+const FAILURE_REASONING_PREFIXES = [
   "Classificação por IA desligada.",
   "Classificação recusada pelo provedor.",
   "Resposta vazia do classificador.",
-  "Resposta fora do formato esperado.",
-  "Falha ao consultar o classificador.",
-]);
+  "Resposta fora do formato esperado",
+  "JSON inválido devolvido pelo modelo",
+  "Falha ao consultar o classificador",
+];
+
+function isFailureReasoning(reasoning: string): boolean {
+  return FAILURE_REASONING_PREFIXES.some((prefix) => reasoning.startsWith(prefix));
+}
 
 interface DiaResumo {
   data: string;
@@ -66,6 +74,7 @@ interface DiaResumo {
   porDesfecho: Record<string, number>; // intent final gravado em raw.intent
   falhaTecnica: number; // reasoning é uma das strings fixas de erro, não decisão do modelo
   falhaTecnicaPorMotivo: Record<string, number>;
+  exemplosFalha: Record<string, string[]>; // até 3 mensagens de erro reais por motivo, pra diagnóstico
 }
 
 async function main() {
@@ -105,6 +114,7 @@ async function main() {
           porDesfecho: {},
           falhaTecnica: 0,
           falhaTecnicaPorMotivo: {},
+          exemplosFalha: {},
         };
         byDay.set(day, resumo);
       }
@@ -121,9 +131,19 @@ async function main() {
       const desfecho = raw?.intent ?? "desconhecido";
       resumo.porDesfecho[desfecho] = (resumo.porDesfecho[desfecho] ?? 0) + 1;
 
-      if (raw?.aiReasoning && FAILURE_REASONINGS.has(raw.aiReasoning)) {
+      if (raw?.aiReasoning && isFailureReasoning(raw.aiReasoning)) {
         resumo.falhaTecnica++;
-        resumo.falhaTecnicaPorMotivo[raw.aiReasoning] = (resumo.falhaTecnicaPorMotivo[raw.aiReasoning] ?? 0) + 1;
+        // Agrupa pelo prefixo fixo (não a string inteira) — desde o fix que
+        // anexa `err.message`, cada chamada pode ter um texto ligeiramente
+        // diferente (timeout vs. rate limit vs. chave inválida), e sem isso
+        // cada uma virava uma chave só sua no relatório.
+        const prefix =
+          FAILURE_REASONING_PREFIXES.find((p) => raw.aiReasoning!.startsWith(p)) ?? raw.aiReasoning;
+        resumo.falhaTecnicaPorMotivo[prefix] = (resumo.falhaTecnicaPorMotivo[prefix] ?? 0) + 1;
+        if ((resumo.exemplosFalha[prefix]?.length ?? 0) < 3) {
+          resumo.exemplosFalha[prefix] ??= [];
+          resumo.exemplosFalha[prefix].push(raw.aiReasoning);
+        }
       }
 
       const model = raw?.aiModel;
@@ -151,9 +171,16 @@ async function main() {
     const totalSemCusto = dias.reduce((acc, d) => acc + d.semCustoConhecido, 0);
     const totalFalhaTecnica = dias.reduce((acc, d) => acc + d.falhaTecnica, 0);
     const falhaTecnicaPorMotivo: Record<string, number> = {};
+    const exemplosFalha: Record<string, string[]> = {};
     for (const d of dias) {
       for (const [motivo, n] of Object.entries(d.falhaTecnicaPorMotivo)) {
         falhaTecnicaPorMotivo[motivo] = (falhaTecnicaPorMotivo[motivo] ?? 0) + n;
+      }
+      for (const [motivo, exemplos] of Object.entries(d.exemplosFalha)) {
+        exemplosFalha[motivo] ??= [];
+        for (const ex of exemplos) {
+          if (exemplosFalha[motivo].length < 3 && !exemplosFalha[motivo].includes(ex)) exemplosFalha[motivo].push(ex);
+        }
       }
     }
 
@@ -176,6 +203,7 @@ async function main() {
       chamadasSemTokenGravado: totalSemCusto,
       falhaTecnicaTotal: totalFalhaTecnica,
       falhaTecnicaPorMotivo,
+      exemplosFalha,
       avisos,
       porDia: dias,
     };
