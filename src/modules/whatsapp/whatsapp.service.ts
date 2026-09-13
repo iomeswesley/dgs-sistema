@@ -113,7 +113,22 @@ export async function handleInboundReply(reply: InboundReply): Promise<void> {
       raw: {
         intent,
         ...(aiResult
-          ? { aiClassified: true, aiConfidence: aiResult.rawConfidence, aiReasoning: aiResult.reasoning }
+          ? {
+              aiClassified: true,
+              aiConfidence: aiResult.rawConfidence,
+              aiReasoning: aiResult.reasoning,
+              // Tokens de verdade da chamada (null se nem saiu — sem
+              // ANTHROPIC_API_KEY ou erro de rede/API antes de gerar
+              // qualquer saída) — dá custo exato por dia sem estimativa,
+              // ver scripts/custo-classificacao-ia.ts.
+              ...(aiResult.usage
+                ? {
+                    aiModel: aiResult.usage.model,
+                    aiInputTokens: aiResult.usage.inputTokens,
+                    aiOutputTokens: aiResult.usage.outputTokens,
+                  }
+                : {}),
+            }
           : {}),
       } as never,
     },

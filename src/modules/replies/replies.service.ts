@@ -32,6 +32,15 @@ export interface AiClassification {
   /** Confiança bruta do modelo, antes do corte do threshold. */
   rawConfidence: number;
   reasoning: string;
+  /**
+   * Tokens de verdade cobrados nesta chamada (`response.usage`), pra dar
+   * custo exato por dia sem precisar estimar — motivado pela investigação
+   * de 2026-09-13 (gasto de $0,13/dia sem explicação óbvia, resolvida na
+   * época só por estimativa porque nada disso era gravado ainda). `null`
+   * quando a chamada nem saiu (sem `ANTHROPIC_API_KEY`, recusa, erro de
+   * rede) — nesses casos não há tokens cobrados.
+   */
+  usage: { model: string; inputTokens: number; outputTokens: number } | null;
 }
 
 const JSON_SCHEMA = {
@@ -55,7 +64,7 @@ const JSON_SCHEMA = {
  */
 export async function classifyReplyWithAI(text: string): Promise<AiClassification> {
   if (!env.ANTHROPIC_API_KEY) {
-    return { intent: "unknown", rawConfidence: 0, reasoning: "Classificação por IA desligada." };
+    return { intent: "unknown", rawConfidence: 0, reasoning: "Classificação por IA desligada.", usage: null };
   }
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -69,27 +78,37 @@ export async function classifyReplyWithAI(text: string): Promise<AiClassificatio
       messages: [{ role: "user", content: buildReplyClassificationPrompt(text) }],
     });
 
+    // Cobrado mesmo quando a chamada termina em refusal/formato inesperado
+    // abaixo — captura antes de qualquer `return` pra nunca perder o dado
+    // de custo por causa de uma resposta que não deu em classificação.
+    const usage = { model: MODEL, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+
     if (message.stop_reason === "refusal") {
-      return { intent: "unknown", rawConfidence: 0, reasoning: "Classificação recusada pelo provedor." };
+      return { intent: "unknown", rawConfidence: 0, reasoning: "Classificação recusada pelo provedor.", usage };
     }
 
     const textBlock = message.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      return { intent: "unknown", rawConfidence: 0, reasoning: "Resposta vazia do classificador." };
+      return { intent: "unknown", rawConfidence: 0, reasoning: "Resposta vazia do classificador.", usage };
     }
 
     const parsed = resultSchema.safeParse(JSON.parse(textBlock.text));
     if (!parsed.success) {
-      return { intent: "unknown", rawConfidence: 0, reasoning: "Resposta fora do formato esperado." };
+      return { intent: "unknown", rawConfidence: 0, reasoning: "Resposta fora do formato esperado.", usage };
     }
 
     // O corte de confiança vale mesmo quando o modelo escolheu confirm/refuse:
     // uma decisão de baixa confiança não deve virar ação automática.
     const intent = parsed.data.confidence >= CONFIDENCE_THRESHOLD ? parsed.data.intent : "unknown";
 
-    return { intent, rawConfidence: parsed.data.confidence, reasoning: parsed.data.reasoning };
+    return { intent, rawConfidence: parsed.data.confidence, reasoning: parsed.data.reasoning, usage };
   } catch (err) {
     console.error("[REPLIES] Falha na classificação por IA:", (err as Error).message);
-    return { intent: "unknown", rawConfidence: 0, reasoning: "Falha ao consultar o classificador." };
+    // Erro de rede/API — a chamada pode não ter nem saído (sem cobrança) ou
+    // ter falhado depois de cobrar; sem `usage` na exceção do SDK, não dá
+    // pra saber qual dos dois. Tratado como sem custo (o caso mais comum:
+    // timeout, chave inválida, rate limit — nenhum chega a gerar tokens de
+    // saída cobráveis).
+    return { intent: "unknown", rawConfidence: 0, reasoning: "Falha ao consultar o classificador.", usage: null };
   }
 }
