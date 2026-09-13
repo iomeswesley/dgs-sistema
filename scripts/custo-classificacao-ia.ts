@@ -39,6 +39,23 @@ const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
   "claude-opus-5": { input: 5, output: 25 },
 };
 
+// As 5 mensagens de `reasoning` que `classifyReplyWithAI()` devolve quando a
+// chamada NÃO terminou numa decisão real do modelo (sem API key, formato
+// inesperado, recusa, erro de rede) — texto fixo, sempre exatamente igual.
+// Qualquer outro `reasoning` é texto livre gerado pelo modelo de verdade,
+// explicando por que ele mesmo achou a mensagem ambígua/incerta (isso É o
+// comportamento esperado, não falha). Separar os dois é o que decide se um
+// "unknown" foi decisão de verdade ou desperdício de chamada — achado em
+// 2026-09-13: 772/772 chamadas de 08/08 a 01/09 deram "unknown", precisa
+// saber quantas são falha técnica antes de julgar o resultado normal.
+const FAILURE_REASONINGS = new Set([
+  "Classificação por IA desligada.",
+  "Classificação recusada pelo provedor.",
+  "Resposta vazia do classificador.",
+  "Resposta fora do formato esperado.",
+  "Falha ao consultar o classificador.",
+]);
+
 interface DiaResumo {
   data: string;
   chamadas: number;
@@ -47,6 +64,8 @@ interface DiaResumo {
   custoEstimadoUsd: number;
   porModelo: Record<string, { chamadas: number; inputTokens: number; outputTokens: number; custoUsd: number }>;
   porDesfecho: Record<string, number>; // intent final gravado em raw.intent
+  falhaTecnica: number; // reasoning é uma das strings fixas de erro, não decisão do modelo
+  falhaTecnicaPorMotivo: Record<string, number>;
 }
 
 async function main() {
@@ -84,12 +103,15 @@ async function main() {
           custoEstimadoUsd: 0,
           porModelo: {},
           porDesfecho: {},
+          falhaTecnica: 0,
+          falhaTecnicaPorMotivo: {},
         };
         byDay.set(day, resumo);
       }
 
       const raw = m.raw as {
         intent?: string;
+        aiReasoning?: string;
         aiModel?: string;
         aiInputTokens?: number;
         aiOutputTokens?: number;
@@ -98,6 +120,11 @@ async function main() {
       resumo.chamadas++;
       const desfecho = raw?.intent ?? "desconhecido";
       resumo.porDesfecho[desfecho] = (resumo.porDesfecho[desfecho] ?? 0) + 1;
+
+      if (raw?.aiReasoning && FAILURE_REASONINGS.has(raw.aiReasoning)) {
+        resumo.falhaTecnica++;
+        resumo.falhaTecnicaPorMotivo[raw.aiReasoning] = (resumo.falhaTecnicaPorMotivo[raw.aiReasoning] ?? 0) + 1;
+      }
 
       const model = raw?.aiModel;
       const inputTokens = raw?.aiInputTokens;
@@ -122,16 +149,34 @@ async function main() {
     const totalChamadas = dias.reduce((acc, d) => acc + d.chamadas, 0);
     const totalCusto = dias.reduce((acc, d) => acc + d.custoEstimadoUsd, 0);
     const totalSemCusto = dias.reduce((acc, d) => acc + d.semCustoConhecido, 0);
+    const totalFalhaTecnica = dias.reduce((acc, d) => acc + d.falhaTecnica, 0);
+    const falhaTecnicaPorMotivo: Record<string, number> = {};
+    for (const d of dias) {
+      for (const [motivo, n] of Object.entries(d.falhaTecnicaPorMotivo)) {
+        falhaTecnicaPorMotivo[motivo] = (falhaTecnicaPorMotivo[motivo] ?? 0) + n;
+      }
+    }
+
+    const avisos: string[] = [];
+    if (totalSemCusto > 0) {
+      avisos.push(
+        `${totalSemCusto} chamada(s) no período são de antes do fix de 2026-09-13 (não tinham aiModel/aiInputTokens/aiOutputTokens gravados) — contam no volume, mas não entram no custo em $ acima. Custo real do período é maior que totalCustoConhecidoUsd.`
+      );
+    }
+    if (totalFalhaTecnica > 0) {
+      avisos.push(
+        `${totalFalhaTecnica} de ${totalChamadas} chamada(s) (${((totalFalhaTecnica / totalChamadas) * 100).toFixed(1)}%) NÃO terminaram numa decisão real do modelo — falharam tecnicamente antes disso (ver falhaTecnicaPorMotivo). Isso é gasto sem nenhum benefício: a chamada foi cobrada e o resultado caiu em "unknown" por erro, não porque a mensagem era realmente ambígua.`
+      );
+    }
 
     const report = {
       periodo: { de: toBrasiliaDateString(start), ate: toBrasiliaDateString(end) },
       totalChamadasIA: totalChamadas,
       totalCustoConhecidoUsd: Number(totalCusto.toFixed(4)),
       chamadasSemTokenGravado: totalSemCusto,
-      aviso:
-        totalSemCusto > 0
-          ? `${totalSemCusto} chamada(s) no período são de antes do fix de 2026-09-13 (não tinham aiModel/aiInputTokens/aiOutputTokens gravados) — contam no volume, mas não entram no custo em $ acima. Custo real do período é maior que totalCustoConhecidoUsd.`
-          : null,
+      falhaTecnicaTotal: totalFalhaTecnica,
+      falhaTecnicaPorMotivo,
+      avisos,
       porDia: dias,
     };
 
