@@ -61,6 +61,43 @@ export function Callout({
   );
 }
 
+/**
+ * Interruptor deslizante (estilo claro/escuro) — pra ligar/desligar algo
+ * binário sem usar `<select>`/checkbox. Não usa verde (reservado a status
+ * de paciente): estado ligado é `--accent`, igual qualquer outro destaque
+ * do sistema.
+ */
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+      style={{ background: checked ? "var(--accent)" : "var(--ink-faint)" }}
+    >
+      <span
+        aria-hidden
+        className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+        style={{ transform: checked ? "translateX(24px)" : "translateX(4px)" }}
+      />
+    </button>
+  );
+}
+
 export function Field({
   label,
   children,

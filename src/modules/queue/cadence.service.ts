@@ -59,6 +59,10 @@ export async function enqueueReminders(): Promise<CadenceResult> {
       scheduledAt: { gte: tomorrow, lt: dayAfter },
       selectedPhone: { not: null },
       patient: { optedOut: false },
+      // Desde 2026-09-14: lembrete não é mais automático pra toda lista —
+      // só dispara pra quem a equipe ligou explicitamente (ver
+      // `POST /api/lists/:id/reminders`, padrão nasce desligado).
+      list: { remindersEnabled: true },
     },
     select: { id: true, selectedPhone: true },
   });

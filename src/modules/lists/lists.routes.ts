@@ -75,6 +75,7 @@ listsRouter.get(
         sourceFormat: true,
         status: true,
         isComplementary: true,
+        remindersEnabled: true,
         extractionError: true,
         createdAt: true,
         approvedAt: true,
@@ -242,6 +243,7 @@ listsRouter.get(
         mimeType: true,
         sourceFormat: true,
         status: true,
+        remindersEnabled: true,
         extractionError: true,
         extractionRaw: true,
         createdAt: true,
@@ -443,6 +445,41 @@ listsRouter.post(
     runInBackground(extractAndStage(id), (err) =>
       console.error(`[LISTA ${id}] Falha no reprocessamento:`, (err as Error).message)
     );
+  })
+);
+
+const remindersSchema = z.object({ enabled: z.boolean() });
+
+/**
+ * Liga/desliga o lembrete D-1 desta lista específica — desde 2026-09-14 o
+ * padrão é desligado (`remindersEnabled: false` na criação), decisão do
+ * usuário depois de um caso de sobreposição de agenda em duas listas na
+ * mesma unidade/dia: nem toda lista deve mandar lembrete sozinha, precisa
+ * ser escolha explícita da equipe. `enqueueReminders()` (cadence.service.ts)
+ * só cria job pra agendamento cuja lista está com isso ligado. A
+ * confirmação (pop-up) de "quer mesmo ligar?" é responsabilidade do
+ * frontend — aqui só grava e audita.
+ */
+listsRouter.post(
+  "/api/lists/:id/reminders",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const data = parseBody(req, remindersSchema);
+    const list = await prisma.list.findUnique({ where: { id }, select: { remindersEnabled: true } });
+    if (!list) throw new AppError("Lista não encontrada", 404);
+
+    await prisma.list.update({ where: { id }, data: { remindersEnabled: data.enabled } });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: data.enabled ? "enable_reminders" : "disable_reminders",
+      entity: "List",
+      entityId: id,
+      field: "remindersEnabled",
+      oldValue: list.remindersEnabled,
+      newValue: data.enabled,
+    });
+
+    res.json({ ok: true, remindersEnabled: data.enabled });
   })
 );
 

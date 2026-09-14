@@ -4,7 +4,7 @@ import { EmptyState, PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
 import { CANCELLATION_SEGMENTS, StatusBand } from "../components/StatusBand";
-import { ErrorNote, Field, Spinner } from "../components/ui";
+import { ErrorNote, Field, Spinner, Switch } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatCalendarDate, formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
@@ -16,6 +16,7 @@ interface ListSummary {
   status: string;
   sourceFormat: string;
   isComplementary: boolean;
+  remindersEnabled: boolean;
   extractionError: string | null;
   createdAt: string;
   municipality: { id: number; name: string };
@@ -121,6 +122,10 @@ export function Listas() {
   // Excluir lista: só antes do disparo (o backend recusa depois — mensagem
   // real já foi pro paciente, e apagar derrubaria histórico/indicadores).
   const [removing, setRemoving] = useState<ListSummary | null>(null);
+  // Lembrete D-1 nasce desligado por lista (2026-09-14) — ligar pede
+  // confirmação (`confirmingReminders`), desligar não.
+  const [confirmingReminders, setConfirmingReminders] = useState<ListSummary | null>(null);
+  const [remindersBusy, setRemindersBusy] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
 
   // Filtro da listagem — pedido do usuário em 2026-09-03: com dezenas de
@@ -385,6 +390,24 @@ export function Listas() {
       setRemoving(null);
     } finally {
       setRemoveBusy(false);
+    }
+  }
+
+  async function setReminders(listId: number, enabled: boolean) {
+    setRemindersBusy(true);
+    setError(null);
+    try {
+      await api.post(`/api/lists/${listId}/reminders`, { enabled });
+      lists.setData((prev) =>
+        prev
+          ? { ...prev, lists: prev.lists.map((l) => (l.id === listId ? { ...l, remindersEnabled: enabled } : l)) }
+          : prev
+      );
+      setConfirmingReminders(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao mudar o lembrete.");
+    } finally {
+      setRemindersBusy(false);
     }
   }
 
@@ -787,7 +810,23 @@ export function Listas() {
                     {list.uploadedBy.name} em {formatDate(list.createdAt)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-3">
+                  <span
+                    className="flex items-center gap-1.5"
+                    title={list.remindersEnabled ? "Lembrete D-1 ligado nesta lista" : "Lembrete D-1 desligado nesta lista"}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                  >
+                    <span className="text-xs text-ink-muted">Lembrete</span>
+                    <Switch
+                      checked={list.remindersEnabled}
+                      disabled={remindersBusy}
+                      label={`Lembrete D-1 da lista ${list.originalName}`}
+                      onChange={(next) => (next ? setConfirmingReminders(list) : void setReminders(list.id, false))}
+                    />
+                  </span>
                   <span className="eyebrow">{LIST_STATUS_LABEL[list.status] ?? list.status}</span>
                   {canDelete && (
                     <button
@@ -847,6 +886,20 @@ export function Listas() {
         busy={removeBusy}
         onConfirm={handleRemove}
         onCancel={() => setRemoving(null)}
+      />
+
+      <ConfirmModal
+        open={confirmingReminders !== null}
+        title="Ligar o lembrete de véspera desta lista?"
+        description={
+          confirmingReminders
+            ? `Quem confirmou presença em "${confirmingReminders.originalName}" passa a receber uma mensagem no dia anterior à consulta, com o preparo do exame. Vale só para esta lista.`
+            : ""
+        }
+        confirmLabel="Ligar lembrete"
+        busy={remindersBusy}
+        onConfirm={() => confirmingReminders && void setReminders(confirmingReminders.id, true)}
+        onCancel={() => setConfirmingReminders(null)}
       />
     </>
   );

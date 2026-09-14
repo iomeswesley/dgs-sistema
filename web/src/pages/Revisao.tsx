@@ -5,7 +5,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
 import { PatientConversationModal } from "../components/PatientConversationModal";
 import { StatusBand } from "../components/StatusBand";
-import { Callout, ErrorNote, Field, Spinner, StatusPill, Table, Td, Th } from "../components/ui";
+import { Callout, ErrorNote, Field, Spinner, StatusPill, Switch, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatDateTime, formatPhone, LIST_STATUS_LABEL, STATUS_LABEL, toBandCounts } from "../lib/format";
@@ -114,6 +114,7 @@ interface ListDetail {
     mimeType: string;
     sourceFormat: string;
     status: string;
+    remindersEnabled: boolean;
     extractionError: string | null;
     municipality: { id: number; name: string };
     agenda: { id: number; date: string; unit: { id: number; name: string; address: string | null } | null } | null;
@@ -246,6 +247,10 @@ export function Revisao() {
   // unidade/endereço acusa algum problema — força a equipe a olhar em vez
   // de só clicar "aprovar" sem reparar no aviso.
   const [unitConfirmed, setUnitConfirmed] = useState(false);
+  // Lembrete D-1 nasce desligado por lista (pedido do usuário em
+  // 2026-09-14) — ligar exige confirmação explícita, desligar não.
+  const [confirmReminders, setConfirmReminders] = useState(false);
+  const [remindersBusy, setRemindersBusy] = useState(false);
 
   // Enquanto a extração roda em segundo plano (EXTRAINDO), o status só muda
   // sozinho no banco — sem isso a tela ficava presa até a equipe apertar F5.
@@ -740,6 +745,26 @@ export function Revisao() {
     }
   }
 
+  /**
+   * Liga/desliga o lembrete D-1 desta lista. Desligar é reversível e sem
+   * consequência imediata (só evita um envio futuro) — some direto.
+   * Ligar abre confirmação (`confirmReminders`), porque é o que dispara
+   * WhatsApp de verdade pra véspera da consulta.
+   */
+  async function setReminders(enabled: boolean) {
+    setRemindersBusy(true);
+    setError(null);
+    try {
+      await api.post(`/api/lists/${list.id}/reminders`, { enabled });
+      detail.setData((prev) => (prev ? { ...prev, list: { ...prev.list, remindersEnabled: enabled } } : prev));
+      setConfirmReminders(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao mudar o lembrete.");
+    } finally {
+      setRemindersBusy(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -826,6 +851,23 @@ export function Revisao() {
           </div>
         }
       />
+
+      <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-sm font-semibold text-ink">Lembrete D-1 (véspera)</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            {list.remindersEnabled
+              ? "Ligado — quem confirmou recebe o lembrete no dia anterior à consulta."
+              : "Desligado — ninguém desta lista recebe lembrete de véspera até ser ligado aqui."}
+          </p>
+        </div>
+        <Switch
+          checked={list.remindersEnabled}
+          disabled={remindersBusy}
+          label="Lembrete D-1 desta lista"
+          onChange={(next) => (next ? setConfirmReminders(true) : void setReminders(false))}
+        />
+      </div>
 
       {notice && (
         <div className="mb-4">
@@ -1302,6 +1344,16 @@ export function Revisao() {
         busy={busy}
         onConfirm={handleRemove}
         onCancel={() => setRemoving(null)}
+      />
+
+      <ConfirmModal
+        open={confirmReminders}
+        title="Ligar o lembrete de véspera desta lista?"
+        description="Quem confirmou presença passa a receber uma mensagem no dia anterior à consulta, com o preparo do exame. Vale só para esta lista."
+        confirmLabel="Ligar lembrete"
+        busy={remindersBusy}
+        onConfirm={() => void setReminders(true)}
+        onCancel={() => setConfirmReminders(false)}
       />
 
       <ConfirmModal

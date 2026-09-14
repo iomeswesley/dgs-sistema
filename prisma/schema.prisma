@@ -336,6 +336,12 @@ model List {
   // Lista complementar enviada pra preencher vagas abertas de uma agenda que
   // já teve disparo (fase 2).
   isComplementary Boolean      @default(false)
+  // Lembrete D-1 (véspera) — desligado por padrão desde 2026-09-14 (pedido
+  // do usuário: nem toda lista quer o lembrete automático, precisa ser uma
+  // decisão explícita por lista, com confirmação, não um comportamento
+  // ligado sozinho). `enqueueReminders()` (cadence.service.ts) só cria job
+  // de LEMBRETE pra agendamento cuja lista tem isso `true`.
+  remindersEnabled Boolean     @default(false)
   // Resposta bruta da extração da IA, guardada pra auditoria e pra
   // reprocessar sem precisar reler o arquivo.
   extractionRaw   Json?
