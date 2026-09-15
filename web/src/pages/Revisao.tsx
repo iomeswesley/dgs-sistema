@@ -749,15 +749,34 @@ export function Revisao() {
    * Liga/desliga o lembrete D-1 desta lista. Desligar é reversível e sem
    * consequência imediata (só evita um envio futuro) — some direto.
    * Ligar abre confirmação (`confirmReminders`), porque é o que dispara
-   * WhatsApp de verdade pra véspera da consulta.
+   * WhatsApp de verdade pra véspera da consulta — e já sai na hora (ver
+   * comentário no backend, achado de 2026-09-14: esperar o cron do dia
+   * seguinte perderia a janela pra quem tem consulta amanhã).
    */
   async function setReminders(enabled: boolean) {
     setRemindersBusy(true);
     setError(null);
     try {
-      await api.post(`/api/lists/${list.id}/reminders`, { enabled });
+      const result = await api.post<{ dispatched: { queued: number; sent: number; failed: number } | null }>(
+        `/api/lists/${list.id}/reminders`,
+        { enabled }
+      );
       detail.setData((prev) => (prev ? { ...prev, list: { ...prev.list, remindersEnabled: enabled } } : prev));
       setConfirmReminders(false);
+
+      if (enabled && result.dispatched) {
+        let sent = result.dispatched.sent;
+        let failed = result.dispatched.failed;
+        setNotice(`Lembrete ligado. ${sent} enviados até agora, ${failed} falharam. Enviando o restante...`);
+        const finished = await runQueueUntilDone((progress) => {
+          sent = result.dispatched!.sent + progress.sent;
+          failed = result.dispatched!.failed + progress.failed;
+          setNotice(`Lembrete ligado. ${sent} enviados até agora, ${failed} falharam. Enviando o restante...`);
+        });
+        sent = result.dispatched.sent + finished.sent;
+        failed = result.dispatched.failed + finished.failed;
+        setNotice(`Lembrete ligado. ${sent} lembretes enviados${failed > 0 ? `, ${failed} falharam` : ""}.`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao mudar o lembrete.");
     } finally {

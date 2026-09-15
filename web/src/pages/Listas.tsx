@@ -4,11 +4,12 @@ import { EmptyState, PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
 import { CANCELLATION_SEGMENTS, StatusBand } from "../components/StatusBand";
-import { ErrorNote, Field, Spinner, Switch } from "../components/ui";
+import { Callout, ErrorNote, Field, Spinner, Switch } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatCalendarDate, formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
 import { fileToBase64 } from "../lib/file";
+import { runQueueUntilDone } from "../lib/queue";
 
 interface ListSummary {
   id: number;
@@ -126,6 +127,7 @@ export function Listas() {
   // confirmação (`confirmingReminders`), desligar não.
   const [confirmingReminders, setConfirmingReminders] = useState<ListSummary | null>(null);
   const [remindersBusy, setRemindersBusy] = useState(false);
+  const [remindersNotice, setRemindersNotice] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
 
   // Filtro da listagem — pedido do usuário em 2026-09-03: com dezenas de
@@ -396,14 +398,38 @@ export function Listas() {
   async function setReminders(listId: number, enabled: boolean) {
     setRemindersBusy(true);
     setError(null);
+    setRemindersNotice(null);
     try {
-      await api.post(`/api/lists/${listId}/reminders`, { enabled });
+      const result = await api.post<{ dispatched: { queued: number; sent: number; failed: number } | null }>(
+        `/api/lists/${listId}/reminders`,
+        { enabled }
+      );
       lists.setData((prev) =>
         prev
           ? { ...prev, lists: prev.lists.map((l) => (l.id === listId ? { ...l, remindersEnabled: enabled } : l)) }
           : prev
       );
       setConfirmingReminders(null);
+
+      // Ligar já dispara na hora (ver comentário no backend) — o navegador
+      // termina o envio de verdade em requisições separadas, mesmo padrão
+      // de "Disparar confirmações", pra não depender do limite de tempo de
+      // uma chamada só nem do cron do dia seguinte.
+      if (enabled && result.dispatched) {
+        let sent = result.dispatched.sent;
+        let failed = result.dispatched.failed;
+        setRemindersNotice(`Lembrete ligado. ${sent} enviados até agora, ${failed} falharam. Enviando o restante...`);
+        const finished = await runQueueUntilDone((progress) => {
+          sent = result.dispatched!.sent + progress.sent;
+          failed = result.dispatched!.failed + progress.failed;
+          setRemindersNotice(`Lembrete ligado. ${sent} enviados até agora, ${failed} falharam. Enviando o restante...`);
+        });
+        sent = result.dispatched.sent + finished.sent;
+        failed = result.dispatched.failed + finished.failed;
+        setRemindersNotice(
+          `Lembrete ligado. ${sent} lembretes enviados${failed > 0 ? `, ${failed} falharam` : ""}.`
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao mudar o lembrete.");
     } finally {
@@ -681,6 +707,12 @@ export function Listas() {
           </Field>
         </div>
       </FormModal>
+
+      {remindersNotice && (
+        <div className="mb-4">
+          <Callout>{remindersNotice}</Callout>
+        </div>
+      )}
 
       {lists.loading && <Spinner />}
       {lists.error && <ErrorNote message={lists.error} />}

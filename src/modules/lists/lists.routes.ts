@@ -23,6 +23,7 @@ import {
 } from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
+import { enqueueReminders } from "@/modules/queue/cadence.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import {
@@ -459,6 +460,17 @@ const remindersSchema = z.object({ enabled: z.boolean() });
  * só cria job pra agendamento cuja lista está com isso ligado. A
  * confirmação (pop-up) de "quer mesmo ligar?" é responsabilidade do
  * frontend — aqui só grava e audita.
+ *
+ * Ao LIGAR, dispara a cadência de lembrete na hora (mesma lógica do cron,
+ * `enqueueReminders()` + `processQueue()`) em vez de só marcar o campo e
+ * esperar o cron do dia seguinte — achado real em 2026-09-14: o cron roda
+ * 1x/dia às 7h de Brasília; ligar o toggle depois desse horário deixava a
+ * mensagem de véspera sem sair no dia certo (o próximo cron automático já
+ * calcula "amanhã" relativo ao dia seguinte, nunca mais alcança essa
+ * consulta). Roda pra TODAS as listas ligadas, não só esta (mesma
+ * convenção de "cadência dispara globalmente" já documentada em
+ * `run-cadence`) — inofensivo, `enqueueReminders()` já pula quem já foi
+ * lembrado. Ao DESLIGAR não dispara nada, só grava.
  */
 listsRouter.post(
   "/api/lists/:id/reminders",
@@ -479,7 +491,14 @@ listsRouter.post(
       newValue: data.enabled,
     });
 
-    res.json({ ok: true, remindersEnabled: data.enabled });
+    let dispatched: { queued: number; sent: number; failed: number } | null = null;
+    if (data.enabled) {
+      const reminders = await enqueueReminders();
+      const processed = await processQueue();
+      dispatched = { queued: reminders.queued, sent: processed.sent, failed: processed.failed };
+    }
+
+    res.json({ ok: true, remindersEnabled: data.enabled, dispatched });
   })
 );
 
