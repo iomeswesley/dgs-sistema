@@ -14,6 +14,12 @@ describe("detectFormat", () => {
     expect(detectFormat("PROPRIEDADES DA AGENDA\n...")).toBe("SISREG");
   });
 
+  it("reconhece TABULAR pelo cabeçalho da tabela, mesmo com a palavra SISREG na primeira coluna", () => {
+    expect(
+      detectFormat("SISREG Nome Data nasc. Telefone Procedimento Data Horário Observação\n...")
+    ).toBe("TABULAR");
+  });
+
   it("devolve OUTRO quando não bate com nenhum formato conhecido", () => {
     expect(detectFormat("um relatório qualquer de outro sistema")).toBe("OUTRO");
   });

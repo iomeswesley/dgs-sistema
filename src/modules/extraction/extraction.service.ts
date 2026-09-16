@@ -2,6 +2,7 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { detectFormat } from "./parsers/detect.js";
 import { parseCelk } from "./parsers/celk.js";
 import { parseSisreg } from "./parsers/sisreg.js";
+import { parseTabular } from "./parsers/tabular.js";
 import { extractionResultSchema, type ExtractionResult } from "./extraction.schema.js";
 
 /*
@@ -75,18 +76,20 @@ export async function extractList(
       ? parseCelk(text)
       : format === "SISREG"
         ? parseSisreg(text)
-        : {
-            sourceFormat: "OUTRO",
-            municipality: null,
-            executingUnit: null,
-            doctor: null,
-            procedure: null,
-            rows: [],
-            warnings: [
-              "Formato do arquivo não reconhecido (não é SISREG nem CELK). Cadastre os agendamentos manualmente nesta lista.",
-            ],
-            unrecognized: [],
-          };
+        : format === "TABULAR"
+          ? parseTabular(text)
+          : {
+              sourceFormat: "OUTRO",
+              municipality: null,
+              executingUnit: null,
+              doctor: null,
+              procedure: null,
+              rows: [],
+              warnings: [
+                "Formato do arquivo não reconhecido (não é SISREG, CELK nem tabular). Cadastre os agendamentos manualmente nesta lista.",
+              ],
+              unrecognized: [],
+            };
 
   const validated = extractionResultSchema.safeParse(result);
   if (!validated.success) {

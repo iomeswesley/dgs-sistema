@@ -53,7 +53,7 @@ export const unrecognizedGuessSchema = z.object({
 
 export const extractionResultSchema = z.object({
   /** Sistema de origem reconhecido pelo layout. */
-  sourceFormat: z.enum(["SISREG", "CELK", "OUTRO"]),
+  sourceFormat: z.enum(["SISREG", "CELK", "TABULAR", "OUTRO"]),
   /** Município/prefeitura, quando identificável no documento. */
   municipality: z.string().nullable(),
   /** Unidade onde o atendimento acontece. */

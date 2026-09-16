@@ -763,6 +763,12 @@ enum Shift {
 enum SourceFormat {
   SISREG
   CELK
+  // Exportação "limpa": uma linha de texto por paciente (código, nome,
+  // nascimento, telefone, procedimento, data, horário), sem o cabeçalho de
+  // agenda nem a fragmentação multi-linha do SISREG de verdade. Achado
+  // pela primeira vez em 2026-09-16 (lista de Botuverá) — pode reaparecer
+  // com outras prefeituras/relatórios no mesmo estilo.
+  TABULAR
   OUTRO
 }
 
