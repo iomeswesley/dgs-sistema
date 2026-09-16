@@ -56,6 +56,27 @@ export async function extractAndStage(listId: number): Promise<void> {
     const doctorCheck = await checkDoctorMatch(list.agendaId, mapped.doctor);
     result.warnings = [...result.warnings, ...unitCheckWarnings(unitCheck), ...doctorCheckWarnings(doctorCheck)];
 
+    // "sem_medico" (em `mapRow()`, `extraction.mapper.ts`) só sabe se o
+    // TEXTO do arquivo trouxe um nome de médico — não sabe nada de Agenda.
+    // Quando a lista já está vinculada a uma Agenda, o médico do
+    // agendamento vem sempre dela (`resolveCatalog()`, nunca do texto) —
+    // então o aviso fica falso-positivo em qualquer formato que nunca leia
+    // médico nenhum (TABULAR, achado real: lista de Pomerode 2026-09-16,
+    // TODAS as linhas mostravam "sem médico" em Revisão com o médico certo
+    // já vinculado pela agenda, confundindo a equipe). Some o aviso aqui,
+    // depois que o texto já virou avisos gerais acima — nunca mexe em
+    // `readyToSend` pra outros motivos, só remove esse quando ele é
+    // comprovadamente falso.
+    if (doctorCheck.agendaDoctorId !== null) {
+      for (const draft of mapped.drafts) {
+        const idx = draft.issues.indexOf("sem_medico");
+        if (idx !== -1) {
+          draft.issues.splice(idx, 1);
+          draft.readyToSend = draft.issues.length === 0;
+        }
+      }
+    }
+
     await prisma.$transaction(
       async (tx) => {
         // Reprocessamento apaga os rascunhos anteriores — só é permitido
