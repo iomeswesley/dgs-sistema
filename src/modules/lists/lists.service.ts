@@ -5,12 +5,14 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { extractList } from "@/modules/extraction/extraction.service.js";
 import { mapExtraction, type AppointmentDraft } from "@/modules/extraction/extraction.mapper.js";
 import { describePhoneIssue, normalizePhoneList } from "@/lib/phone.js";
-import { namesMatch } from "@/lib/text-match.js";
+import { namesMatch, findClosestMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
-import { parseBrasiliaDateTime } from "@/lib/timezone.js";
+import { parseBrasiliaDateTime, toBrasiliaDateString } from "@/lib/timezone.js";
 import { buildTemplateParams } from "@/modules/queue/queue.service.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
+import { readPdfText } from "@/lib/pdf-text.js";
+import { parseScheduleReference } from "@/lib/schedule-reference.js";
 
 /*
   Ciclo de vida de uma lista:
@@ -858,7 +860,7 @@ export async function retryFailedAppointments(
   listId: number,
   updates: RetryFailedUpdate[],
   userId: number
-): Promise<{ queued: number }> {
+): Promise<{ queued: number; corrected: number }> {
   if (updates.length === 0) throw new AppError("Nenhum telefone informado pra reenviar.", 400);
 
   const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true } });
@@ -871,6 +873,7 @@ export async function retryFailedAppointments(
   const byId = new Map(appointments.map((a) => [a.id, a]));
 
   let queued = 0;
+  let corrected = 0;
   for (const update of updates) {
     const appointment = byId.get(update.appointmentId);
     if (!appointment) continue; // não pertence a essa lista — ignora em silêncio
@@ -881,6 +884,46 @@ export async function retryFailedAppointments(
     }
     if (normalized.kind !== "mobile") {
       throw new AppError(`Telefone do agendamento ${update.appointmentId}: só celular recebe WhatsApp.`, 400);
+    }
+
+    // Bug sério achado em produção em 2026-09-15: esta função sempre
+    // resetava `status` pra PENDENTE e criava o job, mesmo quando esse
+    // TEMPLATE já tinha sido entregue com sucesso antes (pra outro
+    // telefone) — `processQueue()` tem uma trava (pedida pelo usuário em
+    // 2026-09-01) que NUNCA manda o mesmo template duas vezes pro mesmo
+    // agendamento, então esse job novo sempre acabava cancelado como
+    // "Duplicado" silenciosamente, MAS o reset de `status`/`selectedPhone`
+    // já tinha acontecido antes disso, e nada desfazia. Resultado real:
+    // agendamento com confirmação JÁ ENTREGUE voltava a aparecer como
+    // "Pendente" pra sempre (escondendo indicador/situação real), com
+    // `selectedPhone` apontando pra um número que nunca recebeu nada de
+    // verdade — inclusive fazendo a resposta de um paciente (recusa real,
+    // 14/09) nunca aplicar sozinha, porque PENDENTE não é um status "em
+    // aberto" pra fins de casar resposta (ver `findAppointmentForPhone`).
+    // Corrigido: confere ANTES de mexer em qualquer coisa se esse template
+    // já foi entregue — se sim, só corrige o telefone de contato (útil pra
+    // LEMBRETE futuro e pra abrir a conversa certa), sem reenviar a mesma
+    // pergunta de novo (regra de 2026-09-01) nem mexer no status real.
+    const alreadyDelivered = await prisma.whatsappMessage.findFirst({
+      where: {
+        appointmentId: appointment.id,
+        template,
+        direction: "ENVIADA",
+        status: { in: ["ENVIADO", "ENTREGUE", "LIDO"] },
+      },
+      select: { id: true },
+    });
+
+    if (alreadyDelivered) {
+      await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: {
+          selectedPhone: normalized.e164,
+          rawLine: clearResolvedIssues(appointment.rawLine, { selectedPhone: normalized.e164 }),
+        },
+      });
+      corrected++;
+      continue;
     }
 
     await prisma.$transaction([
@@ -915,10 +958,10 @@ export async function retryFailedAppointments(
     action: "retry_failed",
     entity: "List",
     entityId: listId,
-    metadata: { queued, appointmentIds: updates.map((u) => u.appointmentId) },
+    metadata: { queued, corrected, appointmentIds: updates.map((u) => u.appointmentId) },
   });
 
-  return { queued };
+  return { queued, corrected };
 }
 
 /**
@@ -1112,4 +1155,158 @@ export async function deleteList(listId: number, userId: number): Promise<void> 
     oldValue: `${list.originalName} (${list.status})`,
   });
   await prisma.list.delete({ where: { id: listId } });
+}
+
+export interface ScheduleReferenceMatch {
+  appointmentId: number;
+  patientName: string;
+  oldScheduledAt: string;
+  newScheduledAt: string;
+  referenceName: string;
+}
+
+export interface ScheduleReferencePreview {
+  matches: ScheduleReferenceMatch[];
+  /** Nomes lidos no PDF de referência sem paciente correspondente na lista. */
+  unmatchedReference: string[];
+  /** Pacientes da lista sem nenhuma linha correspondente no PDF de referência. */
+  unmatchedAppointments: string[];
+  /** true se a lista já foi disparada — aplicar vai avisar cada paciente casado, não só corrigir o banco em silêncio. */
+  listAlreadyDispatched: boolean;
+}
+
+/**
+ * Lê um PDF nativo de uma segunda fonte (ex.: sistema do laboratório) com o
+ * horário real de cada paciente, casa por nome contra os agendamentos desta
+ * lista e devolve a prévia — não grava nada. Pedido do usuário em
+ * 2026-09-16: casos onde o SISREG só deu horário bucketizado (07:00/13:00)
+ * em vez do horário individual de cada um. Ver `applyScheduleReference()`
+ * pra gravar de verdade depois de a equipe conferir a prévia.
+ */
+export async function previewScheduleReference(listId: number, file: Buffer): Promise<ScheduleReferencePreview> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+
+  const text = await readPdfText(file);
+  if (!text.trim()) {
+    throw new AppError(
+      "Esse PDF não tem texto legível (parece ser um arquivo escaneado/foto) — não dá pra ler automaticamente. Peça um PDF nativo (com texto selecionável) pra essa fonte.",
+      400
+    );
+  }
+
+  const referenceRows = parseScheduleReference(text);
+  if (referenceRows.length === 0) {
+    throw new AppError(
+      "Não encontrei nenhuma linha com nome + horário nesse PDF. Confira se é o arquivo certo.",
+      400
+    );
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: { listId },
+    select: { id: true, scheduledAt: true, patient: { select: { name: true } } },
+  });
+
+  const used = new Set<number>();
+  const matches: ScheduleReferenceMatch[] = [];
+  const unmatchedReference: string[] = [];
+
+  for (const row of referenceRows) {
+    const available = appointments.filter((appointment) => !used.has(appointment.id));
+    const chosen = findClosestMatch(row.name, available, (appointment) => appointment.patient.name);
+    if (!chosen) {
+      unmatchedReference.push(row.name);
+      continue;
+    }
+    used.add(chosen.id);
+    const dateStr = toBrasiliaDateString(chosen.scheduledAt);
+    const newScheduledAt = parseBrasiliaDateTime(`${dateStr}T${row.time}:00`);
+    matches.push({
+      appointmentId: chosen.id,
+      patientName: chosen.patient.name,
+      oldScheduledAt: chosen.scheduledAt.toISOString(),
+      newScheduledAt: newScheduledAt.toISOString(),
+      referenceName: row.name,
+    });
+  }
+
+  const unmatchedAppointments = appointments
+    .filter((appointment) => !used.has(appointment.id))
+    .map((appointment) => appointment.patient.name);
+
+  return {
+    matches,
+    unmatchedReference,
+    unmatchedAppointments,
+    listAlreadyDispatched: list.status === "DISPARADA" || list.status === "CONCLUIDA",
+  };
+}
+
+export interface ScheduleReferenceApplyResult {
+  updatedDirect: number;
+  rescheduledWithNotice: number;
+  failed: Array<{ patientName: string; reason: string }>;
+}
+
+/**
+ * Grava as correções confirmadas pela equipe na prévia. Lista ainda não
+ * disparada: `UPDATE` direto (silencioso, sem nenhum paciente avisado
+ * ainda). Lista já disparada: cada agendamento passa por
+ * `rescheduleAppointment()` — o mesmo caminho do botão "Reagendar" — porque
+ * a mensagem original já saiu errada, corrigir o banco sem avisar deixaria
+ * o paciente sem saber do horário certo.
+ */
+export async function applyScheduleReference(
+  listId: number,
+  matches: ScheduleReferenceMatch[],
+  userId: number
+): Promise<ScheduleReferenceApplyResult> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+
+  const dispatched = list.status === "DISPARADA" || list.status === "CONCLUIDA";
+  const result: ScheduleReferenceApplyResult = { updatedDirect: 0, rescheduledWithNotice: 0, failed: [] };
+
+  for (const match of matches) {
+    try {
+      if (dispatched) {
+        await rescheduleAppointment(listId, match.appointmentId, match.newScheduledAt, userId);
+        result.rescheduledWithNotice++;
+      } else {
+        const appointment = await prisma.appointment.findUnique({ where: { id: match.appointmentId } });
+        if (!appointment || appointment.listId !== listId) {
+          throw new AppError("Agendamento não encontrado nesta lista", 404);
+        }
+        await prisma.appointment.update({
+          where: { id: match.appointmentId },
+          data: {
+            scheduledAt: new Date(match.newScheduledAt),
+            manuallyEdited: true,
+            rawLine: clearResolvedIssues(appointment.rawLine, { scheduledAt: match.newScheduledAt }),
+          },
+        });
+        result.updatedDirect++;
+      }
+    } catch (err) {
+      result.failed.push({
+        patientName: match.patientName,
+        reason: err instanceof AppError ? err.message : "Falha inesperada ao atualizar.",
+      });
+    }
+  }
+
+  await recordAudit({
+    userId,
+    action: "schedule_reference_apply",
+    entity: "List",
+    entityId: listId,
+    metadata: {
+      updatedDirect: result.updatedDirect,
+      rescheduledWithNotice: result.rescheduledWithNotice,
+      failed: result.failed.length,
+    },
+  });
+
+  return result;
 }

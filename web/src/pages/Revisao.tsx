@@ -107,6 +107,21 @@ interface MessagePreview {
   totalPatients: number;
 }
 
+interface ScheduleReferenceMatch {
+  appointmentId: number;
+  patientName: string;
+  oldScheduledAt: string;
+  newScheduledAt: string;
+  referenceName: string;
+}
+
+interface ScheduleReferencePreview {
+  matches: ScheduleReferenceMatch[];
+  unmatchedReference: string[];
+  unmatchedAppointments: string[];
+  listAlreadyDispatched: boolean;
+}
+
 interface ListDetail {
   list: {
     id: number;
@@ -231,6 +246,18 @@ export function Revisao() {
   const [importBusy, setImportBusy] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  // "Atualizar horários por lista de referência" — pedido do usuário em
+  // 2026-09-16: quando o SISREG só deu horário bucketizado (todo mundo da
+  // manhã em 07:00, todo mundo da tarde em 13:00) em vez do horário
+  // individual real, sobe um PDF de uma segunda fonte (ex.: sistema do
+  // laboratório) com o horário certo, casa por nome, mostra a prévia
+  // (quem casou, quem não casou) e só grava depois de confirmar.
+  const scheduleRefInputRef = useRef<HTMLInputElement>(null);
+  const [scheduleRefBusy, setScheduleRefBusy] = useState(false);
+  const [scheduleRefError, setScheduleRefError] = useState<string | null>(null);
+  const [scheduleRefPreview, setScheduleRefPreview] = useState<ScheduleReferencePreview | null>(null);
+  const [scheduleRefApplying, setScheduleRefApplying] = useState(false);
+  const [scheduleRefNotice, setScheduleRefNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<{ name: string; phone: string; scheduledAt: string }>({
     name: "",
@@ -348,15 +375,28 @@ export function Revisao() {
     setRetryBusy(true);
     setRetryError(null);
     try {
-      const result = await api.post<{ queued: number }>(`/api/lists/${list.id}/retry-failed`, { updates });
-      setRetryOpen(false);
-      setRetryNotice(`Reenviando pra ${result.queued} paciente(s)...`);
-      const finished = await runQueueUntilDone(({ sent, failed }) => {
-        setRetryNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.`);
+      const result = await api.post<{ queued: number; corrected: number }>(`/api/lists/${list.id}/retry-failed`, {
+        updates,
       });
-      setRetryNotice(
-        `Reenvio concluído — ${finished.sent} enviada(s)` + (finished.failed > 0 ? `, ${finished.failed} falharam` : "") + "."
-      );
+      setRetryOpen(false);
+      const correctedNote =
+        result.corrected > 0
+          ? ` ${result.corrected} já tinha sido entregue antes — só o telefone de contato foi corrigido, sem reenviar a mesma pergunta.`
+          : "";
+      if (result.queued === 0) {
+        setRetryNotice(`Nenhuma mensagem nova pra reenviar.${correctedNote}`);
+      } else {
+        setRetryNotice(`Reenviando pra ${result.queued} paciente(s)...${correctedNote}`);
+        const finished = await runQueueUntilDone(({ sent, failed }) => {
+          setRetryNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.${correctedNote}`);
+        });
+        setRetryNotice(
+          `Reenvio concluído — ${finished.sent} enviada(s)` +
+            (finished.failed > 0 ? `, ${finished.failed} falharam` : "") +
+            "." +
+            correctedNote
+        );
+      }
       detail.reload();
     } catch (err) {
       setRetryError(err instanceof Error ? err.message : "Falha ao reenviar.");
@@ -385,10 +425,19 @@ export function Revisao() {
     setQuickFixBusy(true);
     setQuickFixError(null);
     try {
-      const result = await api.post<{ queued: number }>(`/api/lists/${list.id}/retry-failed`, {
+      const result = await api.post<{ queued: number; corrected: number }>(`/api/lists/${list.id}/retry-failed`, {
         updates: [{ appointmentId: quickFixTarget.id, phone: quickFixPhone.trim() }],
       });
       setQuickFixTarget(null);
+      if (result.corrected > 0) {
+        // A confirmação já tinha sido entregue (pra outro telefone) — só o
+        // cadastro de contato foi atualizado, sem mandar a mesma pergunta
+        // de novo (não reenviamos o mesmo template duas vezes pro mesmo
+        // agendamento, ver comentário no backend).
+        setRetryNotice("Telefone corrigido. A confirmação já tinha sido entregue antes — não reenviamos a mesma pergunta de novo.");
+        detail.reload();
+        return;
+      }
       setRetryNotice(`Telefone corrigido — reenviando pra ${result.queued} paciente(s)...`);
       const finished = await runQueueUntilDone(({ sent, failed }) => {
         setRetryNotice(`Reenviando... ${sent} enviada(s), ${failed} falharam.`);
@@ -542,6 +591,71 @@ export function Revisao() {
       setImportError(err instanceof Error ? err.message : "Falha ao importar o PDF.");
     } finally {
       setImportBusy(false);
+    }
+  }
+
+  /**
+   * "Atualizar horários por lista de referência" — sobe um PDF nativo de
+   * outra fonte com o horário certo de cada paciente, o backend lê e casa
+   * por nome, e mostra a prévia (nada é gravado ainda). Ver `confirmScheduleReference`.
+   */
+  async function handleScheduleReferenceFile(file: File) {
+    setScheduleRefBusy(true);
+    setScheduleRefError(null);
+    setScheduleRefPreview(null);
+    setScheduleRefNotice(null);
+    try {
+      const preview = await api.post<ScheduleReferencePreview>(`/api/lists/${list.id}/schedule-reference/preview`, {
+        mimeType: file.type || "application/pdf",
+        fileBase64: await fileToBase64(file),
+      });
+      setScheduleRefPreview(preview);
+    } catch (err) {
+      setScheduleRefError(err instanceof Error ? err.message : "Falha ao ler o PDF de referência.");
+    } finally {
+      setScheduleRefBusy(false);
+    }
+  }
+
+  /**
+   * Grava as correções confirmadas na prévia. Lista já disparada: cada
+   * paciente casado recebe o aviso de reagendamento de verdade (mesmo
+   * template do botão "Reagendar"), por isso avisa antes de confirmar.
+   */
+  async function confirmScheduleReference() {
+    if (!scheduleRefPreview || scheduleRefPreview.matches.length === 0) return;
+    setScheduleRefApplying(true);
+    setScheduleRefError(null);
+    try {
+      const result = await api.post<{ updatedDirect: number; rescheduledWithNotice: number; failed: Array<{ patientName: string; reason: string }> }>(
+        `/api/lists/${list.id}/schedule-reference/apply`,
+        { matches: scheduleRefPreview.matches }
+      );
+      const directNote = result.updatedDirect > 0 ? `${result.updatedDirect} horário(s) corrigido(s) direto (lista ainda não avisou ninguém).` : "";
+      const failedNote =
+        result.failed.length > 0
+          ? ` ${result.failed.length} falharam: ${result.failed.map((f) => f.patientName).join(", ")}.`
+          : "";
+      setScheduleRefPreview(null);
+      detail.reload();
+      if (result.rescheduledWithNotice > 0) {
+        setScheduleRefNotice(`${directNote} Avisando ${result.rescheduledWithNotice} paciente(s) da mudança de horário...`.trim());
+        const finished = await runQueueUntilDone(({ sent, failed }) => {
+          setScheduleRefNotice(`${directNote} Enviando avisos... ${sent} enviado(s), ${failed} falharam.`.trim());
+        });
+        setScheduleRefNotice(
+          `${directNote} ${finished.sent} aviso(s) de reagendamento enviado(s)` +
+            (finished.failed > 0 ? `, ${finished.failed} falharam` : "") +
+            `.${failedNote}`.trim()
+        );
+        detail.reload();
+      } else {
+        setScheduleRefNotice(`${directNote}${failedNote}`.trim());
+      }
+    } catch (err) {
+      setScheduleRefError(err instanceof Error ? err.message : "Falha ao gravar as correções.");
+    } finally {
+      setScheduleRefApplying(false);
     }
   }
 
@@ -1026,6 +1140,37 @@ export function Revisao() {
         {importError && (
           <div className="mt-2">
             <ErrorNote message={importError} />
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="btn btn-quiet ml-2 px-3 py-1.5 text-sm"
+          disabled={scheduleRefBusy}
+          onClick={() => scheduleRefInputRef.current?.click()}
+          title="Sobe um PDF nativo de outra fonte (ex.: sistema do laboratório) com o horário certo de cada paciente, e corrige aqui"
+        >
+          {scheduleRefBusy ? "Lendo…" : "Atualizar horários por lista de referência"}
+        </button>
+        <input
+          ref={scheduleRefInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void handleScheduleReferenceFile(file);
+          }}
+        />
+        {scheduleRefNotice && (
+          <div className="mt-2">
+            <Callout>{scheduleRefNotice}</Callout>
+          </div>
+        )}
+        {scheduleRefError && (
+          <div className="mt-2">
+            <ErrorNote message={scheduleRefError} />
           </div>
         )}
       </div>
@@ -1596,6 +1741,61 @@ export function Revisao() {
             onChange={(e) => setRescheduleDateTime(e.target.value)}
           />
         </Field>
+      </FormModal>
+
+      <FormModal
+        open={scheduleRefPreview !== null}
+        title="Confirmar horários da lista de referência"
+        wide
+        description={
+          scheduleRefPreview
+            ? `${scheduleRefPreview.matches.length} paciente(s) casado(s) por nome.` +
+              (scheduleRefPreview.listAlreadyDispatched
+                ? " Esta lista já foi disparada — ao confirmar, cada paciente casado recebe um aviso de WhatsApp da mudança de horário (mesmo template do botão \"Reagendar\")."
+                : " Esta lista ainda não foi disparada — a correção é gravada direto, sem avisar ninguém.")
+            : ""
+        }
+        submitLabel={
+          scheduleRefPreview?.listAlreadyDispatched ? "Corrigir e avisar pacientes" : "Corrigir horários"
+        }
+        busy={scheduleRefApplying}
+        error={scheduleRefError}
+        onSubmit={confirmScheduleReference}
+        onCancel={() => setScheduleRefPreview(null)}
+      >
+        {scheduleRefPreview && (
+          <div className="max-h-[50vh] overflow-y-auto">
+            <Table
+              head={
+                <tr>
+                  <Th>Paciente</Th>
+                  <Th>Horário atual</Th>
+                  <Th>Horário novo</Th>
+                </tr>
+              }
+            >
+              {scheduleRefPreview.matches.map((match) => (
+                <tr key={match.appointmentId}>
+                  <Td>{match.patientName}</Td>
+                  <Td>{formatDateTime(match.oldScheduledAt)}</Td>
+                  <Td className="font-semibold text-ink">{formatDateTime(match.newScheduledAt)}</Td>
+                </tr>
+              ))}
+            </Table>
+            {scheduleRefPreview.unmatchedAppointments.length > 0 && (
+              <Callout>
+                {scheduleRefPreview.unmatchedAppointments.length} paciente(s) desta lista não apareceram no PDF de
+                referência (ficam com o horário atual): {scheduleRefPreview.unmatchedAppointments.join(", ")}
+              </Callout>
+            )}
+            {scheduleRefPreview.unmatchedReference.length > 0 && (
+              <Callout>
+                {scheduleRefPreview.unmatchedReference.length} nome(s) lido(s) no PDF de referência não bateram com
+                ninguém desta lista: {scheduleRefPreview.unmatchedReference.join(", ")}
+              </Callout>
+            )}
+          </div>
+        )}
       </FormModal>
 
       <FormModal

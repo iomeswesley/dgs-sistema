@@ -51,3 +51,51 @@ export function findUniqueMatch<T>(
   const matches = candidates.filter((item) => matchFn(value, nameOf(item)));
   return matches.length === 1 ? matches[0]! : null;
 }
+
+function levenshtein(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i]![0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0]![j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i]![j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1]![j - 1]!
+          : 1 + Math.min(dp[i - 1]![j]!, dp[i]![j - 1]!, dp[i - 1]![j - 1]!);
+    }
+  }
+  return dp[a.length]![b.length]!;
+}
+
+/**
+ * Como `findUniqueMatch`, mas com um segundo passo de tolerância a erro de
+ * digitação/grafia quando `namesMatch` não resolve sozinho (nem igual, nem
+ * um contendo o outro) — usado pra casar nome entre DUAS fontes diferentes
+ * de dado (ex.: lista do SISREG × lista de referência de outro sistema),
+ * onde pequenas diferenças de grafia são comuns ("NATALI" vs "NATALIE",
+ * "ATANKEVCZ" vs "ATANKEVICZ") e não podem travar o casamento inteiro.
+ * Só aceita o mais próximo por distância de edição quando a distância é
+ * pequena (`maxDistance`, padrão 3) E claramente menor que a do segundo
+ * colocado — caso contrário fica `null` (ambíguo demais, não adivinha).
+ * Validado manualmente em 2026-09-16 (correção de horário da lista 84 via
+ * CISAMVE) antes de virar helper reaproveitável.
+ */
+export function findClosestMatch<T>(
+  value: string,
+  candidates: T[],
+  nameOf: (item: T) => string,
+  maxDistance = 3
+): T | null {
+  const exact = candidates.filter((item) => namesMatch(value, nameOf(item)));
+  if (exact.length === 1) return exact[0]!;
+  if (exact.length > 1) return null;
+
+  const normalizedValue = normalizeForMatch(value);
+  const scored = candidates
+    .map((item) => ({ item, dist: levenshtein(normalizeForMatch(nameOf(item)), normalizedValue) }))
+    .sort((a, b) => a.dist - b.dist);
+  const best = scored[0];
+  const second = scored[1];
+  if (best && best.dist <= maxDistance && (!second || second.dist > best.dist)) return best.item;
+  return null;
+}

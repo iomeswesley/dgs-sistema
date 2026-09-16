@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exactNameMatch, findUniqueMatch, namesMatch } from "./text-match.js";
+import { exactNameMatch, findClosestMatch, findUniqueMatch, namesMatch } from "./text-match.js";
 
 describe("exactNameMatch", () => {
   it("bate ignorando acento e caixa", () => {
@@ -47,5 +47,37 @@ describe("findUniqueMatch", () => {
 
   it("sem modo exact, 'Camboriú' fica ambíguo entre as duas cidades e devolve null", () => {
     expect(findUniqueMatch("Camboriú", cities, (c) => c.name)).toBeNull();
+  });
+});
+
+describe("findClosestMatch", () => {
+  const patients = [
+    { name: "GABRIELA NATALIE DA SILVA PINTO" },
+    { name: "ELIANE APARECIDA ATANKEVICZ" },
+    { name: "MARIA CLAUDIA SILVA DE LIRA MACEDO" },
+  ];
+
+  it("usa contém/igual primeiro quando resolve sozinho (mesmo caso de findUniqueMatch)", () => {
+    expect(findClosestMatch("MARIA CLAUDIA SILVA DE LIRA MACEDO", patients, (p) => p.name)).toEqual({
+      name: "MARIA CLAUDIA SILVA DE LIRA MACEDO",
+    });
+  });
+
+  it("tolera pequena diferença de grafia entre duas fontes (achado real, lista CISAMVE × cadastro)", () => {
+    expect(findClosestMatch("GABRIELA NATALI DA SILVA PINTO", patients, (p) => p.name)).toEqual({
+      name: "GABRIELA NATALIE DA SILVA PINTO",
+    });
+    expect(findClosestMatch("ELIANE APARECIDA ATANKEVCZ", patients, (p) => p.name)).toEqual({
+      name: "ELIANE APARECIDA ATANKEVICZ",
+    });
+  });
+
+  it("não adivinha quando nenhum candidato está perto o bastante", () => {
+    expect(findClosestMatch("FULANO COMPLETAMENTE DIFERENTE", patients, (p) => p.name)).toBeNull();
+  });
+
+  it("não adivinha quando dois candidatos ficam igualmente perto (ambíguo)", () => {
+    const twins = [{ name: "ANA MARIA SILVA" }, { name: "ANA MARIA SILVO" }];
+    expect(findClosestMatch("ANA MARIA SILVX", twins, (p) => p.name)).toBeNull();
   });
 });

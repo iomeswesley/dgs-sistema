@@ -10,6 +10,7 @@ import { pickAlternatePhone } from "@/lib/phone.js";
 import { classifyReply } from "@/lib/templates.js";
 import {
   addManualAppointment,
+  applyScheduleReference,
   approveList,
   checkUnit,
   deleteList,
@@ -17,6 +18,7 @@ import {
   extractAndStage,
   getMessagePreview,
   importAdditionalPatients,
+  previewScheduleReference,
   removeAppointment,
   rescheduleAppointment,
   retryFailedAppointments,
@@ -579,6 +581,61 @@ listsRouter.post(
     await rescheduleAppointment(routeId(req), appointmentId, scheduledAt, currentUserId(req));
     await processQueue();
     res.status(201).json({ ok: true });
+  })
+);
+
+const scheduleReferencePreviewSchema = z.object({
+  mimeType: z.string().min(1),
+  fileBase64: z.string().min(1),
+});
+
+/**
+ * Lê um PDF nativo de referência (segunda fonte, ex.: laboratório) com o
+ * horário real de cada paciente e casa por nome contra os agendamentos
+ * desta lista — só prévia, nada é gravado ainda. Ver `previewScheduleReference()`.
+ */
+listsRouter.post(
+  "/api/lists/:id/schedule-reference/preview",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, scheduleReferencePreviewSchema);
+    if (!ACCEPTED_TYPES.includes(data.mimeType)) {
+      throw new AppError("Envie um PDF nativo (com texto selecionável).", 400);
+    }
+    const fileData = Buffer.from(data.fileBase64, "base64");
+    if (fileData.length === 0) throw new AppError("Arquivo vazio.", 400);
+    if (fileData.length > MAX_UPLOAD_BYTES) {
+      throw new AppError("Arquivo maior que 20 MB. Divida em partes.", 413);
+    }
+    const preview = await previewScheduleReference(routeId(req), fileData);
+    res.json(preview);
+  })
+);
+
+const scheduleReferenceMatchSchema = z.object({
+  appointmentId: z.number().int().positive(),
+  patientName: z.string().min(1),
+  oldScheduledAt: z.string().min(1),
+  newScheduledAt: z.string().min(1),
+  referenceName: z.string().min(1),
+});
+
+const scheduleReferenceApplySchema = z.object({
+  matches: z.array(scheduleReferenceMatchSchema).min(1),
+});
+
+/**
+ * Grava as correções de horário confirmadas na prévia acima. Lista não
+ * disparada: corrige direto (silencioso). Lista já disparada: reagenda com
+ * aviso pra cada paciente (mesmo caminho do botão "Reagendar"). Ver
+ * `applyScheduleReference()`.
+ */
+listsRouter.post(
+  "/api/lists/:id/schedule-reference/apply",
+  asyncHandler(async (req, res) => {
+    const { matches } = parseBody(req, scheduleReferenceApplySchema);
+    const result = await applyScheduleReference(routeId(req), matches, currentUserId(req));
+    if (result.rescheduledWithNotice > 0) await processQueue();
+    res.status(201).json(result);
   })
 );
 
