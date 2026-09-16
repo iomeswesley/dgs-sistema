@@ -28,10 +28,17 @@ const ROW_PATTERN =
 
 // Dentro de `rest` (telefone + procedimento grudados), o telefone é só
 // dígitos/parênteses/hífen/ponto/espaço — o procedimento sempre começa com
-// letra maiúscula logo depois. Não usa `extractPhones()` aqui porque o
-// telefone às vezes vem com os dígitos quebrados por espaço em posições
-// que `PHONE_RAW` (dígitos contíguos) não reconhece (ex.: "47 9840 05251").
-const PHONE_THEN_PROCEDURE = /^(?<phone>[\d()\-.\s]+?\d)\s+(?<procedure>[A-ZÀ-ÖØ-Þ].*)$/;
+// letra maiúscula logo depois... exceto quando vem com o código do SISREG
+// na frente ("01 - ULTRA-SONOGRAFIA..."), achado em 2026-09-16 (lista de
+// Pomerode, um PDF sem camada de texto que precisou ser retranscrito nesse
+// mesmo formato): o "01 -" ficava ambíguo com o fim do telefone (os dois
+// são dígito+traço), e sem esse caso a linha inteira ficava sem
+// procedimento nenhum. O grupo opcional cobre esse prefixo sem quebrar o
+// caso sem prefixo (ex.: Botuverá, "CONSULTA EM ORTOPEDIA..." direto).
+// Não usa `extractPhones()` aqui porque o telefone às vezes vem com os
+// dígitos quebrados por espaço em posições que `PHONE_RAW` (dígitos
+// contíguos) não reconhece (ex.: "47 9840 05251").
+const PHONE_THEN_PROCEDURE = /^(?<phone>[\d()\-.\s]+?\d)\s+(?<procedure>(?:\d+\s*-\s*)?[A-ZÀ-ÖØ-Þ].*)$/;
 
 export function parseTabular(text: string): ExtractionResult {
   const lines = text.split("\n").map((line) => line.trimEnd());

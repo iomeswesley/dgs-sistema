@@ -44,6 +44,14 @@ describe("parseTabular", () => {
     expect(second?.phones).toEqual(["47 9840 05251"]);
   });
 
+  it("lê o procedimento certo mesmo quando vem com código na frente (ex.: '01 - ULTRA-SONOGRAFIA...') — achado real em 2026-09-16, Pomerode", () => {
+    const text = `SISREG Nome Data nasc. Telefone Procedimento Data Horário Observação
+444444444 MARCOS EXEMPLO SILVA 02/01/1985 (47) 99794-7772 01 - ULTRA-SONOGRAFIA DE BOLSA ESCROTAL 17/09/2026 07:00`;
+    const [row] = parseTabular(text).rows;
+    expect(row?.phones).toEqual(["(47) 99794-7772"]);
+    expect(row?.procedure).toBe("01 - ULTRA-SONOGRAFIA DE BOLSA ESCROTAL");
+  });
+
   it("nunca lê médico — não existe no formato, quem sobe a lista escolhe", () => {
     for (const row of parseTabular(TABULAR_TEXT).rows) {
       expect(row.doctor).toBeNull();
