@@ -2,6 +2,17 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-09-16 — novo formato de extração "TABULAR" (Botuverá)
+
+Pedido do usuário: subir uma lista de Botuverá num padrão de PDF nunca visto antes — uma linha por paciente (código, nome, nascimento, telefone, procedimento, data, horário), sem o cabeçalho de agenda nem a fragmentação multi-linha do SISREG de verdade. A primeira coluna se chama literalmente "SISREG" (é só o código de solicitação) — `detectFormat()` precisou checar o cabeçalho da tabela **antes** do teste genérico de SISREG, senão bateria por engano nesse arquivo e tentaria rodar o parser errado.
+
+- **`parsers/tabular.ts`** (novo) — mesmo padrão estrutural do `celk.ts` (uma linha de texto por paciente, sem quebra), regex ancorada nas duas pontas fixas (nascimento logo após o nome; data+hora no fim) — o telefone é isolado do procedimento pelo primeiro caractere maiúsculo depois dele, porque esse formato às vezes quebra o telefone em pedaços por espaço em vez de hífen (ex.: "47 9840 05251") — guardado cru, `normalizePhone()` limpa depois. Nunca lê médico/unidade/município — não existem no arquivo, fica por conta de quem sobe a lista (esperado, não é falha do parser).
+- **`SourceFormat.TABULAR`** novo no schema (migration aditiva, aplicada em produção) + `extractionResultSchema` + wiring em `extraction.service.ts`/`detect.ts`.
+- Validado contra o PDF real antes de subir de verdade (80 pacientes, zero avisos, nome/telefone/data batendo linha por linha) — só depois disso rodou contra produção.
+- **Lista #79 criada em produção**, vinculada à **Agenda #66** (Botuverá, 17/09/2026, UBS Willy Maestri — unidade já cadastrada, reaproveitada) com médico placeholder **"Não informado"** (mesma convenção que `resolveCatalog()` já usa sozinha quando não há médico nenhum pra decidir) — deixado **em `EM_REVISAO`, sem aprovar nem disparar**, pro usuário confirmar o médico certo (só precisa editar o nome do doutor placeholder — todos os 80 agendamentos compartilham o mesmo `doctorId`, um edit só resolve a lista inteira) e conferir o endereço (já vem preenchido da unidade cadastrada, só falta olhar) antes de mandar de verdade. 76/80 pacientes com celular válido; 4 só tinham fixo cadastrado no PDF (sem WhatsApp — real, não é bug).
+- **Achado no caminho**: havia trabalho não commitado de outra sessão na working tree (fix em `retryFailedAppointments()`/telas de Cancelamento e Revisão) — isolado com `git stash` antes do `vercel --prod` (pra não publicar código de outra sessão sem revisão) e devolvido logo depois do deploy confirmado saudável. Só commitei os arquivos desta tarefa.
+- `npm run typecheck` e `npm test` limpos (167 testes, 7 novos).
+
 ## Sessão de 2026-09-13 (2) — classificação de resposta ambígua trocada de Opus pra Haiku
 
 Usuário estranhou $0,13 de gasto na API da Anthropic num dia e perguntou quantas mensagens de WhatsApp isso representava — resposta: **nenhuma relação direta**. Envio de WhatsApp é cobrado pela Meta, não pela Anthropic; o único ponto do sistema que chama a API da Anthropic é `classifyReplyWithAI()` (`modules/replies`), e só quando uma resposta em texto livre é ambígua o bastante pra `classifyReply()` (determinístico, grátis) não resolver sozinha — a maioria das respostas nunca chega lá.
