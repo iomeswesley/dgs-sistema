@@ -40,6 +40,14 @@ const ROW_PATTERN =
 // contíguos) não reconhece (ex.: "47 9840 05251").
 const PHONE_THEN_PROCEDURE = /^(?<phone>[\d()\-.\s]+?\d)\s+(?<procedure>(?:\d+\s*-\s*)?[A-ZÀ-ÖØ-Þ].*)$/;
 
+// Paciente genuinamente sem telefone nenhum no documento (achado real em
+// 2026-09-17, lista de Pomerode 19/09): `rest` vira só o procedimento, sem
+// nada de telefone na frente — `PHONE_THEN_PROCEDURE` não bate (não tem o
+// grupo de telefone pra casar) e, sem esse caso à parte, o procedimento
+// inteiro se perdia (virava `null`) só porque faltava telefone, o que não
+// devia acontecer — os dois problemas são independentes.
+const BARE_PROCEDURE = /^(?:\d+\s*-\s*)?[A-ZÀ-ÖØ-Þ].*$/;
+
 export function parseTabular(text: string): ExtractionResult {
   const lines = text.split("\n").map((line) => line.trimEnd());
   const warnings: string[] = [];
@@ -62,12 +70,23 @@ export function parseTabular(text: string): ExtractionResult {
     // não serve pra isso — ela exige dígitos contíguos ou já formatados, e
     // esse arquivo às vezes quebra o número em pedaços por espaço (ex.:
     // "47 9840 05251"), sem hífen nenhum.
-    // Sem separação clara telefone/procedimento reconhecida: melhor-esforço
-    // com `extractPhones()` (mesmo helper do CELK) em vez de perder a linha
-    // inteira — o procedimento fica null (linha entra em revisão como
-    // "sem_procedimento", não desaparece da lista).
-    const phones = split ? [split.groups!.phone!.trim()] : extractPhones(rest);
-    const procedure = split ? split.groups!.procedure!.trim() : null;
+    let phones: string[];
+    let procedure: string | null;
+    if (split) {
+      phones = [split.groups!.phone!.trim()];
+      procedure = split.groups!.procedure!.trim();
+    } else if (BARE_PROCEDURE.test(rest.trim())) {
+      // Sem telefone nenhum na linha — `rest` é só o procedimento.
+      phones = [];
+      procedure = rest.trim();
+    } else {
+      // Sem separação clara telefone/procedimento reconhecida: melhor-esforço
+      // com `extractPhones()` (mesmo helper do CELK) em vez de perder a linha
+      // inteira — o procedimento fica null (linha entra em revisão como
+      // "sem_procedimento", não desaparece da lista).
+      phones = extractPhones(rest);
+      procedure = null;
+    }
 
     rows.push({
       name: name.trim(),

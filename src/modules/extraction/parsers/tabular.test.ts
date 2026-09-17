@@ -52,6 +52,14 @@ describe("parseTabular", () => {
     expect(row?.procedure).toBe("01 - ULTRA-SONOGRAFIA DE BOLSA ESCROTAL");
   });
 
+  it("lê o procedimento normalmente mesmo quando o paciente não tem telefone nenhum — achado real em 2026-09-17, Pomerode", () => {
+    const text = `SISREG Nome Data nasc. Telefone Procedimento Data Horário Observação
+555555555 WOLFGANG EXEMPLO DREWS 01/11/1950 01 - ULTRA-SONOGRAFIA DO APARELHO URINARIO 19/09/2026 08:00`;
+    const [row] = parseTabular(text).rows;
+    expect(row?.phones).toEqual([]);
+    expect(row?.procedure).toBe("01 - ULTRA-SONOGRAFIA DO APARELHO URINARIO");
+  });
+
   it("nunca lê médico — não existe no formato, quem sobe a lista escolhe", () => {
     for (const row of parseTabular(TABULAR_TEXT).rows) {
       expect(row.doctor).toBeNull();
