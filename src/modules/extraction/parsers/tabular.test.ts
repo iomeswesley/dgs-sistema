@@ -60,6 +60,14 @@ describe("parseTabular", () => {
     expect(row?.procedure).toBe("01 - ULTRA-SONOGRAFIA DO APARELHO URINARIO");
   });
 
+  it("lê os dois (ou mais) telefones e o procedimento normalmente quando a linha traz vários telefones separados por '/' — achado real em 2026-09-17, Pomerode", () => {
+    const text = `SISREG Nome Data nasc. Telefone Procedimento Data Horário Observação
+666666666 EDI EXEMPLO HORNBURG 22/05/1940 (47) 3306-1203 / (47) 99284-9176 / (47) 3052-4217 01 - ULTRA-SONOGRAFIA DO APARELHO URINARIO 19/09/2026 08:00`;
+    const [row] = parseTabular(text).rows;
+    expect(row?.phones).toEqual(["(47) 3306-1203", "(47) 99284-9176", "(47) 3052-4217"]);
+    expect(row?.procedure).toBe("01 - ULTRA-SONOGRAFIA DO APARELHO URINARIO");
+  });
+
   it("nunca lê médico — não existe no formato, quem sobe a lista escolhe", () => {
     for (const row of parseTabular(TABULAR_TEXT).rows) {
       expect(row.doctor).toBeNull();

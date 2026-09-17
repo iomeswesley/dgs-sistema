@@ -40,12 +40,13 @@ const ROW_PATTERN =
 // contíguos) não reconhece (ex.: "47 9840 05251").
 const PHONE_THEN_PROCEDURE = /^(?<phone>[\d()\-.\s]+?\d)\s+(?<procedure>(?:\d+\s*-\s*)?[A-ZÀ-ÖØ-Þ].*)$/;
 
-// Paciente genuinamente sem telefone nenhum no documento (achado real em
-// 2026-09-17, lista de Pomerode 19/09): `rest` vira só o procedimento, sem
-// nada de telefone na frente — `PHONE_THEN_PROCEDURE` não bate (não tem o
-// grupo de telefone pra casar) e, sem esse caso à parte, o procedimento
-// inteiro se perdia (virava `null`) só porque faltava telefone, o que não
-// devia acontecer — os dois problemas são independentes.
+// `rest` sem telefone nenhum, ou com 2+ telefones (achado real em
+// 2026-09-17, lista de Pomerode 19/09 — várias linhas trazem 2 ou 3
+// telefones separados por "/") — nos dois casos `PHONE_THEN_PROCEDURE`
+// não bate (só reconhece exatamente 1 telefone antes do procedimento) e,
+// sem tratar à parte, o procedimento inteiro se perdia (virava `null`) por
+// causa só da contagem de telefones, o que não devia acontecer — quantos
+// telefones tem e qual é o procedimento são coisas independentes.
 const BARE_PROCEDURE = /^(?:\d+\s*-\s*)?[A-ZÀ-ÖØ-Þ].*$/;
 
 export function parseTabular(text: string): ExtractionResult {
@@ -75,17 +76,31 @@ export function parseTabular(text: string): ExtractionResult {
     if (split) {
       phones = [split.groups!.phone!.trim()];
       procedure = split.groups!.procedure!.trim();
-    } else if (BARE_PROCEDURE.test(rest.trim())) {
-      // Sem telefone nenhum na linha — `rest` é só o procedimento.
-      phones = [];
-      procedure = rest.trim();
     } else {
-      // Sem separação clara telefone/procedimento reconhecida: melhor-esforço
-      // com `extractPhones()` (mesmo helper do CELK) em vez de perder a linha
-      // inteira — o procedimento fica null (linha entra em revisão como
-      // "sem_procedimento", não desaparece da lista).
-      phones = extractPhones(rest);
-      procedure = null;
+      // 0, ou 2+, telefones — extrai TODOS os telefones formatados do
+      // trecho (mesmo `extractPhones()` do CELK) e usa o que sobra, depois
+      // de tirar cada telefone achado e qualquer "/" separando-os, como
+      // procedimento — quando o que sobra ainda parece procedimento de
+      // verdade. Cobre "sem telefone nenhum" (nada extraído, sobra é o
+      // próprio `rest`) e "dois ou mais telefones juntos" com o mesmo
+      // caminho, sem duplicar lógica pros dois casos.
+      const extracted = extractPhones(rest);
+      const remainder = extracted
+        .reduce((acc, phone) => acc.split(phone).join(" "), rest)
+        .replace(/\//g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (BARE_PROCEDURE.test(remainder)) {
+        phones = extracted;
+        procedure = remainder;
+      } else {
+        // Sem separação clara telefone/procedimento reconhecida: melhor-
+        // esforço com o que `extractPhones()` achou, em vez de perder a
+        // linha inteira — o procedimento fica null (linha entra em revisão
+        // como "sem_procedimento", não desaparece da lista).
+        phones = extracted;
+        procedure = null;
+      }
     }
 
     rows.push({
