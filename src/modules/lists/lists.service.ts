@@ -5,14 +5,14 @@ import { AppError } from "@/middleware/errorHandler.js";
 import { extractList } from "@/modules/extraction/extraction.service.js";
 import { mapExtraction, type AppointmentDraft } from "@/modules/extraction/extraction.mapper.js";
 import { describePhoneIssue, normalizePhoneList } from "@/lib/phone.js";
-import { namesMatch, findClosestMatch } from "@/lib/text-match.js";
+import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { parseBrasiliaDateTime, toBrasiliaDateString } from "@/lib/timezone.js";
 import { buildTemplateParams } from "@/modules/queue/queue.service.js";
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { readPdfText } from "@/lib/pdf-text.js";
-import { parseScheduleReference } from "@/lib/schedule-reference.js";
+import { matchScheduleReference, parseScheduleReference } from "@/lib/schedule-reference.js";
 
 /*
   Ciclo de vida de uma lista:
@@ -1205,35 +1205,34 @@ export async function previewScheduleReference(listId: number, file: Buffer): Pr
 
   const appointments = await prisma.appointment.findMany({
     where: { listId },
-    select: { id: true, scheduledAt: true, patient: { select: { name: true } } },
+    select: { id: true, scheduledAt: true, patient: { select: { name: true } }, procedure: { select: { name: true } } },
   });
 
-  const used = new Set<number>();
-  const matches: ScheduleReferenceMatch[] = [];
-  const unmatchedReference: string[] = [];
+  const result = matchScheduleReference(
+    referenceRows,
+    appointments.map((appointment) => ({
+      id: appointment.id,
+      name: appointment.patient.name,
+      procedureName: appointment.procedure.name,
+    }))
+  );
 
-  for (const row of referenceRows) {
-    const available = appointments.filter((appointment) => !used.has(appointment.id));
-    const chosen = findClosestMatch(row.name, available, (appointment) => appointment.patient.name);
-    if (!chosen) {
-      unmatchedReference.push(row.name);
-      continue;
-    }
-    used.add(chosen.id);
-    const dateStr = toBrasiliaDateString(chosen.scheduledAt);
-    const newScheduledAt = parseBrasiliaDateTime(`${dateStr}T${row.time}:00`);
-    matches.push({
-      appointmentId: chosen.id,
-      patientName: chosen.patient.name,
-      oldScheduledAt: chosen.scheduledAt.toISOString(),
+  const byId = new Map(appointments.map((appointment) => [appointment.id, appointment]));
+  const matches: ScheduleReferenceMatch[] = result.matches.map((match) => {
+    const appointment = byId.get(match.candidateId)!;
+    const dateStr = toBrasiliaDateString(appointment.scheduledAt);
+    const newScheduledAt = parseBrasiliaDateTime(`${dateStr}T${match.time}:00`);
+    return {
+      appointmentId: appointment.id,
+      patientName: appointment.patient.name,
+      oldScheduledAt: appointment.scheduledAt.toISOString(),
       newScheduledAt: newScheduledAt.toISOString(),
-      referenceName: row.name,
-    });
-  }
+      referenceName: match.referenceName,
+    };
+  });
 
-  const unmatchedAppointments = appointments
-    .filter((appointment) => !used.has(appointment.id))
-    .map((appointment) => appointment.patient.name);
+  const unmatchedReference = result.unmatchedReference.map((row) => row.name);
+  const unmatchedAppointments = result.unmatchedCandidateIds.map((id) => byId.get(id)!.patient.name);
 
   return {
     matches,

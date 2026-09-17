@@ -52,7 +52,11 @@ export function findUniqueMatch<T>(
   return matches.length === 1 ? matches[0]! : null;
 }
 
-function levenshtein(a: string, b: string): number {
+/** Distância de edição (Levenshtein) entre duas strings — exportada porque
+ * `schedule-reference.ts` reaproveita pra casar procedimento entre fontes
+ * com grafia bem diferente (ex.: "ULTRASSONOGRAFIA..." do CISAMVE vs
+ * "ULTRA-SONOGRAFIA..." do catálogo), onde nem `namesMatch` resolve. */
+export function levenshtein(a: string, b: string): number {
   const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
   for (let i = 0; i <= a.length; i++) dp[i]![0] = i;
   for (let j = 0; j <= b.length; j++) dp[0]![j] = j;
