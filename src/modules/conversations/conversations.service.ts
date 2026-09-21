@@ -137,6 +137,19 @@ async function groupIntoConversations(messages: ConversationMessageRow[]): Promi
   return [...byPhone.values()].sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
 }
 
+/**
+ * Impressão digital barata da lista de conversas: id mais recente + total de
+ * mensagens (as duas são agregações — o Postgres devolve uma linha só). Muda
+ * sempre que chega ou sai uma mensagem, que é tudo que a lista mostra. Existe
+ * pra tela de Conversas não precisar rebaixar 1000 mensagens a cada 15s só
+ * pra descobrir que nada mudou (era a maior fonte de egress do Supabase —
+ * ~4 mil chamadas × 1000 linhas no período de 2026-09).
+ */
+export async function getConversationsVersion(): Promise<string> {
+  const result = await prisma.whatsappMessage.aggregate({ _max: { id: true }, _count: { _all: true } });
+  return `${result._max.id ?? 0}:${result._count._all}`;
+}
+
 const CONVERSATION_MESSAGE_SELECT = {
   phone: true,
   body: true,

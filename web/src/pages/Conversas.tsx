@@ -124,12 +124,39 @@ export function Conversas() {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [selectedPhone, thread.data?.messages.length]);
 
+  // Atualização periódica SEM rebaixar a lista inteira toda vez: primeiro
+  // pergunta a "versão" (poucos bytes, ver `getConversationsVersion()`) e só
+  // recarrega a lista quando ela mudou. Também não roda com a aba em segundo
+  // plano — cada recarga da lista eram ~1000 mensagens saindo do Supabase, e
+  // uma aba esquecida aberta o dia todo era a maior fonte de egress do banco.
+  const lastVersionRef = useRef<string | null>(null);
   useEffect(() => {
-    const interval = setInterval(() => {
-      conversations.reload();
-      if (selectedPhone) thread.reload();
-    }, REFRESH_MS);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    async function tick(initial = false) {
+      if (document.hidden) return;
+      try {
+        const { version } = await api.get<{ version: string }>("/api/conversations/version");
+        if (cancelled) return;
+        const changed = lastVersionRef.current !== null && lastVersionRef.current !== version;
+        lastVersionRef.current = version;
+        if (changed) conversations.reload();
+      } catch {
+        // falha de rede momentânea: tenta de novo no próximo ciclo
+      }
+      // A conversa recém-selecionada já foi carregada por `useApi` — não repete.
+      if (!initial && selectedPhone && !cancelled) thread.reload();
+    }
+    void tick(true); // primeira leitura só fixa a versão de referência
+    const interval = setInterval(() => void tick(), REFRESH_MS);
+    const onVisible = () => {
+      if (!document.hidden) void tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // Só reagenda quando muda a conversa selecionada — reload() em si é
     // estável entre renders (useCallback em useApi).
     // eslint-disable-next-line react-hooks/exhaustive-deps

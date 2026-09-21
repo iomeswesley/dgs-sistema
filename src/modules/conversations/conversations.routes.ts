@@ -4,7 +4,14 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
 import { TEMPLATE_FIELDS } from "@/lib/templates.js";
-import { getMessageMedia, getThread, listConversations, sendReply, sendTemplateReply } from "./conversations.service.js";
+import {
+  getConversationsVersion,
+  getMessageMedia,
+  getThread,
+  listConversations,
+  sendReply,
+  sendTemplateReply,
+} from "./conversations.service.js";
 
 export const conversationsRouter = Router();
 conversationsRouter.use("/api/conversations", requireAuth);
@@ -14,6 +21,19 @@ conversationsRouter.get(
   asyncHandler(async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search : undefined;
     res.json({ conversations: await listConversations(200, search) });
+  })
+);
+
+/**
+ * "Versão" barata da lista de conversas — só o id da mensagem mais recente e
+ * a contagem, poucos bytes. O frontend consulta isso no lugar de recarregar
+ * a lista inteira (1000 mensagens) a cada 15s: só busca a lista de verdade
+ * quando esse valor muda. Ver `getConversationsVersion()`.
+ */
+conversationsRouter.get(
+  "/api/conversations/version",
+  asyncHandler(async (_req, res) => {
+    res.json({ version: await getConversationsVersion() });
   })
 );
 

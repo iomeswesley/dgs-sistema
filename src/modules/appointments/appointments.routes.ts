@@ -54,19 +54,45 @@ appointmentsRouter.get(
           orderBy: { createdAt: "desc" },
           take: 3,
           select: {
+            id: true,
             direction: true,
             status: true,
             body: true,
             buttonPayload: true,
             errorMessage: true,
             createdAt: true,
-            raw: true,
+            // `raw` (payload inteiro do webhook, ~KBs por mensagem) NÃO é
+            // selecionado aqui — a tela só usa 3 campos dele (leitura por IA),
+            // buscados abaixo por caminho JSON. Egress do Supabase (2026-09).
           },
         },
       },
     });
 
-    res.json({ appointments, capacity: await queueCapacity() });
+    const messageIds = appointments.flatMap((a) => a.messages.map((m) => m.id));
+    const aiById = new Map<number, { aiClassified: boolean; aiConfidence?: number; aiReasoning?: string }>();
+    if (messageIds.length > 0) {
+      // Só as mensagens que a IA de fato classificou voltam (a minoria); ids
+      // vêm de consulta já filtrada por cliente acima, então SQL cru é seguro.
+      const aiRows = await prisma.$queryRaw<
+        { id: number; aiConfidence: string | null; aiReasoning: string | null }[]
+      >`SELECT id, raw->>'aiConfidence' AS "aiConfidence", raw->>'aiReasoning' AS "aiReasoning"
+        FROM whatsapp_messages
+        WHERE id = ANY(${messageIds}::int[]) AND raw->>'aiClassified' = 'true'`;
+      for (const row of aiRows) {
+        aiById.set(row.id, {
+          aiClassified: true,
+          aiConfidence: row.aiConfidence === null ? undefined : Number(row.aiConfidence),
+          aiReasoning: row.aiReasoning ?? undefined,
+        });
+      }
+    }
+    const withAi = appointments.map((a) => ({
+      ...a,
+      messages: a.messages.map(({ id, ...m }) => ({ ...m, raw: aiById.get(id) ?? null })),
+    }));
+
+    res.json({ appointments: withAi, capacity: await queueCapacity() });
   })
 );
 
