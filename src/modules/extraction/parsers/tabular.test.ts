@@ -79,4 +79,19 @@ describe("parseTabular", () => {
     expect(result.rows).toHaveLength(0);
     expect(result.warnings[0]).toMatch(/nenhuma linha de paciente reconhecida/i);
   });
+
+  // Achado em 2026-09-24 (lista de Psiquiatria de Dr Pedrinho/Botuverá):
+  // esse arquivo tem número da linha E código de solicitação do SISREG,
+  // duas colunas numéricas antes do nome — o texto real que o pdf-parse
+  // devolve (confirmado com `readPdfText()` contra o PDF de verdade).
+  it("não deixa o código de solicitação do SISREG grudar no nome quando há duas colunas numéricas", () => {
+    const text =
+      "SISREG Nome Data nasc. Telefone Procedimento Data Horário Observação\n" +
+      "1 \t676792725 \tKENIA EXEMPLO PALOSCHI \t31/03/1977 \t(47) 9905-6185 \tCONSULTA EM PSIQUIATRIA - GERAL \t01/10/2026 \t08:00";
+    const [row] = parseTabular(text).rows;
+    expect(row?.name).toBe("KENIA EXEMPLO PALOSCHI");
+    expect(row?.birthDate).toBe("1977-03-31");
+    expect(row?.phones).toEqual(["(47) 9905-6185"]);
+    expect(row?.procedure).toBe("CONSULTA EM PSIQUIATRIA - GERAL");
+  });
 });

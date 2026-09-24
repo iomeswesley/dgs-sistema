@@ -10,7 +10,7 @@ import { extractPhones, toIsoDate, toIsoDateTime } from "./shared.js";
   formato SISREG de verdade; por isso `detectFormat()` checa esse cabeçalho
   ANTES do teste genérico de "contém a palavra SISREG").
 
-    <código> <NOME> <DD/MM/AAAA nascimento> <telefone> <PROCEDIMENTO> <DD/MM/AAAA> <HH:MM> [observação]
+    <linha> [código de solicitação] <NOME> <DD/MM/AAAA nascimento> <telefone> <PROCEDIMENTO> <DD/MM/AAAA> <HH:MM> [observação]
 
   Sem cabeçalho de agenda nenhum (sem município, unidade nem médico em
   lugar nenhum do arquivo) — diferente do CELK/SISREG, que trazem isso no
@@ -23,8 +23,18 @@ import { extractPhones, toIsoDate, toIsoDateTime } from "./shared.js";
 // qualquer palavra) — em vez disso, ancora nos dois pedaços que SEMPRE têm
 // formato fixo: a data de nascimento logo depois do nome, e a data+hora do
 // atendimento no fim (antes de uma observação opcional).
+//
+// `(?:\d+\s+)?` antes do nome: achado em 2026-09-24 (lista de Psiquiatria
+// de Dr Pedrinho/Botuverá) — esse arquivo tem DUAS colunas numéricas antes
+// do nome (número da linha + código de solicitação do SISREG de verdade,
+// ex.: "1 \t676792725 \tKENIA..."), diferente do Botuverá original de
+// 2026-09-16 (só o número da linha). Sem esse grupo, `name` (lazy) engolia
+// o código de solicitação inteiro por engano ("676792725 \tKENIA..."),
+// porque não havia nada de fixo pra parar o `.+?` antes dele. `name` agora
+// exige começar com letra (mesma convenção de `BARE_PROCEDURE` abaixo) —
+// código de solicitação é sempre dígito puro, nunca colide.
 const ROW_PATTERN =
-  /^\d+\s+(?<name>.+?)\s+(?<birth>\d{2}\/\d{2}\/\d{4})\s+(?<rest>.+?)\s+(?<date>\d{2}\/\d{2}\/\d{4})\s+(?<time>\d{2}:\d{2})\s*(?<obs>.*)$/;
+  /^\d+\s+(?:\d+\s+)?(?<name>[A-ZÀ-ÖØ-Þ].+?)\s+(?<birth>\d{2}\/\d{2}\/\d{4})\s+(?<rest>.+?)\s+(?<date>\d{2}\/\d{2}\/\d{4})\s+(?<time>\d{2}:\d{2})\s*(?<obs>.*)$/;
 
 // Dentro de `rest` (telefone + procedimento grudados), o telefone é só
 // dígitos/parênteses/hífen/ponto/espaço — o procedimento sempre começa com
