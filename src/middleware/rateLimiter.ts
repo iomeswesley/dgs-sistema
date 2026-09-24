@@ -31,6 +31,20 @@ export async function loginRateLimiter(req: Request, res: Response, next: NextFu
   }
 }
 
+const CONTACT_WINDOW_MS = 60 * 60_000;
+const MAX_CONTACT_REQUESTS = 5;
+
+export async function contactRateLimiter(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!(await checkAndRecordHit(`contact:${req.ip}`, CONTACT_WINDOW_MS, MAX_CONTACT_REQUESTS))) {
+      return res.status(429).json({ error: "Muitos envios seguidos. Tente de novo mais tarde." });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 const RESET_WINDOW_MS = 15 * 60_000;
 const MAX_RESET_REQUESTS = 3;
 

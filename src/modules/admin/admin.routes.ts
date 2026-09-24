@@ -24,9 +24,18 @@ import {
 } from "@/modules/indicators/indicators.service.js";
 import { getCancellationReceivedBreakdown } from "@/modules/cancellations/cancellations.service.js";
 import { toCsv } from "@/lib/csv.js";
+import { listContactLeads } from "@/modules/leads/leads.service.js";
 
 export const adminRouter = Router();
 adminRouter.use("/api/admin", requireAuth, requireSuperAdmin);
+
+/** Contatos deixados no formulário da landing page pública. */
+adminRouter.get(
+  "/api/admin/leads",
+  asyncHandler(async (_req, res) => {
+    res.json({ leads: await listContactLeads() });
+  })
+);
 
 /** Lista todos os clientes com contagens básicas — visão geral da Fase 4. */
 adminRouter.get(

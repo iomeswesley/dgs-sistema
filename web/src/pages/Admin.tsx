@@ -4,6 +4,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
+import { formatDateTime } from "../lib/format";
 import { useApi } from "../lib/useApi";
 
 /*
@@ -192,7 +193,71 @@ export function Admin() {
       {managingAccess && (
         <ClientAccessModal client={managingAccess} onClose={() => setManagingAccess(null)} />
       )}
+
+      <ContactLeads />
     </div>
+  );
+}
+
+interface ContactLead {
+  id: number;
+  createdAt: string;
+  name: string;
+  organization: string;
+  role: string | null;
+  phone: string;
+  email: string;
+  message: string | null;
+  notifiedAt: string | null;
+}
+
+function ContactLeads() {
+  const leads = useApi<{ leads: ContactLead[] }>("/api/admin/leads");
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-semibold text-ink">Contatos do site</h2>
+      <p className="mb-3 text-sm text-ink-muted">Quem preencheu o formulário da página pública (os mais recentes primeiro).</p>
+      {leads.loading && <Spinner />}
+      {leads.error && <ErrorNote message={leads.error} />}
+      {leads.data && leads.data.leads.length === 0 && <Callout>Nenhum contato recebido ainda.</Callout>}
+      {leads.data && leads.data.leads.length > 0 && (
+        <Table
+          head={
+            <tr>
+              <Th>Recebido em</Th>
+              <Th>Nome</Th>
+              <Th>Secretaria / município</Th>
+              <Th>Contato</Th>
+              <Th>Mensagem</Th>
+            </tr>
+          }
+        >
+          {leads.data.leads.map((lead) => (
+            <tr key={lead.id} className="border-b border-rule align-top last:border-0">
+              <Td>
+                <div className="whitespace-nowrap">{formatDateTime(lead.createdAt)}</div>
+                <div className="text-xs text-ink-muted">{lead.notifiedAt ? "Avisado no WhatsApp" : "Sem aviso no WhatsApp"}</div>
+              </Td>
+              <Td>
+                <div className="font-medium text-ink">{lead.name}</div>
+                {lead.role && <div className="text-xs text-ink-muted">{lead.role}</div>}
+              </Td>
+              <Td>{lead.organization}</Td>
+              <Td>
+                <div className="whitespace-nowrap">{lead.phone}</div>
+                <a className="text-xs text-accent underline underline-offset-2" href={`mailto:${lead.email}`}>
+                  {lead.email}
+                </a>
+              </Td>
+              <Td>
+                <div className="max-w-sm whitespace-pre-wrap text-sm">{lead.message || "—"}</div>
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </section>
   );
 }
 

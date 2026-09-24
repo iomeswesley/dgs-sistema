@@ -25,6 +25,7 @@ import { conversationsRouter } from "@/modules/conversations/conversations.route
 import { cancellationsRouter } from "@/modules/cancellations/cancellations.routes.js";
 import { settingsRouter } from "@/modules/settings/settings.routes.js";
 import { adminRouter } from "@/modules/admin/admin.routes.js";
+import { leadsRouter } from "@/modules/leads/leads.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia } from "@/modules/queue/cadence.service.js";
@@ -254,6 +255,7 @@ export function createApp() {
   app.use(cancellationsRouter);
   app.use(settingsRouter);
   app.use(adminRouter);
+  app.use(leadsRouter);
 
   app.use("/api", notFoundHandler);
 
@@ -264,6 +266,13 @@ export function createApp() {
   /* ---------------- Frontend (SPA) ---------------- */
 
   if (fs.existsSync(WEB_DIST)) {
+    // Landing page pública (HTML estático em web/public/landing). Quem já
+    // está logado vai direto pro sistema; o login continua em /entrar.
+    app.get("/", (req, res) => {
+      if (req.session.user) return res.redirect("/listas");
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(path.join(WEB_DIST, "landing", "index.html"));
+    });
     app.use(
       express.static(WEB_DIST, {
         // Sem isso, o Express (por baixo, o pacote `send`) manda

@@ -735,6 +735,24 @@ model AuditLog {
 
 // Rate limit persistido no banco, não em memória: em serverless cada
 // instância teria seu próprio Map e o limite não valeria nada.
+// Contato deixado no formulário da landing page pública (RegulAção).
+// Da plataforma, não de um cliente — por isso sem clientId e fora de
+// TENANT_ISOLATED_MODELS; só o super admin enxerga, em /admin.
+model ContactLead {
+  id           Int       @id @default(autoincrement())
+  createdAt    DateTime  @default(now())
+  name         String
+  organization String
+  role         String?
+  phone        String
+  email        String
+  message      String?
+  notifiedAt   DateTime?
+
+  @@index([createdAt])
+  @@map("contact_leads")
+}
+
 model RateLimitHit {
   id        Int      @id @default(autoincrement())
   key       String

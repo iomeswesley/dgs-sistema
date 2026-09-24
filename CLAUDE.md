@@ -2,6 +2,16 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-09-24 — landing page pública "RegulAção" em `/`
+
+Pedido do usuário: página de apresentação do produto no padrão da landing do `odonto-saas` (HTML estático + simulador de WhatsApp animado), com a marca **RegulAção** (arte do cliente, azul-marinho + vermelho; "DGS" não aparece na página, decisão explícita) e dados sempre fictícios.
+
+- **`web/public/landing/`** (`index.html`, `landing.css`, `landing.js`, `regulacao.png` = arte completa, `regulacao-marca.png` = recorte só do nome, `fonts/` = Montserrat variável auto-hospedada, OFL). HTML estático — sem script/estilo inline, então a CSP do `app.ts` não precisou mudar (nada de Google Fonts). Não tem o `noindex` do SPA (pode ser indexada).
+- **`app.get("/")` em `src/app.ts`**: deslogado vê a landing; logado vai pra `/listas`. Login continua em `/entrar`. Em dev, só aparece servindo pelo Express (`npm run build:web` + config `api` do launch.json, porta 3000) — o Vite na 5173 mostra o SPA.
+- **Simulador**: roteiro em array em `landing.js`, em loop — confirmação com "Sim" + lembrete; confirmação com "Não poderei ir" → "vaga liberada"; convite de vaga aberta aceito. Textos adaptados dos templates reais, com "Central de Regulação" no lugar de "DGS".
+- **Números**: só porcentagens fixas e aproximadas ("cerca de 70% confirmam" etc.), pedido do usuário — sem contagem absoluta nem nome de município; destaque em quem avisa que não vai (vaga reaproveitável com antecedência), sem indicador de "vagas repostas". **Planos**: os mesmos valores do slide 14 da apresentação (créditos R$ 0,50; faixas R$ 0,44/0,36/0,28), marcados como ilustrativos.
+- **Formulário de contato**: `POST /api/public/contact` (`src/modules/leads/`) → tabela `contact_leads` (model `ContactLead`, da plataforma — sem `clientId`, fora de `TENANT_ISOLATED_MODELS`). Validação em `leads.schema.ts` (testada), honeypot `website`, rate limit 5/h por IP (`contactRateLimiter`), consentimento obrigatório. Lista em `/admin` → "Contatos do site" (`GET /api/admin/leads`). Aviso por WhatsApp best-effort com o template `novo_contato_site` (Template 6 do TEMPLATES-WHATSAPP.md) pela conta ativa do cliente `LEAD_NOTIFY_CLIENT_ID` para `LEAD_NOTIFY_PHONE` — sem as duas envs, o contato só fica gravado.
+
 ## Sessão de 2026-09-17 (2) — "Atualizar horários por lista de referência" passa a reconhecer o formato CISAMVE (procedimento + nome)
 
 Continuação direta da correção manual da lista #90 (ver seção anterior): o usuário pediu pra transformar aquele trabalho manual (casar nome+procedimento na mão, script descartável) numa capacidade real da feature já existente. Plano curto aprovado antes de codar (pedido explícito do usuário) — implementado exatamente como descrito, sem tocar em botão/rotas/`FormModal`.

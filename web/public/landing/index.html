@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <title>RegulAção — confirmação de consultas do SUS pelo WhatsApp</title>
+  <meta name="description" content="Tecnologia que transforma a regulação em atendimento: a secretaria envia a agenda, o paciente confirma pelo WhatsApp e a vaga de quem não pode ir volta pra fila com antecedência." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="RegulAção — confirmação de consultas pelo WhatsApp" />
+  <meta property="og:description" content="Tecnologia que transforma a regulação em atendimento." />
+  <meta property="og:image" content="/landing/regulacao.png" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preload" href="/landing/fonts/montserrat-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/landing/landing.css" />
+  <script src="/landing/landing.js" defer></script>
+</head>
+<body>
+  <header class="site-header" id="topo">
+    <div class="header-inner">
+      <a href="#topo" class="brand" aria-label="RegulAção — início">
+        <img src="/landing/regulacao-marca.png" alt="RegulAção" width="720" height="125" />
+      </a>
+      <nav class="nav" aria-label="Seções">
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#resultados">Resultados</a>
+        <a href="#planos">Planos</a>
+        <a href="#duvidas">Dúvidas</a>
+      </nav>
+      <div class="header-actions">
+        <a href="/entrar" class="btn btn-ghost">Entrar</a>
+        <a href="#contato" class="btn btn-primary">Fale com a gente</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Regulação em saúde · SUS</p>
+          <h1>O paciente confirma a consulta pelo <span class="hl-red">WhatsApp</span>. A vaga de quem não pode ir volta pra agenda <span class="hl-blue">com antecedência</span>.</h1>
+          <p class="lead">A secretaria envia a lista da agenda, o RegulAção avisa cada paciente com botões de Sim e Não, lembra na véspera e mostra ao vivo quem vem, quem não vem e quem ainda não respondeu.</p>
+          <ul class="chips">
+            <li>Lista do SISREG ou CELK lida sozinha</li>
+            <li>Confirmação com um toque: Sim / Não</li>
+            <li>Lembrete automático na véspera</li>
+            <li>WhatsApp oficial da Meta</li>
+          </ul>
+          <div class="hero-cta">
+            <a href="#contato" class="btn btn-primary btn-lg">Quero levar pro meu município</a>
+            <a href="#como-funciona" class="btn btn-ghost btn-lg">Ver como funciona</a>
+          </div>
+        </div>
+
+        <div class="hero-demo" aria-label="Demonstração de conversa no WhatsApp com dados fictícios">
+          <div class="phone">
+            <div class="wa-head">
+              <span class="wa-avatar" aria-hidden="true">RA</span>
+              <div class="wa-who">
+                <strong>Central de Regulação</strong>
+                <span>conta comercial oficial</span>
+              </div>
+            </div>
+            <div class="wa-body" id="wa-body" aria-live="off"></div>
+          </div>
+          <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
+          <p class="demo-note">Demonstração com dados fictícios</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMO FUNCIONA -->
+    <section class="section" id="como-funciona">
+      <div class="container reveal">
+        <p class="eyebrow">Como funciona</p>
+        <h2>Da lista da agenda ao paciente confirmado, sem digitar mensagem</h2>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num">1</span>
+            <h3>A secretaria envia a lista</h3>
+            <p>O PDF da agenda (SISREG ou CELK) é lido automaticamente: nome, telefone, data, horário e exame. A equipe confere na tela e aprova antes de qualquer envio.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">2</span>
+            <h3>O paciente responde com um toque</h3>
+            <p>Mensagem oficial no WhatsApp com os dados da consulta e os botões <em>Sim, vou comparecer</em> e <em>Não poderei ir</em>. Na véspera, um lembrete com o que levar.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">3</span>
+            <h3>A agenda se reorganiza a tempo</h3>
+            <p>Quem confirmou, quem avisou que não vai e quem não respondeu aparecem ao vivo. A vaga liberada é oferecida a outro paciente dias antes da consulta.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- RESULTADOS -->
+    <section class="section section-alt" id="resultados">
+      <div class="container reveal">
+        <p class="eyebrow">Resultados na operação</p>
+        <h2>O que acontece quando o paciente é avisado do jeito certo</h2>
+        <div class="stats">
+          <div class="stat"><strong>8 em 10</strong><span>pacientes respondem pelo WhatsApp</span></div>
+          <div class="stat"><strong>cerca de 70%</strong><span>confirmam presença</span></div>
+          <div class="stat"><strong>cerca de 87%</strong><span>das mensagens entregues na hora</span></div>
+          <div class="stat"><strong>até 90%</strong><span>menos tempo da equipe por lista</span></div>
+        </div>
+
+        <div class="spotlight">
+          <div class="spotlight-copy">
+            <p class="eyebrow eyebrow-red">A vaga que não se perde</p>
+            <h3>Quem avisa que não vai é um atendimento a mais — se você souber a tempo</h3>
+            <p>Sem aviso, o horário fica vazio no dia. Com o RegulAção, o paciente diz que não pode ir com dias de antecedência, e a unidade tem tempo de chamar outra pessoa da fila, com preparo e autorização em dia. Mais atendimentos por médico, na mesma agenda.</p>
+          </div>
+          <div class="spotlight-stats">
+            <div class="stat stat-red"><strong>cerca de 15%</strong><span>avisam que não poderão ir</span></div>
+            <div class="stat stat-red"><strong>quase 3 dias</strong><span>de antecedência, em média</span></div>
+            <div class="stat stat-red"><strong>mais de 80%</strong><span>desses avisos chegam antes do dia da consulta</span></div>
+          </div>
+        </div>
+        <p class="fineprint">Percentuais aproximados, medidos na operação real em municípios de Santa Catarina.</p>
+      </div>
+    </section>
+
+    <!-- PLANOS -->
+    <section class="section" id="planos">
+      <div class="container reveal">
+        <p class="eyebrow">Planos</p>
+        <h2>Comece por créditos, cresça por faixas de uso</h2>
+        <div class="plans">
+          <article class="plan">
+            <p class="plan-tag">Conhecer e validar</p>
+            <h3>Créditos pré-pagos</h3>
+            <p class="price"><strong>R$ 0,50</strong> <span>por mensagem</span></p>
+            <p class="plan-sub">Pacote de 1.000 mensagens por R$ 500</p>
+            <ul>
+              <li>Sem mensalidade nem contrato longo</li>
+              <li>Ideal para testar em uma unidade</li>
+              <li>Quem valida migra para o plano mensal</li>
+            </ul>
+            <a href="#contato" class="btn btn-ghost">Quero testar</a>
+          </article>
+
+          <article class="plan plan-featured">
+            <p class="plan-tag">Operar no dia a dia</p>
+            <h3>Plano mensal por faixas</h3>
+            <p class="plan-sub">Cada faixa tem seu preço: quanto mais usa, menos paga por mensagem.</p>
+            <div class="tiers">
+              <div class="tier"><strong>R$ 0,44</strong><span>até 5.000 mensagens/mês</span><em>ex.: 3.000 msgs = R$ 1.320</em></div>
+              <div class="tier"><strong>R$ 0,36</strong><span>de 5.001 a 10.000</span><em>ex.: 8.000 msgs = R$ 3.280</em></div>
+              <div class="tier"><strong>R$ 0,28</strong><span>acima de 10.000</span><em>ex.: 15.000 msgs = R$ 5.400</em></div>
+            </div>
+            <a href="#contato" class="btn btn-primary">Falar sobre o plano</a>
+          </article>
+        </div>
+        <p class="fineprint">Valores ilustrativos, com imposto incluído. Exemplos calculados por faixa (ex.: 8.000 = 5.000 × 0,44 + 3.000 × 0,36).</p>
+      </div>
+    </section>
+
+    <!-- DÚVIDAS -->
+    <section class="section section-alt" id="duvidas">
+      <div class="container reveal">
+        <p class="eyebrow">Dúvidas frequentes</p>
+        <h2>Perguntas que as secretarias costumam fazer</h2>
+        <div class="faq">
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Funciona com a lista que já sai do SISREG ou do CELK?</button>
+            <div class="faq-a"><p>Sim. A equipe sobe o PDF do relatório como ele já é gerado hoje; o sistema lê nome, telefone, data, horário e procedimento sozinho. Nada é enviado antes de alguém revisar e aprovar na tela.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">É o WhatsApp oficial? O número pode ser bloqueado?</button>
+            <div class="faq-a"><p>É a API oficial do WhatsApp Business (Meta), com modelos de mensagem aprovados e respeitando o limite diário de envios do número. Não é disparo por WhatsApp comum.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">E quando o paciente diz que não vai?</button>
+            <div class="faq-a"><p>O horário aparece na hora como vaga liberada, em média com quase 3 dias de antecedência. A equipe pode oferecer a vaga a outro paciente da fila pelo próprio WhatsApp, com botão para aceitar.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">E se o telefone estiver errado ou o paciente não tiver WhatsApp?</button>
+            <div class="faq-a"><p>O sistema sinaliza quem ficou sem entrega, tenta o telefone alternativo do cadastro quando existe e deixa a lista de quem precisa de contato manual pronta para a equipe.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Como fica a LGPD e o dado de saúde?</button>
+            <div class="faq-a"><p>Os dados de cada secretaria ficam isolados, o diagnóstico (CID) nunca vai na mensagem, toda alteração manual fica registrada e os dados antigos são expurgados automaticamente.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Quanto tempo leva para começar?</button>
+            <div class="faq-a"><p>Os municípios atendidos hoje entraram em operação no mesmo dia em que a primeira lista foi carregada.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Como a prefeitura contrata?</button>
+            <div class="faq-a"><p>Deixe seu contato abaixo: montamos a proposta de acordo com o volume do município e a modalidade de contratação adequada.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTATO -->
+    <section class="section contact" id="contato">
+      <div class="container contact-grid reveal">
+        <div class="contact-copy">
+          <p class="eyebrow eyebrow-light">Fale com a gente</p>
+          <h2>Leve o RegulAção para a sua secretaria</h2>
+          <p>Conte um pouco sobre o seu município e retornamos com uma demonstração e uma proposta.</p>
+          <img src="/landing/regulacao.png" alt="" class="contact-art" width="1200" height="800" loading="lazy" />
+        </div>
+        <form class="contact-form" id="contact-form" novalidate>
+          <label>Nome<input name="name" autocomplete="name" required maxlength="120" /></label>
+          <label>Secretaria / município<input name="organization" autocomplete="organization" required maxlength="160" /></label>
+          <label><span>Cargo <small>(opcional)</small></span><input name="role" autocomplete="organization-title" maxlength="120" /></label>
+          <div class="form-row">
+            <label>Telefone / WhatsApp<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required placeholder="(47) 99999-0000" /></label>
+            <label>E-mail<input name="email" type="email" autocomplete="email" required maxlength="160" /></label>
+          </div>
+          <label><span>Mensagem <small>(opcional)</small></span><textarea name="message" rows="3" maxlength="2000"></textarea></label>
+          <label class="hp" aria-hidden="true">Site<input name="website" tabindex="-1" autocomplete="off" /></label>
+          <label class="consent"><input type="checkbox" name="consent" required /> <span>Autorizo o contato pelos dados acima, conforme a <a href="/privacidade" target="_blank" rel="noopener">política de privacidade</a>.</span></label>
+          <button type="submit" class="btn btn-primary btn-lg">Enviar contato</button>
+          <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <img src="/landing/regulacao-marca.png" alt="RegulAção" width="720" height="125" class="footer-brand" />
+      <p>Tecnologia que transforma a regulação em atendimento.</p>
+      <nav><a href="/privacidade">Política de privacidade</a> · <a href="/entrar">Acesso da equipe</a></nav>
+    </div>
+  </footer>
+  <noscript><style>.reveal{opacity:1!important;transform:none!important}</style></noscript>
+</body>
+</html>

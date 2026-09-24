@@ -216,6 +216,24 @@ DGS - D'Artibale Gestão em Saúde
 
 ---
 
+## Template 6 — Aviso interno de contato pelo site (2026-09-24)
+
+**Nome**: `novo_contato_site` · **Categoria**: Utility · **Idioma**: pt_BR · **Sem botões**
+
+```
+Novo contato pelo site.
+
+Nome: {{1}}
+Secretaria/Município: {{2}}
+Telefone: {{3}}
+
+Os dados completos estão no painel administrativo.
+```
+
+**Não vai pra paciente** — avisa a equipe quando alguém preenche o formulário da landing page (RegulAção, em `/`). Fica fora de `DEFAULT_TEMPLATES` (não é submetido a toda WABA de cliente que conecta): submeter uma vez só, na WABA do cliente que avisa, com `npx tsx --env-file=.env scripts/submeter-template-contato.ts`. Destino e conta: envs `LEAD_NOTIFY_PHONE` e `LEAD_NOTIFY_CLIENT_ID` na Vercel.
+
+---
+
 ## Práticas de envio que protegem o número
 
 - **Opt-out honrado de verdade**: quem responder "SAIR"/"PARE"/"NÃO QUERO RECEBER" entra em `patients.opted_out` e nunca mais recebe nada. É a defesa mais barata contra denúncia.

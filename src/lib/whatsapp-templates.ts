@@ -176,6 +176,26 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
   },
 ];
 
+/**
+ * Aviso interno de contato novo pela landing page — vai pra equipe, não pro
+ * paciente. Fora de DEFAULT_TEMPLATES de propósito: não é submetido a toda
+ * WABA de cliente que conecta, só à que avisa (scripts/submeter-template-contato.ts).
+ */
+export const LEAD_NOTIFICATION_TEMPLATE: TemplateDefinition = {
+  name: "novo_contato_site",
+  category: "UTILITY",
+  language: "pt_BR",
+  components: [
+    {
+      type: "BODY",
+      text:
+        "Novo contato pelo site.\n\nNome: {{1}}\nSecretaria/Município: {{2}}\nTelefone: {{3}}\n\n" +
+        "Os dados completos estão no painel administrativo.",
+      example: { body_text: [["Maria Souza", "Secretaria de Saúde de Exemplo", "(47) 99999-0000"]] },
+    },
+  ],
+};
+
 export interface TemplateStatus {
   name: string;
   status: "APPROVED" | "PENDING" | "REJECTED" | "NAO_ENCONTRADO";
@@ -211,7 +231,15 @@ export async function registerPhoneNumber(phoneNumberId: string, accessToken: st
  * conexão. Cada template é independente — falha em um não impede os outros.
  */
 export async function submitDefaultTemplates(wabaId: string, accessToken: string): Promise<void> {
-  for (const template of DEFAULT_TEMPLATES) {
+  await submitTemplates(DEFAULT_TEMPLATES, wabaId, accessToken);
+}
+
+export async function submitTemplates(
+  templates: TemplateDefinition[],
+  wabaId: string,
+  accessToken: string
+): Promise<void> {
+  for (const template of templates) {
     try {
       const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/message_templates`, {
         method: "POST",
@@ -246,8 +274,11 @@ export async function submitDefaultTemplates(wabaId: string, accessToken: string
  * Status de aprovação dos 3 templates padrão nessa WABA — consultado ao
  * vivo na Meta (sem cache, é uma tela de configuração, não a fila de envio).
  */
-export async function getTemplateStatuses(wabaId: string, accessToken: string): Promise<TemplateStatus[]> {
-  const names = DEFAULT_TEMPLATES.map((t) => t.name);
+export async function getTemplateStatuses(
+  wabaId: string,
+  accessToken: string,
+  names: string[] = DEFAULT_TEMPLATES.map((t) => t.name)
+): Promise<TemplateStatus[]> {
   const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/message_templates`);
   url.searchParams.set("fields", "name,status,category");
   url.searchParams.set("limit", "100");

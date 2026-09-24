@@ -72,6 +72,12 @@ const envSchema = z.object({
 
   SENTRY_DSN: z.string().optional(),
 
+  // Aviso por WhatsApp a cada contato novo do formulário da landing page:
+  // pra qual número mandar e por qual cliente (a conta WhatsApp ativa dele).
+  // Sem os dois, o contato só fica gravado (visível em /admin).
+  LEAD_NOTIFY_PHONE: z.string().optional(),
+  LEAD_NOTIFY_CLIENT_ID: z.coerce.number().int().positive().optional(),
+
   VERCEL: z
     .string()
     .optional()
