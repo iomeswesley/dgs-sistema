@@ -70,21 +70,19 @@
     return node;
   }
 
+  // Como no WhatsApp: o balão da mensagem e, embaixo dele, cada botão de
+  // resposta rápida como um bloco branco separado.
   function buildMessage(step) {
-    var msg = el("div", "msg " + step.dir + (step.buttons ? " has-buttons" : ""));
+    var group = el("div", "msg-group " + step.dir);
+    var msg = el("div", "msg");
     if (step.title) msg.appendChild(el("span", "msg-title", step.title));
     msg.appendChild(document.createTextNode(step.text));
-    if (step.buttons) {
-      var box = el("div", "msg-buttons");
-      step.buttons.forEach(function (label) {
-        box.appendChild(el("span", null, label));
-      });
-      msg.appendChild(el("time", null, step.time));
-      msg.appendChild(box);
-    } else {
-      msg.appendChild(el("time", null, step.time));
-    }
-    return msg;
+    msg.appendChild(el("time", null, step.time));
+    group.appendChild(msg);
+    (step.buttons || []).forEach(function (label) {
+      group.appendChild(el("div", "wa-btn", label));
+    });
+    return group;
   }
 
   function startSimulator() {
@@ -103,7 +101,7 @@
     function showToast(step) {
       toast.className = "toast " + step.tone;
       toast.textContent = "";
-      toast.appendChild(el("span", "toast-dot"));
+      toast.appendChild(el("span", "toast-dot", "R"));
       var text = el("div", null, step.text);
       text.appendChild(el("small", null, step.sub));
       toast.appendChild(text);
@@ -146,7 +144,7 @@
           appendMessage(step);
           await wait(step.buttons ? 1600 : 900);
         } else if (step.type === "tap" && lastTemplate) {
-          var buttons = lastTemplate.querySelectorAll(".msg-buttons span");
+          var buttons = lastTemplate.querySelectorAll(".wa-btn");
           if (buttons[step.button]) buttons[step.button].classList.add("tapped");
           await wait(500);
         } else if (step.type === "toast") {

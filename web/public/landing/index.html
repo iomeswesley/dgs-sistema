@@ -56,16 +56,21 @@
 
         <div class="hero-demo" aria-label="Demonstração de conversa no WhatsApp com dados fictícios">
           <div class="phone">
-            <div class="wa-head">
-              <span class="wa-avatar" aria-hidden="true">RA</span>
-              <div class="wa-who">
-                <strong>Central de Regulação</strong>
-                <span>conta comercial oficial</span>
+            <div class="phone-screen">
+              <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
+              <div class="wa-head">
+                <span class="wa-back" aria-hidden="true">‹</span>
+                <span class="wa-avatar" aria-hidden="true">RA</span>
+                <div class="wa-who">
+                  <strong>Central de Regulação <span class="wa-verified" aria-hidden="true">✓</span></strong>
+                  <span>conta comercial oficial</span>
+                </div>
               </div>
+              <div class="wa-body" id="wa-body" aria-live="off"></div>
+              <div class="wa-input" aria-hidden="true"><span class="wa-field">Mensagem</span><span class="wa-mic"></span></div>
+              <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
             </div>
-            <div class="wa-body" id="wa-body" aria-live="off"></div>
           </div>
-          <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
           <p class="demo-note">Demonstração com dados fictícios</p>
         </div>
       </div>
