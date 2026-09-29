@@ -1599,7 +1599,14 @@ function WhatsappTab() {
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: coexistence ? { setup: {}, featureType: "whatsapp_business_app_onboarding" } : { setup: {} },
+          // sessionInfoVersion: "3" — presente na receita documentada em
+          // whatsapp-coexistence-guia.md e no barbearia-saas (validado em
+          // produção); faltava aqui (achado em 2026-09-29 comparando os
+          // dois projetos linha a linha, antes do próximo teste real de
+          // coexistência).
+          extras: coexistence
+            ? { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" }
+            : { setup: {}, sessionInfoVersion: "3" },
         }
       );
     } catch (err) {

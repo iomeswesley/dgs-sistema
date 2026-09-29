@@ -203,6 +203,35 @@ export interface TemplateStatus {
 }
 
 /**
+ * Redefine o PIN de verificação em 2 etapas direto no nó {phone_number_id}
+ * (endpoint diferente do /register abaixo) — não exige o PIN antigo, só um
+ * token válido. Chamado sempre antes do /register (ver `registerPhoneNumber`)
+ * pra garantir que o PIN usado ali é sempre o que acabou de ser gerado,
+ * mesmo se o número já tiver 2FA de uma conexão anterior (nossa ou de outro
+ * app) — sem isso, o /register rejeita com "(#133005) Two step verification
+ * PIN Mismatch". Gap achado em 2026-09-29 comparando com o barbearia-saas
+ * (`whatsappConnect.service.ts`) via whatsapp-coexistence-guia.md — o mesmo
+ * gap já tinha mordido o odonto-saas antes de ser portado lá.
+ */
+async function setTwoStepPin(phoneNumberId: string, accessToken: string, pin: string): Promise<void> {
+  const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ pin }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    // Número nunca registrado na Cloud API antes (1º registro de verdade) —
+    // a Meta rejeita redefinir o PIN de uma conta que ainda não existe
+    // (code 133010/error_subcode 2593006, "Use /register API to create an
+    // account first"). Sem PIN antigo pra conflitar, é seguro pular e
+    // deixar o /register abaixo criar a conta já com o PIN novo.
+    if (/"code"\s*:\s*133010\b/.test(body) && /"error_subcode"\s*:\s*2593006\b/.test(body)) return;
+    throw new Error(`Falha ao redefinir o PIN de verificação do WhatsApp (${res.status}): ${body}`);
+  }
+}
+
+/**
  * Registra o número na Cloud API — passo separado do Embedded Signup,
  * obrigatório antes do primeiro envio (sem isso todo envio falha com
  * "(#133010) Account not registered"). O PIN é gerado na hora e não
@@ -213,6 +242,7 @@ export interface TemplateStatus {
  */
 export async function registerPhoneNumber(phoneNumberId: string, accessToken: string): Promise<void> {
   const pin = String(Math.floor(100000 + Math.random() * 900000));
+  await setTwoStepPin(phoneNumberId, accessToken, pin);
   const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/register`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
