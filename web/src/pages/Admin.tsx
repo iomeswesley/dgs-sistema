@@ -41,6 +41,7 @@ interface AdminClient {
   _count: { municipalities: number; patients: number; appointments: number; users: number };
   billing: BillingStatus;
   billingConfig: BillingConfig | null;
+  billingError: string | null;
 }
 
 interface ClientUser {
@@ -141,7 +142,7 @@ export function Admin() {
                 </span>
               </Td>
               <Td>
-                <BillingSummary billing={c.billing} />
+                <BillingSummary billing={c.billing} error={c.billingError} />
               </Td>
               <Td>
                 <div className="flex flex-wrap gap-3">
@@ -305,7 +306,8 @@ function ContactLeads() {
 }
 
 /** Resumo curto do status de cobrança pra tabela de clientes. */
-function BillingSummary({ billing }: { billing: BillingStatus }) {
+function BillingSummary({ billing, error }: { billing: BillingStatus; error: string | null }) {
+  if (error) return <span className="text-xs text-rose-600" title={error}>⚠️ Erro ao calcular</span>;
   if (!billing.mode) return <span className="text-xs text-ink-muted">Sem limite</span>;
 
   const label =

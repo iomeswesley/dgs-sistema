@@ -69,10 +69,23 @@ adminRouter.get(
     });
     const configByClient = new Map(settingsRows.map((row) => [row.clientId, row]));
 
+    // Nunca deixa um cliente com dado inconsistente (ex.: sem AppSettings —
+    // já aconteceu de verdade com um cliente órfão de teste, derrubando a
+    // tela inteira em produção, 2026-09-28) derrubar a lista inteira. Cada
+    // cliente é isolado: se getBillingStatus() falhar pra um, os outros
+    // continuam aparecendo normal, e esse mostra "sem limite" com um aviso.
     const withBilling = [];
     for (const client of clients) {
-      const billing = await runWithClient(client.id, () => getBillingStatus());
-      withBilling.push({ ...client, billing, billingConfig: configByClient.get(client.id) ?? null });
+      let billing;
+      let billingError: string | null = null;
+      try {
+        billing = await runWithClient(client.id, () => getBillingStatus());
+      } catch (err) {
+        billing = { mode: null, blocked: false, limit: null, used: 0, remaining: null, resetsAt: null };
+        billingError = err instanceof Error ? err.message : "Falha ao calcular status de cobrança.";
+        console.error(`[ADMIN] Falha ao calcular billing do cliente ${client.id} (${client.name}):`, billingError);
+      }
+      withBilling.push({ ...client, billing, billingError, billingConfig: configByClient.get(client.id) ?? null });
     }
 
     res.json({ clients: withBilling });
