@@ -2,6 +2,18 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-09-29 (2) — Coexistência: diff linha a linha contra o barbearia-saas, 2 gaps corrigidos
+
+Pedido do usuário: comparar `C:\Users\Admin\Documents\Claude\whatsapp-coexistence-guia.md` (guia cross-projeto, ver "Pendências abertas" no topo) e a implementação real do `barbearia-saas` contra o sistema-dgs, linha a linha, antes do próximo teste real de coexistência com Facebook de cliente externo (ainda não validado ponta a ponta). Mesma lição que o `odonto-saas` já tinha ensinado (documentada no guia): "parece igual" (confirmado por leitura visual) não é o mesmo que "todo fix que o projeto irmão já aplicou foi realmente portado" — só um diff mecânico pega isso.
+
+**2 gaps reais achados e corrigidos** (commit `733318d`):
+1. **`registerPhoneNumber()` (`src/lib/whatsapp-templates.ts`) não redefinia o PIN de 2 etapas antes do `/register`** — o barbearia-saas sempre chama `POST /{phone_number_id}` (endpoint separado, reset de PIN sem exigir o antigo) antes do `/register`, porque um número que já teve 2FA de uma conexão anterior (nossa ou de outro app) faz o `/register` rejeitar com `(#133005) Two step verification PIN Mismatch`. Só não tinha se manifestado ainda porque toda conexão real do sistema-dgs até hoje foi número novo/limpo, nunca reconexão. Nova função `setTwoStepPin()` (mesmo padrão do barbearia-saas, inclusive tratando `code 133010/subcode 2593006` — "conta nunca registrada antes" — como sucesso silencioso, já que aí não tem PIN antigo pra conflitar) chamada logo antes do `/register` já existente.
+2. **`FB.login()` (`Configuracoes.tsx`) não mandava `sessionInfoVersion: "3"` nos `extras`** — presente na receita documentada no guia (seção "Passo a passo que funcionou de verdade") e no `barbearia-saas` validado em produção, faltava nos dois modos (número novo e coexistência).
+
+**Conferido também, sem achar problema** (equivalentes, só implementação diferente — não precisou mexer): COOP do helmet (`crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }` aqui vs. `false` no barbearia-saas — os dois são a solução documentada no guia pro popup do Embedded Signup não perder `window.opener`), decisão `isCoexistence` pulando `registerPhoneNumber` (idêntica na essência), listener dos dois eventos de finalização (`FINISH`/`FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`), fallback da env var dedicada (`WHATSAPP_SIGNUP_CONFIG_ID_COEXISTENCE` aqui vs. `WHATSAPP_CONFIG_ID_COEXISTENCE` lá — nome levemente diferente, mesmo comportamento). Template OTP (`sub_type: "url"` vs `"copy_code"`) não se aplica — sistema-dgs não tem fluxo de código de verificação via template de Authentication, isso é exclusivo do barbearia-saas.
+
+`npm run typecheck`/`npm test` limpos (203 testes passando — só 1 falha de integração multi-cliente pré-existente, banco de teste separado, sem relação), deploy em produção confirmado saudável. Guia cross-projeto (`whatsapp-coexistence-guia.md`) atualizado com os 2 achados. **Pendência real que continua**: coexistência do sistema-dgs ainda não foi validada ponta a ponta com Facebook de cliente externo (fora do App) — esses 2 fixes reduzem o risco do próximo teste, mas não substituem o teste em si.
+
 ## Sessão de 2026-09-29 — validação em produção do limite de mensagens + 2 fixes
 
 Continuação direta da sessão de 2026-09-28. Usuário pediu conferência visual do `/admin` (print) e teste real com o cliente DGS.
