@@ -6,6 +6,13 @@ export interface QueueProcessResult {
   deferred: number;
   remainingToday: number;
   dueNow: number;
+  staleCancelled: Record<string, number>;
+}
+
+function mergeStale(into: Record<string, number>, from: Record<string, number>) {
+  for (const [template, count] of Object.entries(from)) {
+    into[template] = (into[template] ?? 0) + count;
+  }
 }
 
 /**
@@ -25,11 +32,12 @@ export interface QueueProcessResult {
  * cron do dia seguinte pra terminar um disparo de hoje.
  */
 export async function runQueueUntilDone(
-  onProgress?: (accumulated: { sent: number; failed: number }) => void
-): Promise<{ sent: number; failed: number; remainingToday: number }> {
+  onProgress?: (accumulated: { sent: number; failed: number; staleCancelled: Record<string, number> }) => void
+): Promise<{ sent: number; failed: number; remainingToday: number; staleCancelled: Record<string, number> }> {
   let totalSent = 0;
   let totalFailed = 0;
   let remainingToday = 0;
+  const totalStale: Record<string, number> = {};
 
   // Teto de segurança pra nunca girar pra sempre por causa de algum bug —
   // 500 chamadas já cobrem uma fila bem maior do que qualquer lista real.
@@ -38,13 +46,20 @@ export async function runQueueUntilDone(
     totalSent += result.sent;
     totalFailed += result.failed;
     remainingToday = result.remainingToday;
-    onProgress?.({ sent: totalSent, failed: totalFailed });
+    mergeStale(totalStale, result.staleCancelled);
+    onProgress?.({ sent: totalSent, failed: totalFailed, staleCancelled: totalStale });
 
     if (result.dueNow === 0) break;
-    // Nada foi processado nessa rodada mas ainda tem due now (ex.: erro
-    // silencioso) — pára pra não martelar a API sem sair do lugar.
-    if (result.sent === 0 && result.failed === 0) break;
+    // Nada foi processado nessa rodada (nem enviado, nem falhou, nem
+    // cancelado por estar desatualizado) mas ainda tem due now (ex.: erro
+    // silencioso) — pára pra não martelar a API sem sair do lugar. Um lote
+    // inteiro de cancelados por obsolescência TAMBÉM é progresso real —
+    // sem contar isso aqui, um backlog represado só de mensagens
+    // desatualizadas (ex.: depois de um bloqueio comercial longo, ver
+    // modules/billing) pararia de drenar cedo demais, achando que travou.
+    const staleThisRound = Object.values(result.staleCancelled).reduce((a, b) => a + b, 0);
+    if (result.sent === 0 && result.failed === 0 && staleThisRound === 0) break;
   }
 
-  return { sent: totalSent, failed: totalFailed, remainingToday };
+  return { sent: totalSent, failed: totalFailed, remainingToday, staleCancelled: totalStale };
 }

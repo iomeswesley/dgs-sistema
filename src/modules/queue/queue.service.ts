@@ -177,6 +177,17 @@ export interface ProcessResult {
    * admin mexer em /admin (ver modules/billing).
    */
   billingBlocked: boolean;
+  /**
+   * Cancelados por estarem desatualizados quando finalmente chegou a vez de
+   * enviar — não é falha nem sucesso, é "não faz mais sentido mandar" (a
+   * consulta já passou). Contado por template (CONFIRMACAO/VAGA_ABERTA/
+   * REAGENDAMENTO/LEMBRETE), pra quem olha o resultado entender qual tipo
+   * de mensagem ficou obsoleta, não só quantas. Fica mais relevante depois
+   * de um bloqueio comercial longo (ver modules/billing) — represar por
+   * dias aumenta a chance de a fila drenar depois que a consulta já
+   * aconteceu.
+   */
+  staleCancelled: Record<string, number>;
 }
 
 // maxDuration é 60s (vercel.json) — pára de propósito antes disso pra nunca
@@ -232,7 +243,15 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
   await reclaimStuckJobs();
   const capacity = await queueCapacity();
   if (capacity.remaining === 0) {
-    return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0, billingBlocked: false };
+    return {
+      sent: 0,
+      failed: 0,
+      deferred: capacity.pending,
+      remainingToday: 0,
+      dueNow: 0,
+      billingBlocked: false,
+      staleCancelled: {},
+    };
   }
   // Limite comercial do cliente (créditos/janela, ver modules/billing) —
   // independente do teto diário da Meta acima. Bloqueia igual pra qualquer
@@ -248,6 +267,7 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
       remainingToday: capacity.remaining,
       dueNow: 0,
       billingBlocked: true,
+      staleCancelled: {},
     };
   }
 
@@ -303,6 +323,10 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
 
   let sent = 0;
   let failed = 0;
+  const staleCancelled: Record<string, number> = {};
+  function markStale(template: string) {
+    staleCancelled[template] = (staleCancelled[template] ?? 0) + 1;
+  }
   const start = Date.now();
 
   for (const [index, job] of jobs.entries()) {
@@ -357,18 +381,25 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
           lastError: "Lembrete atrasado — a fila não processou a tempo e a consulta já é hoje (ou já passou). Cancelado pra não mandar 'amanhã' errado.",
         },
       });
+      markStale(job.template);
       continue;
     }
 
-    // Confirmação/reposição de vaga atrasada demais — a consulta que se
-    // pedia pra confirmar já passou. Achado junto com o de cima (mesmos
-    // 443 jobs presos): 25 confirmações travadas eram de consultas já
-    // ocorridas. Pedir "confirme sua presença" pra uma data que já foi
-    // não faz sentido nenhum pro paciente. LEMBRETE já tem sua própria
-    // checagem acima (mais rígida — nem no mesmo dia pode); CANCELAMENTO
-    // continua saindo sempre, é fato decidido pela equipe, não pergunta.
+    // Confirmação/reposição de vaga/reagendamento atrasado demais — a
+    // consulta que se pedia pra confirmar já passou. Achado junto com o de
+    // cima (mesmos 443 jobs presos): 25 confirmações travadas eram de
+    // consultas já ocorridas. Pedir "confirme sua presença" (ou "houve uma
+    // alteração no horário") pra uma data que já foi não faz sentido
+    // nenhum pro paciente. REAGENDAMENTO entrou aqui em 2026-09-29 (mesmo
+    // risco que CONFIRMACAO/VAGA_ABERTA — achado revisando o que acontece
+    // quando o bloqueio comercial represa a fila por vários dias, ver
+    // modules/billing: sem essa checagem, um reagendamento podia sair
+    // pedindo confirmação de um horário que já passou). LEMBRETE já tem
+    // sua própria checagem acima (mais rígida — nem no mesmo dia pode);
+    // CANCELAMENTO continua saindo sempre, é fato decidido pela equipe,
+    // não pergunta.
     if (
-      (job.template === "CONFIRMACAO" || job.template === "VAGA_ABERTA") &&
+      (job.template === "CONFIRMACAO" || job.template === "VAGA_ABERTA" || job.template === "REAGENDAMENTO") &&
       job.appointment.scheduledAt.getTime() < Date.now()
     ) {
       await prisma.messageJob.update({
@@ -379,6 +410,7 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
           lastError: "Atrasado demais — a consulta já passou. Cancelado em vez de pedir confirmação de algo que já aconteceu.",
         },
       });
+      markStale(job.template);
       continue;
     }
 
@@ -490,7 +522,15 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
   const dueNow = await prisma.messageJob.count({
     where: { status: "PENDENTE", scheduledFor: { lte: new Date() } },
   });
-  return { sent, failed, deferred: after.pending, remainingToday: after.remaining, dueNow, billingBlocked: false };
+  return {
+    sent,
+    failed,
+    deferred: after.pending,
+    remainingToday: after.remaining,
+    dueNow,
+    billingBlocked: false,
+    staleCancelled,
+  };
 }
 
 export type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrThrow>> & {

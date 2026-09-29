@@ -15,6 +15,30 @@ import {
   toBandCounts,
 } from "../lib/format";
 
+const STALE_TEMPLATE_LABEL: Record<string, string> = {
+  CONFIRMACAO: "confirmação",
+  LEMBRETE: "lembrete",
+  VAGA_ABERTA: "vaga aberta",
+  REAGENDAMENTO: "reagendamento",
+};
+
+/**
+ * "2 confirmações, 1 lembrete" — pedido do usuário (2026-09-29): quando a
+ * fila represada por um bloqueio comercial (ver modules/billing) drena e
+ * acha mensagem cuja consulta já passou, o processQueue() já cancela
+ * sozinho (não manda "amanhã" errado nem pede confirmação do que já
+ * aconteceu) — mas isso era silencioso, só no `MessageJob.lastError`.
+ * Formata o resumo por categoria pra equipe ver o que ficou obsoleto sem
+ * precisar ir no banco.
+ */
+function formatStaleCancelled(staleCancelled: Record<string, number>): string | null {
+  const parts = Object.entries(staleCancelled)
+    .filter(([, count]) => count > 0)
+    .map(([template, count]) => `${count} ${STALE_TEMPLATE_LABEL[template] ?? template.toLowerCase()}`);
+  if (parts.length === 0) return null;
+  return `${parts.reduce((a, b, i) => (i === 0 ? b : `${a}, ${b}`), "")} cancelado(s) por estar(em) desatualizado(s) — a consulta já tinha passado.`;
+}
+
 interface Appointment {
   id: number;
   scheduledAt: string;
@@ -122,8 +146,10 @@ export function Hoje() {
         data.reload();
         summary.reload();
       });
+      const stale = formatStaleCancelled(result.staleCancelled);
       setProcessResult(
-        `${result.sent} enviadas, ${result.failed} falharam. Cabem mais ${result.remainingToday} hoje.`
+        `${result.sent} enviadas, ${result.failed} falharam. Cabem mais ${result.remainingToday} hoje.` +
+          (stale ? ` ${stale}` : "")
       );
       data.reload();
       summary.reload();
@@ -150,6 +176,7 @@ export function Hoje() {
         remindersQueued: number;
         retriesQueued: number;
         closedAsNoAnswer: number;
+        staleCancelled: Record<string, number>;
       }>("/api/queue/run-cadence");
       let sent = result.sent;
       let failed = result.failed;
@@ -164,10 +191,16 @@ export function Hoje() {
       });
       sent = result.sent + finished.sent;
       failed = result.failed + finished.failed;
+      const staleTotal: Record<string, number> = { ...result.staleCancelled };
+      for (const [template, count] of Object.entries(finished.staleCancelled)) {
+        staleTotal[template] = (staleTotal[template] ?? 0) + count;
+      }
+      const stale = formatStaleCancelled(staleTotal);
       setProcessResult(
         `${sent} enviadas, ${failed} falharam · ${result.remindersQueued} lembretes e ` +
           `${result.retriesQueued} reenvios criados · ${result.closedAsNoAnswer} fechados sem resposta. ` +
-          `Cabem mais ${finished.remainingToday} hoje.`
+          `Cabem mais ${finished.remainingToday} hoje.` +
+          (stale ? ` ${stale}` : "")
       );
       data.reload();
       summary.reload();
