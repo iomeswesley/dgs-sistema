@@ -796,7 +796,7 @@ export function Revisao() {
           sent: number;
           failed: number;
           deferred: number;
-          capacity: { remaining: number };
+          capacity: { remaining: number; billing: { blocked: boolean } };
         }>(`/api/lists/${list.id}/dispatch`);
         let sent = result.sent;
         let failed = result.failed;
@@ -817,9 +817,11 @@ export function Revisao() {
           `${sent} mensagens enviadas` +
             (failed > 0 ? `, ${failed} falharam` : "") +
             (result.skipped > 0 ? `. ${result.skipped} ignoradas (opt-out ou já enfileiradas)` : "") +
-            (finished.remainingToday === 0 && sent + failed < result.queued
-              ? " — limite diário de hoje acabou, o restante sai amanhã automaticamente."
-              : ".")
+            (result.capacity.billing.blocked
+              ? " — limite de mensagens do plano atingido, o restante fica pausado até um super admin liberar mais em Admin → Cobrança."
+              : finished.remainingToday === 0 && sent + failed < result.queued
+                ? " — limite diário de hoje acabou, o restante sai amanhã automaticamente."
+                : ".")
         );
       } else {
         await api.post(`/api/lists/${list.id}/conclude`);

@@ -543,14 +543,42 @@ model MessageJob {
 }
 
 // Linha única (id sempre 1) com configurações do sistema que a equipe pode
-// ajustar em Configurações, sem precisar de deploy — hoje só a retenção da
-// mídia recebida do paciente (ver WhatsappMessage.mediaData).
+// ajustar em Configurações, sem precisar de deploy — hoje a retenção da
+// mídia recebida do paciente (ver WhatsappMessage.mediaData) e o limite
+// comercial de mensagens (ver modules/billing).
 model AppSettings {
   id                 Int      @id @default(autoincrement())
   // Uma linha por cliente (antes era linha unica com id fixo 1).
   clientId           Int      @unique
   mediaRetentionDays Int      @default(7)
   updatedAt          DateTime @updatedAt
+
+  // Limite comercial de mensagens (2026-09-28) — editável só pelo super
+  // admin em /admin (nunca por PATCH /api/settings, que é aberto a
+  // qualquer usuário do cliente). `billingMode: null` = sem limite, é o
+  // estado de todo cliente hoje (nenhum precisou disso ainda). Ver
+  // src/modules/billing/billing.ts pra semântica completa de cada modo.
+  billingMode      BillingMode?
+  // JANELA: teto de mensagens dentro de cada janela.
+  messageLimit     Int?
+  // JANELA: data de início da primeira janela — coluna de calendário
+  // pura (@db.Date), igual Agenda.date. NUNCA formatar/comparar com
+  // timeZone explícito (bug já documentado 2x no CLAUDE.md, 2026-08-25 e
+  // 2026-08-26) — ler os componentes UTC direto, só virar timestamp real
+  // (meia-noite de Brasília) via parseBrasiliaDateTime() na hora de
+  // comparar com WhatsappMessage.createdAt.
+  periodStartDate  DateTime?    @db.Date
+  // JANELA: duração de cada janela em dias (7 pra teste, 30 pra
+  // mensalidade, etc.) — a janela reseta sozinha, repetindo a partir de
+  // periodStartDate indefinidamente.
+  periodLengthDays Int?
+  // CREDITOS: saldo concedido desde o último "adicionar créditos" —
+  // nunca reseta por tempo, só quando o admin soma mais (addClientCredits
+  // recalcula preservando o que sobrou).
+  creditsBalance   Int?
+  // CREDITOS: quando esse saldo foi concedido — âncora de contagem
+  // (usado = mensagens enviadas desde este instante).
+  creditsGrantedAt DateTime?
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
@@ -857,4 +885,10 @@ enum DeliveryStatus {
   ENTREGUE
   LIDO
   FALHOU
+}
+
+// Modo de limite comercial de mensagens por cliente (ver AppSettings).
+enum BillingMode {
+  JANELA
+  CREDITOS
 }

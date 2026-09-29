@@ -38,11 +38,22 @@ interface Appointment {
   }[];
 }
 
+// Espelha BillingStatus (src/modules/billing/billing.ts).
+interface BillingStatus {
+  mode: "JANELA" | "CREDITOS" | null;
+  blocked: boolean;
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  resetsAt: string | null;
+}
+
 interface Capacity {
   dailyLimit: number;
   used: number;
   remaining: number;
   pending: number;
+  billing: BillingStatus;
 }
 
 export function Hoje() {
@@ -190,7 +201,7 @@ export function Hoje() {
         description="Como está a resposta das listas disparadas, por período."
         actions={
           <div className="flex gap-2">
-            {capacity && capacity.pending > 0 && (
+            {capacity && capacity.pending > 0 && !capacity.billing.blocked && (
               <button type="button" className="btn btn-quiet" disabled={busy} onClick={processQueue}>
                 Enviar {Math.min(capacity.pending, capacity.remaining)} da fila
               </button>
@@ -210,6 +221,19 @@ export function Hoje() {
       {error && (
         <div className="mb-4">
           <ErrorNote message={error} />
+        </div>
+      )}
+
+      {capacity?.billing.blocked && (
+        <div className="mb-5">
+          <Callout tone="danger">
+            Envio pausado por limite de mensagens do plano —{" "}
+            {capacity.billing.mode === "JANELA"
+              ? `${capacity.billing.used} de ${capacity.billing.limit} usadas nesta janela`
+              : `sem créditos restantes`}
+            . <span className="tabular font-semibold">{capacity.pending}</span> mensagem(ns) esperando na fila até um
+            super admin liberar mais em Admin → Cobrança.
+          </Callout>
         </div>
       )}
 

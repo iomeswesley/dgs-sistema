@@ -25,6 +25,7 @@ import {
 import { getCancellationReceivedBreakdown } from "@/modules/cancellations/cancellations.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { listContactLeads } from "@/modules/leads/leads.service.js";
+import { addClientCredits, getBillingStatus, setClientBilling } from "@/modules/billing/billing.service.js";
 
 export const adminRouter = Router();
 adminRouter.use("/api/admin", requireAuth, requireSuperAdmin);
@@ -49,7 +50,32 @@ adminRouter.get(
         },
       },
     });
-    res.json({ clients });
+
+    // Status de cobrança de cada cliente (ver modules/billing) — precisa de
+    // um `runWithClient` por cliente pra contar `WhatsappMessage` (modelo
+    // isolado) certo, mesmo padrão de `/api/admin/indicators` abaixo.
+    // Sequencial, não paralelo: poucos clientes hoje, sem pressa nenhuma
+    // nessa tela.
+    //
+    // `billingConfig` (cru, direto de AppSettings) vai junto com `billing`
+    // (já calculado) só pra pré-preencher o formulário de edição — a tela
+    // precisa saber a data de início/duração já configuradas, não só o
+    // status resultante. Uma consulta em lote (não por cliente) porque o
+    // filtro `clientId: { in: [...] }` já é explícito, sem precisar de
+    // `runWithClient` nenhum aqui.
+    const settingsRows = await prisma.appSettings.findMany({
+      where: { clientId: { in: clients.map((c) => c.id) } },
+      select: { clientId: true, billingMode: true, messageLimit: true, periodStartDate: true, periodLengthDays: true, creditsBalance: true },
+    });
+    const configByClient = new Map(settingsRows.map((row) => [row.clientId, row]));
+
+    const withBilling = [];
+    for (const client of clients) {
+      const billing = await runWithClient(client.id, () => getBillingStatus());
+      withBilling.push({ ...client, billing, billingConfig: configByClient.get(client.id) ?? null });
+    }
+
+    res.json({ clients: withBilling });
   })
 );
 
@@ -116,6 +142,55 @@ adminRouter.patch(
       newValue: JSON.stringify(client),
     });
     res.json({ client });
+  })
+);
+
+/*
+  Limite comercial de mensagens (2026-09-28, ver modules/billing). Rotas
+  separadas de PATCH /api/admin/clients/:id de propósito — campo diferente
+  (Client vs. AppSettings), validação bem mais específica por modo, e
+  "adicionar créditos" não é uma edição de campo, é uma operação (soma
+  preservando o saldo restante, não sobrescreve).
+*/
+const setBillingSchema = z.discriminatedUnion("billingMode", [
+  z.object({ billingMode: z.null() }),
+  z.object({
+    billingMode: z.literal("JANELA"),
+    messageLimit: z.coerce.number().int().positive(),
+    periodStartDate: dateOnlySchema,
+    periodLengthDays: z.coerce.number().int().positive(),
+  }),
+  z.object({
+    billingMode: z.literal("CREDITOS"),
+    creditsBalance: z.coerce.number().int().min(0),
+  }),
+]);
+
+adminRouter.patch(
+  "/api/admin/clients/:id/billing",
+  asyncHandler(async (req, res) => {
+    const clientId = routeId(req);
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new AppError("Cliente não encontrado.", 404);
+
+    const data = parseBody(req, setBillingSchema);
+    const billing = await runWithClient(clientId, () => setClientBilling(data, currentUserId(req)));
+    res.json({ billing });
+  })
+);
+
+const addCreditsSchema = z.object({ amount: z.coerce.number().positive() });
+
+adminRouter.post(
+  "/api/admin/clients/:id/billing/credits",
+  asyncHandler(async (req, res) => {
+    const clientId = routeId(req);
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new AppError("Cliente não encontrado.", 404);
+
+    const { amount } = parseBody(req, addCreditsSchema);
+    const billing = await runWithClient(clientId, () => addClientCredits(amount, currentUserId(req)));
+    res.json({ billing });
   })
 );
 

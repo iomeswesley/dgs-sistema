@@ -16,6 +16,7 @@ import { prisma } from "../src/lib/prisma.js";
 import { runWithClient } from "../src/lib/tenant-context.js";
 import { classifyReply } from "../src/lib/templates.js";
 import { parseBrasiliaDateTime, toBrasiliaDateString, endOfBrasiliaDay } from "../src/lib/timezone.js";
+import { getBillingStatus } from "../src/modules/billing/billing.service.js";
 
 const OPEN_STATUSES = ["ENVIADO", "ENTREGUE", "FALHA", "SEM_RESPOSTA"] as const;
 const STUCK_ENVIANDO_MINUTES = 15;
@@ -34,6 +35,17 @@ async function main() {
   const startAnchor = new Date(anchor);
   startAnchor.setDate(startAnchor.getDate() - (days - 1));
   const start = startOfBrasiliaDay(startAnchor);
+
+  // Limite comercial de mensagens (2026-09-28, ver modules/billing) — cobre
+  // TODOS os clientes ativos, não só o 1 (DGS) do resto do relatório abaixo,
+  // porque é justamente pra avisar sozinho quando outro cliente pagante
+  // ficar travado esperando pagamento.
+  const clients = await prisma.client.findMany({ where: { active: true }, select: { id: true, name: true } });
+  const clientesBloqueados: { cliente: string; billing: Awaited<ReturnType<typeof getBillingStatus>> }[] = [];
+  for (const client of clients) {
+    const billing = await runWithClient(client.id, () => getBillingStatus());
+    if (billing.blocked) clientesBloqueados.push({ cliente: client.name, billing });
+  }
 
   await runWithClient(1, async () => {
     const now = new Date();
@@ -173,6 +185,7 @@ async function main() {
         motivo: b.reason,
         pacientesNotificados: b._count.appointments,
       })),
+      clientesBloqueadosPorLimiteDeMensagens: clientesBloqueados,
     };
 
     console.log(JSON.stringify(report, null, 2));

@@ -4,7 +4,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
-import { formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime } from "../lib/format";
 import { useApi } from "../lib/useApi";
 
 /*
@@ -14,6 +14,24 @@ import { useApi } from "../lib/useApi";
   gerenciar quem tem acesso a cada um.
 */
 
+// Espelha BillingStatus (src/modules/billing/billing.ts) — mode: null = sem limite.
+interface BillingStatus {
+  mode: "JANELA" | "CREDITOS" | null;
+  blocked: boolean;
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  resetsAt: string | null;
+}
+
+interface BillingConfig {
+  billingMode: "JANELA" | "CREDITOS" | null;
+  messageLimit: number | null;
+  periodStartDate: string | null;
+  periodLengthDays: number | null;
+  creditsBalance: number | null;
+}
+
 interface AdminClient {
   id: number;
   name: string;
@@ -21,6 +39,8 @@ interface AdminClient {
   notes: string | null;
   createdAt: string;
   _count: { municipalities: number; patients: number; appointments: number; users: number };
+  billing: BillingStatus;
+  billingConfig: BillingConfig | null;
 }
 
 interface ClientUser {
@@ -40,6 +60,7 @@ export function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState<AdminClient | null>(null);
   const [managingAccess, setManagingAccess] = useState<AdminClient | null>(null);
+  const [managingBilling, setManagingBilling] = useState<AdminClient | null>(null);
 
   async function createClient() {
     setBusy(true);
@@ -99,6 +120,7 @@ export function Admin() {
               <Th>Agendamentos</Th>
               <Th>Equipe</Th>
               <Th>Situação</Th>
+              <Th>Cobrança</Th>
               <Th>Ações</Th>
             </tr>
           }
@@ -119,6 +141,9 @@ export function Admin() {
                 </span>
               </Td>
               <Td>
+                <BillingSummary billing={c.billing} />
+              </Td>
+              <Td>
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -126,6 +151,13 @@ export function Admin() {
                     onClick={() => setManagingAccess(c)}
                   >
                     Gerenciar acesso
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-accent underline underline-offset-2"
+                    onClick={() => setManagingBilling(c)}
+                  >
+                    Cobrança
                   </button>
                   <button
                     type="button"
@@ -194,6 +226,17 @@ export function Admin() {
         <ClientAccessModal client={managingAccess} onClose={() => setManagingAccess(null)} />
       )}
 
+      {managingBilling && (
+        <ClientBillingModal
+          client={managingBilling}
+          onClose={() => setManagingBilling(null)}
+          onSaved={() => {
+            setManagingBilling(null);
+            clients.reload();
+          }}
+        />
+      )}
+
       <ContactLeads />
     </div>
   );
@@ -258,6 +301,200 @@ function ContactLeads() {
         </Table>
       )}
     </section>
+  );
+}
+
+/** Resumo curto do status de cobrança pra tabela de clientes. */
+function BillingSummary({ billing }: { billing: BillingStatus }) {
+  if (!billing.mode) return <span className="text-xs text-ink-muted">Sem limite</span>;
+
+  const label =
+    billing.mode === "JANELA"
+      ? `${billing.used}${billing.limit != null ? `/${billing.limit}` : ""}${
+          billing.resetsAt ? ` · até ${formatDate(billing.resetsAt)}` : ""
+        }`
+      : `${billing.remaining ?? "—"} créditos`;
+
+  return (
+    <div className="text-xs">
+      <div className={billing.blocked ? "font-medium text-rose-600" : "text-ink"}>{label}</div>
+      {billing.blocked && <div className="text-rose-600">Bloqueado</div>}
+    </div>
+  );
+}
+
+type BillingFormMode = "SEM_LIMITE" | "JANELA" | "CREDITOS";
+
+function ClientBillingModal({
+  client,
+  onClose,
+  onSaved,
+}: {
+  client: AdminClient;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const config = client.billingConfig;
+  const [mode, setMode] = useState<BillingFormMode>(
+    config?.billingMode === "JANELA" ? "JANELA" : config?.billingMode === "CREDITOS" ? "CREDITOS" : "SEM_LIMITE"
+  );
+  const [messageLimit, setMessageLimit] = useState(String(config?.messageLimit ?? ""));
+  const [periodStartDate, setPeriodStartDate] = useState(
+    config?.periodStartDate ? config.periodStartDate.slice(0, 10) : ""
+  );
+  const [periodLengthDays, setPeriodLengthDays] = useState(String(config?.periodLengthDays ?? "30"));
+  const [creditsBalance, setCreditsBalance] = useState(String(config?.creditsBalance ?? ""));
+  const [addAmount, setAddAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "SEM_LIMITE") {
+        await api.patch(`/api/admin/clients/${client.id}/billing`, { billingMode: null });
+      } else if (mode === "JANELA") {
+        await api.patch(`/api/admin/clients/${client.id}/billing`, {
+          billingMode: "JANELA",
+          messageLimit: Number(messageLimit),
+          periodStartDate,
+          periodLengthDays: Number(periodLengthDays),
+        });
+      } else {
+        await api.patch(`/api/admin/clients/${client.id}/billing`, {
+          billingMode: "CREDITOS",
+          creditsBalance: Number(creditsBalance),
+        });
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addCredits() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post(`/api/admin/clients/${client.id}/billing/credits`, { amount: Number(addAmount) });
+      setAddAmount("");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao adicionar créditos.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isCreditosJaConfigurado = config?.billingMode === "CREDITOS";
+
+  return (
+    <FormModal
+      open
+      title={`Cobrança — ${client.name}`}
+      description="Limite comercial de mensagens de WhatsApp. Sem nenhum modo, o cliente manda sem limite (estado de hoje pra todo mundo)."
+      busy={busy}
+      error={error}
+      onSubmit={save}
+      onCancel={onClose}
+    >
+      <div className="space-y-4">
+        {client.billing.mode && (
+          <Callout tone={client.billing.blocked ? "danger" : "info"}>
+            {client.billing.mode === "JANELA"
+              ? `${client.billing.used}${client.billing.limit != null ? ` de ${client.billing.limit}` : ""} mensagens usadas nesta janela${
+                  client.billing.resetsAt ? ` · próxima em ${formatDate(client.billing.resetsAt)}` : ""
+                }`
+              : `${client.billing.remaining ?? "—"} créditos restantes de ${client.billing.limit ?? "—"} concedidos`}
+            {client.billing.blocked && " — envio pausado até liberar mais."}
+          </Callout>
+        )}
+
+        <Field label="Modo de cobrança">
+          <select className="field" value={mode} onChange={(e) => setMode(e.target.value as BillingFormMode)}>
+            <option value="SEM_LIMITE">Sem limite</option>
+            <option value="JANELA">Janela (teto de mensagens por período)</option>
+            <option value="CREDITOS">Créditos (saldo que só acaba quando adiciona mais)</option>
+          </select>
+        </Field>
+
+        {mode === "JANELA" && (
+          <>
+            <Field label="Limite de mensagens na janela">
+              <input
+                className="field"
+                type="number"
+                min={1}
+                value={messageLimit}
+                onChange={(e) => setMessageLimit(e.target.value)}
+              />
+            </Field>
+            <Field label="Data de início">
+              <input
+                className="field"
+                type="date"
+                value={periodStartDate}
+                onChange={(e) => setPeriodStartDate(e.target.value)}
+              />
+            </Field>
+            <Field label="Duração da janela (dias)">
+              <input
+                className="field"
+                type="number"
+                min={1}
+                value={periodLengthDays}
+                onChange={(e) => setPeriodLengthDays(e.target.value)}
+                placeholder="7 pra teste, 30 pra mensalidade..."
+              />
+            </Field>
+          </>
+        )}
+
+        {mode === "CREDITOS" && (
+          <>
+            <Field label={isCreditosJaConfigurado ? "Saldo inicial (só ao trocar de modo)" : "Saldo inicial de créditos"}>
+              <input
+                className="field"
+                type="number"
+                min={0}
+                value={creditsBalance}
+                onChange={(e) => setCreditsBalance(e.target.value)}
+              />
+            </Field>
+
+            {isCreditosJaConfigurado && (
+              <div className="rounded-lg border border-rule p-3">
+                <p className="mb-2 text-xs text-ink-muted">
+                  Adicionar créditos preserva o saldo restante atual — não sobrescreve.
+                </p>
+                <div className="flex items-end gap-2">
+                  <Field label="Adicionar créditos">
+                    <input
+                      className="field"
+                      type="number"
+                      min={1}
+                      value={addAmount}
+                      onChange={(e) => setAddAmount(e.target.value)}
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    className="btn btn-quiet"
+                    disabled={busy || !addAmount}
+                    onClick={addCredits}
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </FormModal>
   );
 }
 

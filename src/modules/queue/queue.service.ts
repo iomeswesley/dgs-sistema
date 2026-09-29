@@ -9,6 +9,8 @@ import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
+import { getBillingStatus } from "@/modules/billing/billing.service.js";
+import type { BillingStatus } from "@/modules/billing/billing.js";
 
 /*
   Fila de envio.
@@ -47,13 +49,20 @@ export interface QueueCapacity {
   used: number;
   remaining: number;
   pending: number;
+  /**
+   * Limite comercial por cliente (créditos/janela — ver modules/billing),
+   * independente do teto diário da Meta acima. Os dois são checados juntos
+   * em `processQueue()` — o mais restritivo vale.
+   */
+  billing: BillingStatus;
 }
 
 export async function queueCapacity(): Promise<QueueCapacity> {
-  const [used, pending, status] = await Promise.all([
+  const [used, pending, status, billing] = await Promise.all([
     sentToday(),
     prisma.messageJob.count({ where: { status: "PENDENTE" } }),
     getPhoneNumberStatus(),
+    getBillingStatus(),
   ]);
   // O tier já reflete o limite real do número (a Meta sobe sozinha conforme
   // o histórico) — o .env só serve de fallback, sandbox ou falha na consulta.
@@ -63,6 +72,7 @@ export async function queueCapacity(): Promise<QueueCapacity> {
     used,
     remaining: Math.max(0, dailyLimit - used),
     pending,
+    billing,
   };
 }
 
@@ -160,6 +170,13 @@ export interface ProcessResult {
    * função de novo JÁ, em vez de confiar que o cron de amanhã resolve.
    */
   dueNow: number;
+  /**
+   * Parou por limite comercial (créditos/janela), não pelo teto diário da
+   * Meta — diferença que importa pro frontend: o teto da Meta é transitório
+   * (volta sozinho amanhã), o limite comercial só volta quando o super
+   * admin mexer em /admin (ver modules/billing).
+   */
+  billingBlocked: boolean;
 }
 
 // maxDuration é 60s (vercel.json) — pára de propósito antes disso pra nunca
@@ -215,7 +232,23 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
   await reclaimStuckJobs();
   const capacity = await queueCapacity();
   if (capacity.remaining === 0) {
-    return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0 };
+    return { sent: 0, failed: 0, deferred: capacity.pending, remainingToday: 0, dueNow: 0, billingBlocked: false };
+  }
+  // Limite comercial do cliente (créditos/janela, ver modules/billing) —
+  // independente do teto diário da Meta acima. Bloqueia igual pra qualquer
+  // template (decisão do usuário: nem Cancelamento fura) — os jobs ficam
+  // PENDENTE acumulando, sem reivindicar nenhum (nunca chega no
+  // `FOR UPDATE SKIP LOCKED` abaixo), e drenam sozinhos assim que o super
+  // admin liberar mais em /admin.
+  if (capacity.billing.blocked) {
+    return {
+      sent: 0,
+      failed: 0,
+      deferred: capacity.pending,
+      remainingToday: capacity.remaining,
+      dueNow: 0,
+      billingBlocked: true,
+    };
   }
 
   // Reserva os jobs de forma atômica (SELECT ... FOR UPDATE SKIP LOCKED +
@@ -457,7 +490,7 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
   const dueNow = await prisma.messageJob.count({
     where: { status: "PENDENTE", scheduledFor: { lte: new Date() } },
   });
-  return { sent, failed, deferred: after.pending, remainingToday: after.remaining, dueNow };
+  return { sent, failed, deferred: after.pending, remainingToday: after.remaining, dueNow, billingBlocked: false };
 }
 
 export type JobAppointment = Awaited<ReturnType<typeof prisma.appointment.findFirstOrThrow>> & {
