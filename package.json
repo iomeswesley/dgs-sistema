@@ -13,7 +13,7 @@
     "dev:web": "vite",
     "build": "prisma generate && npm run build:api && npm run build:web",
     "build:api": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
-    "build:web": "vite build",
+    "build:web": "vite build && node -e \"require('fs').renameSync('dist-web/index.html','dist-web/app.html')\"",
     "start": "node --env-file=.env dist/src/server.js",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",

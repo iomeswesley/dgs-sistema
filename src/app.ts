@@ -306,9 +306,15 @@ export function createApp() {
     // Fallback do React Router: qualquer rota que não seja /api cai no
     // index.html pra o roteamento acontecer no cliente. Mesmo no-cache do
     // index.html acima — é o mesmo arquivo, só que servido por aqui.
-    app.get("*", (_req, res) => {
+    app.get("*", (req, res) => {
+      // Arquivo com hash que não existe mais (deploy novo): 404 de verdade,
+      // nunca o HTML do app fingindo ser JS/CSS (ver comentário acima).
+      if (req.path.startsWith("/assets/")) return res.status(404).end();
       res.setHeader("Cache-Control", "no-cache");
-      res.sendFile(path.join(WEB_DIST, "index.html"));
+      // `app.html` (não `index.html`): o build renomeia de propósito — com
+      // `outputDirectory` na Vercel, um `index.html` estático seria servido
+      // direto em "/" pela CDN e pularia a landing/redirect de cima.
+      res.sendFile(path.join(WEB_DIST, "app.html"));
     });
   }
 
