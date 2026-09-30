@@ -352,6 +352,42 @@ export function Listas() {
     }
   }
 
+  // Cadastro de unidade sem sair do popup: município novo (ou cliente novo)
+  // chega aqui com zero unidades, e sem isso o select ficava só com "Não
+  // especificada" — sem endereço na mensagem e sem caminho óbvio pra resolver.
+  const [newUnitOpen, setNewUnitOpen] = useState(false);
+  const [newUnit, setNewUnit] = useState({ name: "", address: "" });
+  const [newUnitBusy, setNewUnitBusy] = useState(false);
+  const [newUnitError, setNewUnitError] = useState<string | null>(null);
+
+  async function createUnitInline() {
+    if (!municipalityId) {
+      setNewUnitError("Escolha o município da lista antes de cadastrar a unidade.");
+      return;
+    }
+    if (!newUnit.name.trim()) {
+      setNewUnitError("Informe o nome da unidade.");
+      return;
+    }
+    setNewUnitBusy(true);
+    setNewUnitError(null);
+    try {
+      const { unit } = await api.post<{ unit: Unit }>("/api/catalog/units", {
+        municipalityId: Number(municipalityId),
+        name: newUnit.name.trim(),
+        address: newUnit.address.trim() || null,
+      });
+      units.reload();
+      setAgendaForm((form) => ({ ...form, unitId: String(unit.id) }));
+      setNewUnitOpen(false);
+      setNewUnit({ name: "", address: "" });
+    } catch (err) {
+      setNewUnitError(err instanceof Error ? err.message : "Não foi possível cadastrar a unidade.");
+    } finally {
+      setNewUnitBusy(false);
+    }
+  }
+
   async function confirmAgenda() {
     if (!agendaForm.doctorId || !agendaForm.date) {
       setAgendaError("Médico e data são obrigatórios.");
@@ -668,6 +704,50 @@ export function Listas() {
               </option>
             ))}
           </select>
+          {agendaModalUnitOptions.length === 0 && (
+            <p className="mt-1.5 text-xs text-ink-muted">
+              {municipalityId
+                ? "Nenhuma unidade cadastrada para este município ainda."
+                : "Nenhum município selecionado — escolha o município da lista (fora deste popup) para ver as unidades."}
+            </p>
+          )}
+          {!newUnitOpen ? (
+            <button
+              type="button"
+              className="btn btn-quiet mt-2 px-2 py-1 text-xs"
+              onClick={() => {
+                setNewUnit({ name: preview?.parsed.executingUnit ? toTitleCase(preview.parsed.executingUnit) : "", address: "" });
+                setNewUnitError(null);
+                setNewUnitOpen(true);
+              }}
+            >
+              + Cadastrar unidade
+            </button>
+          ) : (
+            <div className="mt-2 grid grid-cols-1 gap-2 rounded border border-rule p-3">
+              <input
+                className="field"
+                placeholder="Nome da unidade"
+                value={newUnit.name}
+                onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })}
+              />
+              <input
+                className="field"
+                placeholder="Endereço (aparece na mensagem do paciente)"
+                value={newUnit.address}
+                onChange={(e) => setNewUnit({ ...newUnit, address: e.target.value })}
+              />
+              {newUnitError && <p className="text-xs text-mark-red">{newUnitError}</p>}
+              <div className="flex gap-2">
+                <button type="button" className="btn btn-primary px-3 py-1 text-xs" disabled={newUnitBusy} onClick={() => void createUnitInline()}>
+                  {newUnitBusy ? "Salvando…" : "Salvar unidade"}
+                </button>
+                <button type="button" className="btn btn-quiet px-3 py-1 text-xs" onClick={() => setNewUnitOpen(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </Field>
         <Field label="Procedimento" hint="Opcional — deixe em branco se a agenda cobre vários.">
           <select

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { DeleteButton } from "../components/DeleteButton";
 import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
@@ -216,6 +217,15 @@ function MunicipalitiesTab() {
                   >
                     Nova unidade
                   </button>
+                  <DeleteButton
+                    title={`Excluir o município ${municipality.name}?`}
+                    description="As unidades dele saem junto. Só é possível se nada usar este município (agenda, lista ou paciente). Isso não pode ser desfeito."
+                    path={`/api/catalog/municipalities/${municipality.id}`}
+                    onDeleted={() => {
+                      data.reload();
+                      units.reload();
+                    }}
+                  />
                 </div>
               </div>
 
@@ -257,6 +267,12 @@ function MunicipalitiesTab() {
                           >
                             {unit.active ? "Desativar" : "Ativar"}
                           </button>
+                          <DeleteButton
+                            title={`Excluir a unidade ${unit.name}?`}
+                            description="Só é possível se nada usar este cadastro (agenda, lista ou paciente). Isso não pode ser desfeito; para só tirar das opções, use Desativar."
+                            path={`/api/catalog/units/${unit.id}`}
+                            onDeleted={units.reload}
+                          />
                         </div>
                       </Td>
                     </tr>
@@ -458,6 +474,12 @@ function DoctorsTab() {
                   >
                     {doctor.active ? "Desativar" : "Ativar"}
                   </button>
+                  <DeleteButton
+                    title={`Excluir ${doctor.name}?`}
+                    description="Só é possível se nada usar este cadastro (agenda, lista ou paciente). Isso não pode ser desfeito; para só tirar das opções, use Desativar."
+                    path={`/api/catalog/doctors/${doctor.id}`}
+                    onDeleted={data.reload}
+                  />
                 </div>
               </Td>
             </tr>
@@ -620,6 +642,12 @@ function ProceduresTab() {
                   >
                     {procedure.active ? "Desativar" : "Ativar"}
                   </button>
+                  <DeleteButton
+                    title={`Excluir ${procedure.name}?`}
+                    description="Só é possível se nada usar este cadastro (agenda, lista ou paciente). Isso não pode ser desfeito; para só tirar das opções, use Desativar."
+                    path={`/api/catalog/procedures/${procedure.id}`}
+                    onDeleted={data.reload}
+                  />
                 </div>
               </Td>
             </tr>
@@ -854,6 +882,12 @@ function DoctorProceduresTab() {
                     >
                       {item.active ? "Desativar" : "Ativar"}
                     </button>
+                    <DeleteButton
+                      title={`Remover ${item.procedure.name} de ${doctor.name}?`}
+                      description="Remove só esta configuração (tempo por consulta, esperado por dia e valores). Não afeta agendamentos já feitos."
+                      path={`/api/catalog/doctor-procedures/${item.id}`}
+                      onDeleted={doctors.reload}
+                    />
                   </div>
                 </Td>
               </tr>

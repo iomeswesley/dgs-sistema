@@ -11,13 +11,27 @@ import { recordAudit, recordFieldChanges } from "@/modules/audit/audit.service.j
   Cadastros base: municípios, unidades, médicos, procedimentos e a
   configuração de procedimento por médico (tempo, esperado/dia e valores).
 
-  Nada aqui é excluído de verdade — tudo tem `active`. Apagar um médico que
-  já tem agendamento quebraria o histórico dos indicadores, então a baixa é
-  lógica.
+  A baixa normal é lógica (`active`): apagar um médico que já tem
+  agendamento quebraria o histórico dos indicadores. Mas cadastro criado por
+  engano (nunca usado) precisa poder sair de vez — os DELETE abaixo só
+  excluem quando NADA referencia o registro; senão respondem 409 explicando
+  o que o prende e sugerindo Desativar.
 */
 
 export const catalogRouter = Router();
 catalogRouter.use("/api/catalog", requireAuth);
+
+/** "3 agendamentos, 1 lista" — só o que for > 0. */
+function describeUsage(parts: [number, string, string][]): string {
+  return parts
+    .filter(([count]) => count > 0)
+    .map(([count, one, many]) => `${count} ${count === 1 ? one : many}`)
+    .join(", ");
+}
+
+function blockedMessage(what: string, usage: string): string {
+  return `Não dá para excluir ${what}: está em uso (${usage}). Para tirar das opções sem perder o histórico, use Desativar.`;
+}
 
 /* ---------------- Municípios ---------------- */
 
@@ -70,6 +84,54 @@ catalogRouter.patch(
       data
     );
     res.json({ municipality });
+  })
+);
+
+catalogRouter.delete(
+  "/api/catalog/municipalities/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const municipality = await prisma.municipality.findUnique({ where: { id } });
+    if (!municipality) throw new AppError("Município não encontrado", 404);
+
+    const [agendas, lists, appointments, closings] = await Promise.all([
+      prisma.agenda.count({ where: { municipalityId: id } }),
+      prisma.list.count({ where: { municipalityId: id } }),
+      prisma.appointment.count({ where: { municipalityId: id } }),
+      prisma.dailyClosing.count({ where: { municipalityId: id } }),
+    ]);
+    const usage = describeUsage([
+      [agendas, "agenda", "agendas"],
+      [lists, "lista", "listas"],
+      [appointments, "agendamento", "agendamentos"],
+      [closings, "fechamento", "fechamentos"],
+    ]);
+    if (usage) throw new AppError(blockedMessage("este município", usage), 409);
+
+    // Unidades do município saem junto — mas só se nenhuma delas for
+    // referenciada em algum lugar (ex.: unidade solicitante de um paciente).
+    const units = await prisma.healthUnit.findMany({ where: { municipalityId: id }, select: { id: true, name: true } });
+    for (const unit of units) {
+      const inUse = await prisma.appointment.count({ where: { requestingUnitId: unit.id } });
+      if (inUse > 0) {
+        throw new AppError(
+          `Não dá para excluir o município: a unidade "${unit.name}" dele está em uso (${inUse} agendamento(s)). Use Desativar.`,
+          409
+        );
+      }
+    }
+    await prisma.$transaction([
+      prisma.healthUnit.deleteMany({ where: { municipalityId: id } }),
+      prisma.municipality.delete({ where: { id } }),
+    ]);
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "delete",
+      entity: "Municipality",
+      entityId: id,
+      metadata: { name: municipality.name, unitsDeleted: units.length },
+    });
+    res.status(204).end();
   })
 );
 
@@ -127,6 +189,33 @@ catalogRouter.patch(
       data
     );
     res.json({ unit });
+  })
+);
+
+catalogRouter.delete(
+  "/api/catalog/units/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const unit = await prisma.healthUnit.findUnique({ where: { id } });
+    if (!unit) throw new AppError("Unidade não encontrada", 404);
+    const [agendas, appointments] = await Promise.all([
+      prisma.agenda.count({ where: { unitId: id } }),
+      prisma.appointment.count({ where: { requestingUnitId: id } }),
+    ]);
+    const usage = describeUsage([
+      [agendas, "agenda", "agendas"],
+      [appointments, "agendamento", "agendamentos"],
+    ]);
+    if (usage) throw new AppError(blockedMessage("esta unidade", usage), 409);
+    await prisma.healthUnit.delete({ where: { id } });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "delete",
+      entity: "HealthUnit",
+      entityId: id,
+      metadata: { name: unit.name },
+    });
+    res.status(204).end();
   })
 );
 
@@ -189,6 +278,36 @@ catalogRouter.patch(
   })
 );
 
+catalogRouter.delete(
+  "/api/catalog/doctors/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const doctor = await prisma.doctor.findUnique({ where: { id } });
+    if (!doctor) throw new AppError("Médico não encontrado", 404);
+    const [agendas, appointments, closings] = await Promise.all([
+      prisma.agenda.count({ where: { doctorId: id } }),
+      prisma.appointment.count({ where: { doctorId: id } }),
+      prisma.dailyClosing.count({ where: { doctorId: id } }),
+    ]);
+    const usage = describeUsage([
+      [agendas, "agenda", "agendas"],
+      [appointments, "agendamento", "agendamentos"],
+      [closings, "fechamento", "fechamentos"],
+    ]);
+    if (usage) throw new AppError(blockedMessage("este médico", usage), 409);
+    // Configurações de procedimento por médico saem junto (cascade no banco).
+    await prisma.doctor.delete({ where: { id } });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "delete",
+      entity: "Doctor",
+      entityId: id,
+      metadata: { name: doctor.name },
+    });
+    res.status(204).end();
+  })
+);
+
 /* ---------------- Procedimentos ---------------- */
 
 const procedureSchema = z.object({
@@ -239,6 +358,35 @@ catalogRouter.patch(
   })
 );
 
+catalogRouter.delete(
+  "/api/catalog/procedures/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const procedure = await prisma.procedure.findUnique({ where: { id } });
+    if (!procedure) throw new AppError("Procedimento não encontrado", 404);
+    const [agendas, appointments, closings] = await Promise.all([
+      prisma.agenda.count({ where: { procedureId: id } }),
+      prisma.appointment.count({ where: { procedureId: id } }),
+      prisma.dailyClosing.count({ where: { procedureId: id } }),
+    ]);
+    const usage = describeUsage([
+      [agendas, "agenda", "agendas"],
+      [appointments, "agendamento", "agendamentos"],
+      [closings, "fechamento", "fechamentos"],
+    ]);
+    if (usage) throw new AppError(blockedMessage("este procedimento", usage), 409);
+    await prisma.procedure.delete({ where: { id } });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "delete",
+      entity: "Procedure",
+      entityId: id,
+      metadata: { name: procedure.name },
+    });
+    res.status(204).end();
+  })
+);
+
 /* ---------------- Procedimento por médico (valores) ---------------- */
 
 const doctorProcedureSchema = z.object({
@@ -280,5 +428,24 @@ catalogRouter.put(
     );
 
     res.json({ doctorProcedure: record });
+  })
+);
+
+/** Remove só a configuração médico × procedimento (tempo/valores); não mexe em histórico. */
+catalogRouter.delete(
+  "/api/catalog/doctor-procedures/:id",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const record = await prisma.doctorProcedure.findUnique({ where: { id } });
+    if (!record) throw new AppError("Configuração não encontrada", 404);
+    await prisma.doctorProcedure.delete({ where: { id } });
+    await recordAudit({
+      userId: currentUserId(req),
+      action: "delete",
+      entity: "DoctorProcedure",
+      entityId: id,
+      metadata: { doctorId: record.doctorId, procedureId: record.procedureId },
+    });
+    res.status(204).end();
   })
 );
