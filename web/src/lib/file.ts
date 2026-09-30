@@ -12,3 +12,15 @@ export async function fileToBase64(file: File): Promise<string> {
   }
   return btoa(binary);
 }
+
+export const EXCEL_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/**
+ * Tipo do arquivo pra mandar ao servidor. O navegador às vezes deixa
+ * `file.type` vazio pra .xlsx (depende do sistema), então decide pela
+ * extensão; o resto segue o que ele informa, com PDF como padrão.
+ */
+export function fileMimeType(file: File): string {
+  if (/\.xlsx$/i.test(file.name)) return EXCEL_MIME;
+  return file.type || "application/pdf";
+}

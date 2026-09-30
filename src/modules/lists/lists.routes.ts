@@ -28,6 +28,8 @@ import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.
 import { enqueueReminders } from "@/modules/queue/cadence.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { EXCEL_MIME } from "@/modules/extraction/excel-layout.js";
+import { buildImportTemplate } from "@/modules/extraction/excel-template.js";
 import {
   getCancellationStatusSummary,
   type CancellationStatusSummary,
@@ -52,7 +54,8 @@ function runInBackground(task: Promise<unknown>, onError: (err: unknown) => void
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 // Só PDF nativo (SISREG ou CELK) — a prefeitura não manda mais foto, e a
 // extração é local (sem IA), que só lê texto de PDF de verdade.
-const ACCEPTED_TYPES = ["application/pdf"];
+// Além do PDF, a planilha no modelo oficial (.xlsx) — ver excel-layout.ts.
+const ACCEPTED_TYPES = ["application/pdf", EXCEL_MIME];
 
 const uploadSchema = z.object({
   municipalityId: z.number().int().positive(),
@@ -216,6 +219,27 @@ listsRouter.delete(
   })
 );
 
+/**
+ * Baixa o modelo Excel de importação (modelo-importacao-dgs.xlsx). Declarada
+ * antes das rotas com `:id` pra "excel-template" não ser lido como id.
+ * O arquivo é sempre o mesmo — gerado uma vez por processo e reaproveitado.
+ */
+let templateBuffer: Promise<Buffer> | null = null;
+listsRouter.get(
+  "/api/lists/excel-template",
+  asyncHandler(async (_req, res) => {
+    templateBuffer ??= buildImportTemplate();
+    const buffer = await templateBuffer.catch((err) => {
+      templateBuffer = null;
+      throw err;
+    });
+    res.setHeader("Content-Type", EXCEL_MIME);
+    res.setHeader("Content-Disposition", 'attachment; filename="modelo-importacao-dgs.xlsx"');
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(buffer);
+  })
+);
+
 /** Arquivo original, pra revisão lado a lado. */
 listsRouter.get(
   "/api/lists/:id/file",
@@ -227,7 +251,11 @@ listsRouter.get(
     if (!list) throw new AppError("Lista não encontrada", 404);
 
     res.setHeader("Content-Type", list.mimeType);
-    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(list.originalName)}"`);
+    const inline = list.mimeType === "application/pdf" || list.mimeType.startsWith("image/");
+    res.setHeader(
+      "Content-Disposition",
+      `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(list.originalName)}"`
+    );
     res.send(Buffer.from(list.fileData));
   })
 );
@@ -598,7 +626,7 @@ listsRouter.post(
   "/api/lists/:id/schedule-reference/preview",
   asyncHandler(async (req, res) => {
     const data = parseBody(req, scheduleReferencePreviewSchema);
-    if (!ACCEPTED_TYPES.includes(data.mimeType)) {
+    if (data.mimeType !== "application/pdf") {
       throw new AppError("Envie um PDF nativo (com texto selecionável).", 400);
     }
     const fileData = Buffer.from(data.fileBase64, "base64");

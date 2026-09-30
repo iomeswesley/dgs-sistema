@@ -8,7 +8,7 @@ import { Callout, ErrorNote, Field, Spinner, Switch } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatCalendarDate, formatDate, LIST_STATUS_LABEL, toBandCounts } from "../lib/format";
-import { fileToBase64 } from "../lib/file";
+import { fileMimeType, fileToBase64 } from "../lib/file";
 import { runQueueUntilDone } from "../lib/queue";
 
 interface ListSummary {
@@ -234,7 +234,7 @@ export function Listas() {
         agendaId: resolvedAgendaId ? Number(resolvedAgendaId) : null,
         isComplementary,
         originalName: file.name,
-        mimeType: file.type || "application/pdf",
+        mimeType: fileMimeType(file),
         fileBase64: await fileToBase64(file),
       });
       resetUploadForm();
@@ -264,7 +264,7 @@ export function Listas() {
     setPreviewing(true);
     try {
       const { preview: result } = await api.post<{ preview: ListPreview }>("/api/lists/preview", {
-        mimeType: file.type || "application/pdf",
+        mimeType: fileMimeType(file),
         fileBase64: await fileToBase64(file),
       });
       setPreview(result);
@@ -296,8 +296,8 @@ export function Listas() {
       setPreview(null);
       setError(
         err instanceof Error
-          ? `Não consegui pré-ler o PDF (${err.message}). Preencha os campos manualmente.`
-          : "Não consegui pré-ler o PDF. Preencha os campos manualmente."
+          ? `Não consegui pré-ler o arquivo (${err.message}). Preencha os campos manualmente.`
+          : "Não consegui pré-ler o arquivo. Preencha os campos manualmente."
       );
     } finally {
       setPreviewing(false);
@@ -467,12 +467,12 @@ export function Listas() {
         <div className="mt-3">
           <Field
             label="Arquivo"
-            hint="PDF da agenda gerado pelo SISREG ou CELK, até 20 MB. Escolher o arquivo já tenta preencher o resto sozinho."
+            hint="PDF da agenda (SISREG ou CELK) ou planilha no nosso modelo Excel (.xlsx), até 20 MB. Escolher o arquivo já tenta preencher o resto sozinho."
           >
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="field"
               disabled={uploading}
               onChange={(event) => {
@@ -482,6 +482,14 @@ export function Listas() {
             />
           </Field>
         </div>
+
+        <p className="mt-2 text-sm text-ink-muted">
+          A secretaria mandou um Excel?{" "}
+          <a href="/api/lists/excel-template" download className="underline">
+            Baixar modelo Excel
+          </a>{" "}
+          — copie os dados dela para o modelo (as instruções e os formatos de cada coluna estão na primeira aba) e envie aqui.
+        </p>
 
         {previewing && <p className="mt-3 text-sm text-ink-muted">Lendo o arquivo…</p>}
         {preview && !previewing && (
@@ -720,7 +728,7 @@ export function Listas() {
       {allLists.length === 0 && !lists.loading && (
         <EmptyState
           title="Nenhuma lista ainda"
-          description="Envie o PDF da agenda acima. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
+          description="Envie o PDF (ou a planilha no modelo Excel) da agenda acima. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
         />
       )}
 

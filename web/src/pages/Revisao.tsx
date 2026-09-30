@@ -10,7 +10,7 @@ import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatDateTime, formatPhone, LIST_STATUS_LABEL, STATUS_LABEL, toBandCounts } from "../lib/format";
 import { runQueueUntilDone } from "../lib/queue";
-import { fileToBase64 } from "../lib/file";
+import { fileMimeType, fileToBase64 } from "../lib/file";
 
 /*
   Tela de revisão: a etapa obrigatória entre a leitura automática e o disparo.
@@ -239,7 +239,7 @@ export function Revisao() {
   // usuário em 2026-09-03 (antes precisava copiar o nome e ir em
   // Conversas). `null` = fechado.
   const [conversationAppointment, setConversationAppointment] = useState<Appointment | null>(null);
-  // "Importar mais pacientes (PDF)" — agenda que ganhou gente nova depois
+  // "Importar mais pacientes (PDF ou Excel)" — agenda que ganhou gente nova depois
   // do disparo original, sobe um PDF atualizado que se soma nesta lista
   // (quem já está aqui é ignorado, não duplica).
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -553,7 +553,7 @@ export function Revisao() {
   }
 
   /**
-   * "Importar mais pacientes (PDF)" — pedido do usuário em 2026-08-27:
+   * "Importar mais pacientes (PDF ou Excel)" — pedido do usuário em 2026-08-27:
    * agenda que ganhou mais gente depois do disparo original, e a prefeitura
    * manda um PDF "atualizado" (às vezes com todo mundo de novo, não só os
    * novos). O backend (`importAdditionalPatients`) já ignora quem já está
@@ -566,7 +566,7 @@ export function Revisao() {
     try {
       const result = await api.post<{ added: number; skippedDuplicates: number; totalInFile: number; queued: number }>(
         `/api/lists/${list.id}/import-additional`,
-        { mimeType: file.type || "application/pdf", fileBase64: await fileToBase64(file) }
+        { mimeType: fileMimeType(file), fileBase64: await fileToBase64(file) }
       );
       setImportNotice(
         `${result.added} paciente(s) novo(s) adicionado(s)` +
@@ -1116,12 +1116,12 @@ export function Revisao() {
           onClick={() => importInputRef.current?.click()}
           title="Sobe um PDF novo — quem já está nesta lista é ignorado, só entra quem é de fato novo"
         >
-          {importBusy ? "Importando…" : "Importar mais pacientes (PDF)"}
+          {importBusy ? "Importando…" : "Importar mais pacientes (PDF ou Excel)"}
         </button>
         <input
           ref={importInputRef}
           type="file"
-          accept="application/pdf"
+          accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -1490,12 +1490,19 @@ export function Revisao() {
                 src={`/api/lists/${list.id}/file`}
                 className="h-full w-full"
               />
-            ) : (
+            ) : list.mimeType.startsWith("image/") ? (
               <img
                 src={`/api/lists/${list.id}/file`}
                 alt="Foto da lista recebida"
                 className="h-full w-full object-contain"
               />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-ink-muted">
+                <p>Esta lista veio de uma planilha Excel, que não abre na tela.</p>
+                <a href={`/api/lists/${list.id}/file`} download className="btn btn-quiet">
+                  Baixar planilha original
+                </a>
+              </div>
             )}
           </div>
         </div>

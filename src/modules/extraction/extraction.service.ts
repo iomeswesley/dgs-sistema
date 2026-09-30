@@ -4,6 +4,8 @@ import { detectFormat } from "./parsers/detect.js";
 import { parseCelk } from "./parsers/celk.js";
 import { parseSisreg } from "./parsers/sisreg.js";
 import { parseTabular } from "./parsers/tabular.js";
+import { ExcelReadError, parseExcel } from "./parsers/excel.js";
+import { EXCEL_MIME } from "./excel-layout.js";
 import { extractionResultSchema, type ExtractionResult } from "./extraction.schema.js";
 
 /*
@@ -26,8 +28,22 @@ export async function extractList(
   file: Buffer,
   mimeType: string
 ): Promise<{ result: ExtractionResult; usage: { inputTokens: number; outputTokens: number } }> {
+  // Planilha no modelo oficial: leitura determinística, sem passar por texto de PDF.
+  if (mimeType === EXCEL_MIME) {
+    const excel = await parseExcel(file).catch((err) => {
+      if (err instanceof ExcelReadError) throw new AppError(err.message, 400);
+      throw err;
+    });
+    const validatedExcel = extractionResultSchema.safeParse(excel);
+    if (!validatedExcel.success) {
+      console.error("[EXTRACTION] Resultado do parser Excel fora do schema:", validatedExcel.error.flatten());
+      throw new AppError("A leitura do arquivo não bateu com o formato esperado internamente.", 500);
+    }
+    return { result: validatedExcel.data, usage: { inputTokens: 0, outputTokens: 0 } };
+  }
+
   if (mimeType !== "application/pdf") {
-    throw new AppError(`Tipo de arquivo não suportado para extração: ${mimeType}. Envie um PDF.`, 400);
+    throw new AppError(`Tipo de arquivo não suportado para extração: ${mimeType}. Envie um PDF ou o modelo Excel (.xlsx).`, 400);
   }
 
   const text = await readPdfText(file);

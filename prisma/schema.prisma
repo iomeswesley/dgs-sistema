@@ -815,6 +815,9 @@ enum SourceFormat {
   // pela primeira vez em 2026-09-16 (lista de Botuverá) — pode reaparecer
   // com outras prefeituras/relatórios no mesmo estilo.
   TABULAR
+  // Planilha no modelo oficial da plataforma (modelo-importacao-dgs.xlsx) —
+  // o cliente converte o Excel da secretaria pra esse formato padrão.
+  EXCEL
   OUTRO
 }
 
