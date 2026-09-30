@@ -194,4 +194,34 @@ describe("modelo Excel de importação", () => {
       expect(result.municipality).toBe(expected);
     }
   });
+
+  it("modelo com cadastro do cliente: aba Listas oculta + menus nas células, e ainda lê normal", async () => {
+    const started = Date.now();
+    const buffer = await buildImportTemplate({
+      municipalities: ["Timbó", "Blumenau"],
+      units: ["Policlínica Laudila", "UBS Centro"],
+      doctors: ["Luiz Felipe Beserra Barros"],
+      procedures: [],
+    });
+    expect(Date.now() - started).toBeLessThan(5000);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+    const lists = workbook.getWorksheet("Listas")!;
+    expect(lists.state).toBe("hidden");
+    expect(lists.getCell("A2").value).toBe("Blumenau"); // ordenado
+    expect(lists.getCell("A3").value).toBe("Timbó");
+
+    const header = workbook.getWorksheet("Cabeçalho")!;
+    expect(header.getCell("B2").dataValidation?.type).toBe("list");
+    expect(header.getCell("B2").dataValidation?.formulae?.[0]).toBe("Listas!$A$2:$A$3");
+    expect(header.getCell("B5").dataValidation).toBeUndefined(); // procedimentos vazios: sem menu
+    expect(workbook.getWorksheet("Pacientes")!.getCell("G2").dataValidation?.type).toBe("list"); // Médico
+
+    header.getCell("B2").value = "Timbó";
+    workbook.getWorksheet("Pacientes")!.getCell(2, col("name")).value = "FULANO";
+    const result = await parseExcel(await toBuffer(workbook));
+    expect(result.municipality).toBe("Timbó");
+    expect(result.rows).toHaveLength(1);
+  });
 });

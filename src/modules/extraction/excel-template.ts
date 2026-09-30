@@ -38,10 +38,67 @@ function styleHeaderCell(cell: ExcelJS.Cell, required: boolean) {
   cell.border = thin;
 }
 
-export async function buildImportTemplate(): Promise<Buffer> {
+/** Cadastro do cliente, pros menus de opções do modelo (evita erro de digitação). */
+export interface TemplateCatalog {
+  municipalities: string[];
+  units: string[];
+  doctors: string[];
+  procedures: string[];
+}
+
+type ListKey = keyof TemplateCatalog;
+
+const MAX_LIST_ITEMS = 2000;
+
+export async function buildImportTemplate(catalog?: TemplateCatalog): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "DGS";
   workbook.title = "Modelo de importação de agenda";
+
+  /* ---------------- Listas (oculta): opções dos menus ---------------- */
+  // Uma coluna por tipo. O Excel aceita menu que aponta pra outra aba; a aba
+  // fica oculta pra ninguém mexer. Valor fora da lista só AVISA (não trava) —
+  // município/médico novo ainda pode ser digitado.
+  const listRanges: Partial<Record<ListKey, string>> = {};
+  if (catalog) {
+    const lists = workbook.addWorksheet("Listas", { state: "hidden" });
+    const columns: [ListKey, string][] = [
+      ["municipalities", "Municípios"],
+      ["units", "Unidades"],
+      ["doctors", "Médicos"],
+      ["procedures", "Procedimentos"],
+    ];
+    columns.forEach(([key, title], i) => {
+      lists.getCell(1, i + 1).value = title;
+      const items = [...new Set(catalog[key].map((item) => item.trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+        .slice(0, MAX_LIST_ITEMS);
+      items.forEach((item, r) => {
+        lists.getCell(r + 2, i + 1).value = item;
+      });
+      if (items.length > 0) {
+        const letter = lists.getColumn(i + 1).letter;
+        listRanges[key] = `Listas!$${letter}$2:$${letter}$${items.length + 1}`;
+      }
+    });
+  }
+
+  const menuValidation = (key: ListKey, what: string): ExcelJS.DataValidation | null => {
+    const range = listRanges[key];
+    if (!range) return null;
+    return {
+      type: "list",
+      allowBlank: true,
+      formulae: [range],
+      showErrorMessage: true,
+      errorStyle: "warning",
+      errorTitle: `${what} diferente do cadastro`,
+      error: `Esse ${what.toLowerCase()} não está no cadastro do sistema. Escolha um do menu (seta ao lado da célula) para evitar erro; se for novo, pode manter.`,
+      showInputMessage: true,
+      promptTitle: what,
+      prompt: "Escolha no menu (seta ao lado da célula).",
+    };
+  };
 
   /* ---------------- Instruções ---------------- */
   const info = workbook.addWorksheet(SHEET_INSTRUCTIONS, { properties: { tabColor: { argb: BRAND } } });
@@ -55,8 +112,12 @@ export async function buildImportTemplate(): Promise<Buffer> {
     "3. Aba \"Pacientes\": copie uma linha por paciente, coluna por coluna, para as colunas correspondentes. Cole sempre como VALORES (Colar especial > Valores), para não trazer a formatação do arquivo original.",
     "4. Não altere, apague nem mude a ordem dos títulos da primeira linha de \"Pacientes\" e de \"Cabeçalho\" (coluna A).",
     "5. Salve como .xlsx e envie em Listas (mesmo botão de enviar o PDF). O sistema mostra a revisão antes de qualquer mensagem sair.",
+    catalog
+      ? "Município, Unidade, Médico e Procedimento têm MENU de opções (seta ao lado da célula) com o que já está cadastrado no sistema — escolha no menu em vez de digitar."
+      : "",
     "Colunas marcadas com * são obrigatórias. O que faltar não trava o envio, mas a linha fica destacada na revisão.",
   ];
+  steps.splice(0, steps.length, ...steps.filter(Boolean));
   steps.forEach((text, i) => {
     const cell = info.getCell(`A${3 + i}`);
     cell.value = text;
@@ -154,6 +215,17 @@ export async function buildImportTemplate(): Promise<Buffer> {
       };
     } else {
       value.numFmt = "@";
+      const menu =
+        field.key === "municipality"
+          ? menuValidation("municipalities", "Município")
+          : field.key === "executingUnit"
+            ? menuValidation("units", "Unidade")
+            : field.key === "doctor"
+              ? menuValidation("doctors", "Médico")
+              : field.key === "procedure"
+                ? menuValidation("procedures", "Procedimento")
+                : null;
+      if (menu) value.dataValidation = menu;
     }
 
     const help = head.getCell(r, 3);
@@ -203,7 +275,12 @@ export async function buildImportTemplate(): Promise<Buffer> {
 
     // Validação de entrada aplicada à coluna inteira (linhas 2..lastRow).
     const range = `${letter}2:${letter}${lastRow}`;
-    const validation = validationFor(column.key);
+    const validation =
+      column.key === "procedure"
+        ? menuValidation("procedures", "Procedimento")
+        : column.key === "doctor"
+          ? menuValidation("doctors", "Médico")
+          : validationFor(column.key);
     if (validation) {
       for (let r = 2; r <= lastRow; r++) sheet.getCell(`${letter}${r}`).dataValidation = { ...validation };
     }

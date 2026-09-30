@@ -641,7 +641,7 @@ export function Listas() {
         title="Cadastrar município"
         description={
           preview?.parsed.municipality
-            ? `O arquivo indica o município "${preview.parsed.municipality}", mas ele ainda não está cadastrado. Confirme o nome e cadastre antes de continuar.`
+            ? `O arquivo indica o município "${preview.parsed.municipality}", mas ele não bate com nenhum município cadastrado. ATENÇÃO: se já existe um município parecido na lista (só escrito diferente, ex.: com sigla do estado), clique em Cancelar e escolha o município certo no campo "Município" — assim não cria cadastro duplicado. Se é mesmo um município novo, confirme o nome e cadastre.`
             : "Município não cadastrado. Confirme o nome e cadastre antes de continuar."
         }
         submitLabel="Cadastrar e continuar"

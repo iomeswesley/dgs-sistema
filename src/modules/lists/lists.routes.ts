@@ -220,18 +220,26 @@ listsRouter.delete(
 );
 
 /**
- * Baixa o modelo Excel de importação (modelo-importacao-dgs.xlsx). Declarada
- * antes das rotas com `:id` pra "excel-template" não ser lido como id.
- * O arquivo é sempre o mesmo — gerado uma vez por processo e reaproveitado.
+ * Baixa o modelo Excel de importação (modelo-importacao-dgs.xlsx), já com
+ * menus de opções (município, unidade, médico, procedimento) montados a
+ * partir do cadastro DESTE cliente — escolher no menu evita erro de
+ * digitação. Declarada antes das rotas com `:id` pra "excel-template" não
+ * ser lido como id.
  */
-let templateBuffer: Promise<Buffer> | null = null;
 listsRouter.get(
   "/api/lists/excel-template",
   asyncHandler(async (_req, res) => {
-    templateBuffer ??= buildImportTemplate();
-    const buffer = await templateBuffer.catch((err) => {
-      templateBuffer = null;
-      throw err;
+    const [municipalities, units, doctors, procedures] = await Promise.all([
+      prisma.municipality.findMany({ where: { active: true }, select: { name: true } }),
+      prisma.healthUnit.findMany({ where: { active: true }, select: { name: true } }),
+      prisma.doctor.findMany({ where: { active: true }, select: { name: true } }),
+      prisma.procedure.findMany({ where: { active: true }, select: { name: true } }),
+    ]);
+    const buffer = await buildImportTemplate({
+      municipalities: municipalities.map((m) => m.name),
+      units: units.map((u) => u.name),
+      doctors: doctors.map((d) => d.name),
+      procedures: procedures.map((p) => p.name),
     });
     res.setHeader("Content-Type", EXCEL_MIME);
     res.setHeader("Content-Disposition", 'attachment; filename="modelo-importacao-dgs.xlsx"');

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
-import { findUniqueMatch } from "@/lib/text-match.js";
+import { findUniqueMatch, normalizeForMatch } from "@/lib/text-match.js";
 import { extractList } from "@/modules/extraction/extraction.service.js";
 import type { ExtractionResult } from "@/modules/extraction/extraction.schema.js";
 
@@ -50,7 +50,15 @@ export async function previewList(file: Buffer, mimeType: string): Promise<ListP
   const units = municipality
     ? await prisma.healthUnit.findMany({ where: { municipalityId: municipality.id, active: true } })
     : [];
-  const unit = findUniqueMatch(result.executingUnit, units, (u) => u.name);
+  // Por nome primeiro; se não casar, tenta pelo ENDEREÇO — planilha Excel
+  // costuma trazer o endereço no campo "Unidade de atendimento" (achado real,
+  // Timbó 2026-09-30). Só aceita quando exatamente uma unidade bate.
+  let unit = findUniqueMatch(result.executingUnit, units, (u) => u.name);
+  if (!unit && result.executingUnit) {
+    const wanted = normalizeForMatch(result.executingUnit);
+    const byAddress = units.filter((u) => u.address && normalizeForMatch(u.address) === wanted);
+    if (byAddress.length === 1) unit = byAddress[0]!;
+  }
 
   const doctors = await prisma.doctor.findMany({ where: { active: true } });
   const doctor = findUniqueMatch(result.doctor, doctors, (d) => d.name);

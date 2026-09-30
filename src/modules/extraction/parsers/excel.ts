@@ -203,7 +203,7 @@ export async function parseExcel(file: Buffer): Promise<ExtractionResult> {
 
   const sheet =
     findSheet(workbook, SHEET_PATIENTS) ??
-    workbook.worksheets.find((s) => ![normalizeHeader("Instruções"), normalizeHeader(SHEET_HEADER)].includes(normalizeHeader(s.name)));
+    workbook.worksheets.find((s) => ![normalizeHeader("Instruções"), normalizeHeader(SHEET_HEADER), "listas"].includes(normalizeHeader(s.name)));
   const empty = (extraWarning: string): ExtractionResult => ({
     sourceFormat: "EXCEL",
     municipality: header.municipality ?? null,
