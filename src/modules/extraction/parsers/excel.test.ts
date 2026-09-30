@@ -179,4 +179,19 @@ describe("modelo Excel de importação", () => {
     expect(mapped.drafts[1]!.readyToSend).toBe(false);
     expect(mapped.drafts[1]!.issues).toContain("telefone_invalido");
   });
+
+  it("município escrito com sigla de UF (TIMBÓ-SC, Timbó/SC, Timbó (SC)) é limpo pro nome do cadastro", async () => {
+    for (const [typed, expected] of [
+      ["TIMBÓ-SC", "TIMBÓ"],
+      ["Timbó / SC", "Timbó"],
+      ["Timbó (SC)", "Timbó"],
+      ["Balneário Camboriú - SC", "Balneário Camboriú"],
+      ["Pomerode", "Pomerode"],
+    ]) {
+      const { workbook, header } = await openTemplate();
+      header.getCell("B2").value = typed;
+      const result = await parseExcel(await toBuffer(workbook));
+      expect(result.municipality).toBe(expected);
+    }
+  });
 });

@@ -172,7 +172,11 @@ function readHeaderSheet(sheet: ExcelJS.Worksheet | undefined): Partial<Record<H
       return;
     }
     const text = cellText(cell);
-    if (text) out[key] = text;
+    if (!text) return;
+    // Município: a pessoa costuma escrever "TIMBÓ-SC" / "Timbó/SC" / "Timbó (SC)"
+    // mesmo com o modelo pedindo só o nome — a comparação com o cadastro é
+    // exata, então tira a sigla de UF no fim (achado real, 2026-09-30).
+    out[key] = key === "municipality" ? text.replace(/\s*[-/(,]\s*[A-Za-z]{2}\s*\)?\s*$/, "").trim() || text : text;
   });
   return out;
 }
