@@ -73,7 +73,7 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
               "09:15",
               "Ultrassonografia obstétrica",
               "Policlínica - Av. Eugênio Krause, 2265, Centro",
-              "Nenhum preparo especial necessário",
+              "Sem preparo especial informado, confira a guia do exame",
             ],
           ],
         },
@@ -86,6 +86,40 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
       // documentado (captava desistência de última hora, 24h antes, pra
       // secretaria repor a vaga). Se um dia quiser reintroduzir só a
       // desistência, era só esse segundo botão que valia a pena manter.
+    ],
+  },
+  {
+    // Versão 2 do lembrete (02/10/2026): pacientes iam ao exame sem documento
+    // porque o texto não mandava conferir a guia do exame, onde estão as
+    // orientações e os documentos a levar. Submetido sob NOME NOVO pra não
+    // derrubar o lembrete_vespera aprovado enquanto a Meta revisa; só depois
+    // de APPROVED troca TEMPLATE_NAMES.LEMBRETE (lib/templates.ts) pra este nome.
+    name: "lembrete_vespera_v2",
+    category: "UTILITY",
+    language: "pt_BR",
+    components: [
+      {
+        type: "BODY",
+        text:
+          "Olá, {{1}}! Lembrando da sua consulta amanhã:\n\nData: {{2}} às {{3}}\nProcedimento: {{4}}\nLocal: {{5}}\n\n" +
+          "Leve com você:\n- Documento de identificação com foto\n- Encaminhamento médico\n- A guia do exame\n\n" +
+          "Importante: confira na guia do exame as orientações e os documentos que precisam ser levados. " +
+          "Retire a autorização do exame na Unidade Solicitante (UBS, Policlínica ou Hospital) antes da consulta. " +
+          "Se já retirou, é só comparecer no horário.\n\nPreparo: {{6}}. Qualquer dúvida, procure a unidade de saúde.",
+        example: {
+          body_text: [
+            [
+              "Arthur",
+              "23/07/2026",
+              "09:15",
+              "Ultrassonografia obstétrica",
+              "Policlínica - Av. Eugênio Krause, 2265, Centro",
+              "sem preparo especial informado, confira a guia do exame",
+            ],
+          ],
+        },
+      },
+      { type: "FOOTER", text: "DGS - D'Artibale Gestão em Saúde" },
     ],
   },
   {

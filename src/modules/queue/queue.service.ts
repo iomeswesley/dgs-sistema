@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma.js";
 import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
-import { TEMPLATE_NAMES } from "@/lib/templates.js";
+import { PREPARO_PADRAO, TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
@@ -580,7 +580,7 @@ export function buildTemplateParams(template: TemplateKind, appointment: JobAppo
     // posição do texto, só palavra ou pontuação sozinha depois não basta,
     // precisou de texto de verdade. Tira o ponto final daqui pra não duplicar.
     const preparation = (
-      appointment.procedure.preparationInstructions?.trim() || "Nenhum preparo especial necessário"
+      appointment.procedure.preparationInstructions?.trim() || PREPARO_PADRAO
     ).replace(/\.+$/, "");
 
     return {

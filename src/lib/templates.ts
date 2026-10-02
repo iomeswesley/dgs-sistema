@@ -3,6 +3,12 @@ import type { TemplateKind } from "@prisma/client";
 // Nomes dos templates como cadastrados no Meta Business Manager, e a ordem
 // exata das variáveis de cada um. Ver TEMPLATES-WHATSAPP.md — se o texto
 // mudar lá, a ordem aqui precisa acompanhar.
+// Preenche {{6}} do lembrete quando o procedimento não tem instrução de preparo
+// cadastrada. NÃO pode soar como "não precisa levar nada": pacientes foram ao
+// exame sem documento porque "Nenhum preparo especial necessário" parecia
+// dispensar tudo — as orientações e os documentos a levar estão na guia.
+export const PREPARO_PADRAO = "sem preparo especial informado, confira as orientações e os documentos a levar na guia do exame";
+
 export const TEMPLATE_NAMES: Record<TemplateKind, string> = {
   CONFIRMACAO: "confirmacao_consulta",
   LEMBRETE: "lembrete_vespera",

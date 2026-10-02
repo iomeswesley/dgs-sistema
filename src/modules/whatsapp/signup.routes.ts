@@ -10,7 +10,7 @@ import { requireAuth, currentUserId } from "@/middleware/auth.js";
 import { parseBody } from "@/lib/http.js";
 import { describePhoneIssue, normalizePhoneList } from "@/lib/phone.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
-import { TEMPLATE_NAMES } from "@/lib/templates.js";
+import { PREPARO_PADRAO, TEMPLATE_NAMES } from "@/lib/templates.js";
 import {
   adoptEnvAccount,
   exchangeSignupCode,
@@ -290,7 +290,7 @@ function buildTestParams(template: TemplateKind) {
   const local = "Unidade de Teste";
 
   if (template === "LEMBRETE") {
-    return { body: [firstName, date, time, procedure, local, "Nenhum preparo especial necessário"] };
+    return { body: [firstName, date, time, procedure, local, PREPARO_PADRAO] };
   }
   if (template === "VAGA_ABERTA") {
     return { body: [firstName, municipality, procedure, date, time, local] };
