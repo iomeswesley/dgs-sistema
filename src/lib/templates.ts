@@ -11,7 +11,7 @@ export const PREPARO_PADRAO = "sem preparo especial informado, confira as orient
 
 export const TEMPLATE_NAMES: Record<TemplateKind, string> = {
   CONFIRMACAO: "confirmacao_consulta",
-  LEMBRETE: "lembrete_vespera",
+  LEMBRETE: "lembrete_vespera_v2",
   VAGA_ABERTA: "convite_vaga_aberta",
   CANCELAMENTO: "cancelamento_consulta",
   REAGENDAMENTO: "reagendamento_consulta",

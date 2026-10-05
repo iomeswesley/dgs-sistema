@@ -1436,6 +1436,7 @@ interface TemplateStatus {
 const TEMPLATE_LABEL: Record<string, string> = {
   confirmacao_consulta: "Confirmação de consulta",
   lembrete_vespera: "Lembrete de véspera",
+  lembrete_vespera_v2: "Lembrete de véspera (v2)",
   convite_vaga_aberta: "Convite pra vaga aberta",
   cancelamento_consulta: "Cancelamento",
 };

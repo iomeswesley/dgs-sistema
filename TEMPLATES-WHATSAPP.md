@@ -257,3 +257,9 @@ Os dados completos estão no painel administrativo.
 - [ ] **Coexistência (número que já usa o app WhatsApp Business) continua travada** — não é um checklist de template, é a revisão `business_management` da Meta parada num erro que só ela resolve (`#1690130`). Não bloqueia número novo/limpo, só o caso de reaproveitar um número que já tem histórico no app. Ver "Pendências abertas" no topo do CLAUDE.md pra sequência certa de retomar isso.
 
 **Numa WABA nova (cliente novo conectando pela tela), o registro e a submissão dos 5 templates acontecem sozinhos** dentro de `POST /api/whatsapp/signup/callback` (`registerPhoneNumber()` + `submitDefaultTemplates()`, `lib/whatsapp-templates.ts`) — só billing e perfil do WhatsApp Business continuam manuais, feitos direto no Business Manager da Meta.
+
+---
+
+## Nota 2026-10-05 — Template 2 em uso é o `lembrete_vespera_v2`
+
+O texto do Template 2 acima é o original (`lembrete_vespera`). Desde 05/10/2026 o sistema envia o **`lembrete_vespera_v2`** (aprovado), que acrescenta "- A guia do exame" na lista "Leve com você" e a frase "Importante: confira na guia do exame as orientações e os documentos que precisam ser levados." antes da instrução de retirar a autorização. Motivo: pacientes iam ao exame sem documento. Texto exato em `src/lib/whatsapp-templates.ts` (`DEFAULT_TEMPLATES`). A variável `{{6}}` (Preparo) sem instrução cadastrada vira "sem preparo especial informado, confira as orientações e os documentos a levar na guia do exame" (`PREPARO_PADRAO`, `src/lib/templates.ts`).
