@@ -2,6 +2,12 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-10-07 (2) — Meta Business Partners: já somos MEMBER, falta chegar a Badged
+
+- **Partner Center** (`business.facebook.com/partner_center/mbp_growth_insights?business_id=981536728049005`, print do usuário 06/10): **Current tier: Member**, Status **Compliant**; Business Verification e Data Use Checkup **Approved**; MBP Policy Self-certification "Not Available" (anual, não depende de nós). A candidatura de 06/10 foi aceita como Member.
+- **Pra virar Badged** (qualquer um dos caminhos basta): **Path A** = 2.500 msgs de WhatsApp/dia (média) + 10 negócios ativos + qualidade ≥90%; **Path B** = 200 chamadas de WhatsApp/dia (média, é a Calling API de voz — irrelevante pro produto) + qualidade ≥90%. **Hoje (dados de 05/10)**: 194 msgs/dia, 4 negócios ativos, 100% de qualidade, 0 chamadas — ou seja, qualidade ok; volume e nº de clientes longe (≈13× e 2,5×).
+- **Em aberto (não confirmado)**: a tela NÃO diz se o Badged é o que libera a **linha de crédito** pros clientes (Solution Partner). Perguntar no Support do Partner Center / "Learn more". Alternativa sem depender disso: Multi-Partner Solution com um Solution Partner existente, ou cliente paga a Meta direto + cobrança de plataforma (modelo atual).
+
 ## Sessão de 2026-10-07 — bug do CELK com vários procedimentos no mesmo PDF (lista 127, Penha, Dr. Jesus 14/10)
 
 - **Bug**: o PDF CELK de Penha/Dr. Jesus (14/10/2026) trazia DUAS seções ("Tipo Procedimento: ULTRASSONOGRAFIA OBSTETRICO / Profissional: …" com 24 pacientes de 08:00–11:50 e "… DE MAMA / …" com 29 de 13:00–16:52, cada uma com subtotal), mas `parseCelk` pegava só o primeiro procedimento do cabeçalho e deixava `row.procedure` sempre `null` — os 53 saíram como "ULTRASSONOGRAFIA OBSTETRICO". **Fix** (`parsers/celk.ts`): rastreia a seção em vigor por paciente (`SECTION`, ignora o filtro "Tipo Procedimento: Todos"); com MAIS de um procedimento no arquivo cada linha leva o da sua seção, o procedimento do cabeçalho fica `null` e entra um aviso "Este arquivo traz N procedimentos"; com um só, nada muda. 2 testes novos (celk.test.ts, 10 passando; suíte 216).
