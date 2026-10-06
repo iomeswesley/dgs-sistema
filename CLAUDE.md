@@ -2,6 +2,11 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-10-07 (3) — Partnership Home: setup concluído
+
+- **Partnership Home** (`partnershiphome.atmeta.com`, Mkt `981536728049005`): termos aceitos e self-certification feita **pelo usuário** — Set up = **Complete**. Termos (PDF de 13 págs., lido): sem custo/mensalidade; Meta pode monitorar, pedir certificações e suspender sem aviso; licença perpétua sobre os dados enviados; listagem pública do nome/logo; **indenização à Meta**; responsabilidade da Meta limitada a US$ 100; lei da Califórnia (foro local quando a lei exige); termos alteráveis unilateralmente; **nada sobre linha de crédito/Solution Partner**.
+- Focos: **Agency** (Enroll — é pra agências de anúncio, NÃO se aplica) e **Business Messaging and Meta Business Agent** (marcado "Coming soon": suporte operacional dedicado + elegibilidade a incentivos/fundos via Meta Performance Accelerator). Nada ainda sobre crédito. Próximo passo: botão "Eligibility details" e o Support (chat) perguntando como virar Solution Partner / linha de crédito.
+
 ## Sessão de 2026-10-07 (2) — Meta Business Partners: já somos MEMBER, falta chegar a Badged
 
 - **Partner Center** (`business.facebook.com/partner_center/mbp_growth_insights?business_id=981536728049005`, print do usuário 06/10): **Current tier: Member**, Status **Compliant**; Business Verification e Data Use Checkup **Approved**; MBP Policy Self-certification "Not Available" (anual, não depende de nós). A candidatura de 06/10 foi aceita como Member.
