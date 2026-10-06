@@ -2,6 +2,10 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-10-07 (4) — chamado enviado à Meta sobre Solution Partner / linha de crédito
+
+- O usuário enviou (via Partner Center → Support → "Program support" → "Program Info and Benefits" → "Requirement Inquiry") um chamado perguntando: requisitos e processo pra virar **Solution Partner com linha de crédito**; se o **Badged** (Path A: 2.500 msgs/dia + 10 negócios ativos) é pré-requisito; volume mínimo/prazo/como aplicar; moedas de crédito pro Brasil (BRL). Mkt `981536728049005` está inscrito em **Agency** desde 06/10 (benefícios: vouchers Meta Certification, Blueprint, suporte técnico de API; requisitos de desempenho de Agency são gasto em anúncios — não se aplicam). **Aguardando resposta por escrito da Meta** — registrar aqui e na memória `solution-partner-candidatura-2026-10-06` quando chegar.
+
 ## Sessão de 2026-10-07 (3) — Partnership Home: setup concluído
 
 - **Partnership Home** (`partnershiphome.atmeta.com`, Mkt `981536728049005`): termos aceitos e self-certification feita **pelo usuário** — Set up = **Complete**. Termos (PDF de 13 págs., lido): sem custo/mensalidade; Meta pode monitorar, pedir certificações e suspender sem aviso; licença perpétua sobre os dados enviados; listagem pública do nome/logo; **indenização à Meta**; responsabilidade da Meta limitada a US$ 100; lei da Califórnia (foro local quando a lei exige); termos alteráveis unilateralmente; **nada sobre linha de crédito/Solution Partner**.
