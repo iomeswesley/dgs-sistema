@@ -72,4 +72,39 @@ describe("parseCelk", () => {
     expect(result.rows).toHaveLength(0);
     expect(result.warnings.length).toBeGreaterThan(0);
   });
+
+  it("vários procedimentos no mesmo PDF: cada paciente leva o procedimento da sua seção", () => {
+    const text = `Prefeitura Municipal de Exemplópolis
+Página 001 de 001	Relação da Agenda para Contato
+Unidade Executante: Múltipla Seleção, 10 itens selecionados Período: de 14/10/2026 até 14/10/2026 Ordenação: Paciente/Data
+Profissional: ( 1 ) DOUTOR EXEMPLO Convênio: Todos Tipo Procedimento: Todos
+Unidade Executante: POLICLINICA
+Tipo Procedimento: ULTRASSONOGRAFIA OBSTETRICO / Profissional: DOUTOR EXEMPLO
+Paciente Idade Telefone Data e Hora	Telefone 1 Telefone 2 Telefone 3 Celular Convênio
+GESTANTE UM EXEMPLO 25 (47) 99000-0001 14/10/2026 - 08:00 SUS
+GESTANTE DOIS EXEMPLO 31 (47) 99000-0002 14/10/2026 - 08:20 SUS
+2	Quantidade de agendamentos por precedimento:
+Tipo Procedimento: ULTRASSONOGRAFIA DE MAMA / Profissional: DOUTOR EXEMPLO
+Paciente Idade Telefone Data e Hora	Telefone 1 Telefone 2 Telefone 3 Celular Convênio
+PACIENTE TRES EXEMPLO 52 (47) 99000-0003 14/10/2026 - 13:00 SUS
+PACIENTE QUATRO EXEMPLO 48 (47) 99000-0004 14/10/2026 - 13:20 SUS
+2	Quantidade de agendamentos por precedimento:
+4	Quantidade total de agendamentos:
+Emitido por FULANA em 02/10/2026 - 13:24 BRT | CELK SAÚDE v3.1.342.1 - CELK SISTEMAS LTDA`;
+    const result = parseCelk(text);
+    expect(result.rows.map((r) => [r.name, r.procedure])).toEqual([
+      ["GESTANTE UM EXEMPLO", "ULTRASSONOGRAFIA OBSTETRICO"],
+      ["GESTANTE DOIS EXEMPLO", "ULTRASSONOGRAFIA OBSTETRICO"],
+      ["PACIENTE TRES EXEMPLO", "ULTRASSONOGRAFIA DE MAMA"],
+      ["PACIENTE QUATRO EXEMPLO", "ULTRASSONOGRAFIA DE MAMA"],
+    ]);
+    expect(result.procedure).toBeNull(); // não existe um só procedimento no cabeçalho
+    expect(result.warnings.join(" ")).toMatch(/2 procedimentos/);
+  });
+
+  it("um único procedimento continua vindo só do cabeçalho (linhas sem procedimento próprio)", () => {
+    const result = parseCelk(CELK_TEXT);
+    expect(result.procedure).toBe("REG - CONSULTA EM CARDIOLOGIA");
+    expect(result.rows.every((r) => r.procedure === null)).toBe(true);
+  });
 });

@@ -39,7 +39,23 @@ export function parseCelk(text: string): ExtractionResult {
     doctorMatches.map((m) => m[1]?.replace(/^\(\s*\d+\s*\)\s*/, "").trim()).find((value) => !!value) ?? null;
 
   const rows: ExtractedRow[] = [];
+  // O CELK pode trazer VÁRIOS procedimentos no mesmo PDF (uma seção por
+  // procedimento: "Tipo Procedimento: X / Profissional: Y", seguida dos
+  // pacientes dela e de uma linha de subtotal) — achado real em 2026-10-06
+  // (Penha, Dr. Jesus: ultrassonografia obstétrica + de mama no mesmo
+  // arquivo, e os 53 saíram como "obstétrico"). Rastreia a seção em vigor
+  // pra cada paciente; o cabeçalho "Tipo Procedimento: Todos" (filtro) não
+  // tem "/ Profissional:" e não conta como seção.
+  const SECTION = /Tipo\s+Procedimento:\s*([^\n/]+?)\s*\/\s*Profissional:/i;
+  let currentSection: string | null = null;
+  const rowSections: (string | null)[] = [];
   for (const line of lines) {
+    const section = line.match(SECTION);
+    if (section?.[1]) {
+      const name = section[1].replace(/^\(\s*\d+\s*\)\s*/, "").trim();
+      if (name && !/^Todos$/i.test(name)) currentSection = name;
+      continue;
+    }
     // Fora da tabela de pacientes (cabeçalho, rodapé, contagem final) — o
     // rodapé "Emitido por ... em DD/MM/AAAA - HH:MM" também tem data e hora,
     // então descarta explicitamente antes de tentar casar como paciente.
@@ -57,6 +73,7 @@ export function parseCelk(text: string): ExtractionResult {
     if (!rawName || !phonesBlob) continue;
     const phones = [...extractPhones(phonesBlob), ...(extraPhones ? extractPhones(extraPhones) : [])];
 
+    rowSections.push(currentSection);
     rows.push({
       name: rawName.trim(),
       cns: null,
@@ -77,12 +94,26 @@ export function parseCelk(text: string): ExtractionResult {
     warnings.push("Nenhuma linha de paciente reconhecida no formato CELK — confira o arquivo manualmente.");
   }
 
+  // Mais de um procedimento no arquivo: cada paciente leva o da SUA seção e o
+  // procedimento do cabeçalho fica em branco (não existe um só). Com um único
+  // procedimento nada muda — continua valendo o do cabeçalho, como sempre.
+  const distinctSections = [...new Set(rowSections.filter((name): name is string => !!name))];
+  const multipleProcedures = distinctSections.length > 1;
+  if (multipleProcedures) {
+    rows.forEach((row, index) => {
+      row.procedure = rowSections[index] ?? null;
+    });
+    warnings.push(
+      `Este arquivo traz ${distinctSections.length} procedimentos (${distinctSections.join("; ")}) — cada paciente foi lido com o procedimento da sua seção. Confira se está certo.`
+    );
+  }
+
   return {
     sourceFormat: "CELK",
     municipality,
     executingUnit,
     doctor,
-    procedure,
+    procedure: multipleProcedures ? null : procedure,
     rows,
     warnings,
     // CELK é uma linha de texto por paciente, sem quebra de página no meio
