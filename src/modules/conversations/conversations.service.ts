@@ -177,10 +177,21 @@ const CONVERSATION_MESSAGE_SELECT = {
  * de recência) e só então busca as mensagens desses números — chega em
  * qualquer conversa, não só nas mais recentes.
  */
+/**
+ * Mensagem NOSSA que a Meta aceitou e depois recusou (status FALHOU — ex.:
+ * 131042, sem forma de pagamento) nunca chegou ao paciente, então não
+ * aparece na conversa nem no resumo da lista: mostrar como se tivesse sido
+ * enviada confunde a equipe (achado real, 2026-10-06 — 188 confirmações
+ * recusadas por falta de cartão apareciam como enviadas). O motivo da falha
+ * continua visível em Revisão/Acompanhamento (status "Falha" do agendamento).
+ */
+const NOT_FAILED_OUTBOUND = { NOT: { direction: "ENVIADA" as const, status: "FALHOU" as const } };
+
 export async function listConversations(limit = 200, search?: string): Promise<ConversationSummary[]> {
   const query = search?.trim();
   if (!query) {
     const messages = await prisma.whatsappMessage.findMany({
+      where: NOT_FAILED_OUTBOUND,
       orderBy: { createdAt: "desc" },
       take: 1000,
       select: CONVERSATION_MESSAGE_SELECT,
@@ -212,6 +223,7 @@ export async function listConversations(limit = 200, search?: string): Promise<C
 
   const messages = await prisma.whatsappMessage.findMany({
     where: {
+      ...NOT_FAILED_OUTBOUND,
       OR: [
         ...(candidatePhones.size > 0 ? [{ phone: { in: [...candidatePhones] } }] : []),
         // Cobre também quem já escreveu mas nunca virou Patient (nenhum
@@ -252,7 +264,7 @@ export async function getThread(rawPhone: string): Promise<{ patientName: string
   const candidates = phoneCandidates(key);
 
   const rows = await prisma.whatsappMessage.findMany({
-    where: { phone: { in: candidates } },
+    where: { phone: { in: candidates }, ...NOT_FAILED_OUTBOUND },
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
