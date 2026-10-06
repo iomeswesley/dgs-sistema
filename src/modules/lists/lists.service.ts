@@ -1141,10 +1141,22 @@ export async function deleteList(listId: number, userId: number): Promise<void> 
   const list = await prisma.list.findUnique({ where: { id: listId } });
   if (!list) throw new AppError("Lista não encontrada", 404);
   if (list.status === "DISPARADA" || list.status === "CONCLUIDA") {
-    throw new AppError(
-      "Lista já disparada não pode ser excluída — tem WhatsApp de verdade enviado a pacientes. Remova os agendamentos indevidos um a um, se for o caso.",
-      409
-    );
+    // Disparada, mas NADA chegou a paciente nenhum (ex.: falha total de envio
+    // por falta de forma de pagamento — 131042, 2026-10-06) e ninguém
+    // respondeu: não há histórico real a proteger, então pode excluir.
+    // Basta UMA mensagem aceita (não falhou) ou UMA resposta pra bloquear.
+    const reached = await prisma.whatsappMessage.count({
+      where: {
+        appointment: { listId },
+        OR: [{ direction: "RECEBIDA" }, { direction: "ENVIADA", status: { not: "FALHOU" } }],
+      },
+    });
+    if (reached > 0) {
+      throw new AppError(
+        `Lista já disparada não pode ser excluída — ${reached} mensagem(ns) de WhatsApp já foram enviadas ou respondidas por pacientes. Remova os agendamentos indevidos um a um, se for o caso.`,
+        409
+      );
+    }
   }
 
   await recordAudit({

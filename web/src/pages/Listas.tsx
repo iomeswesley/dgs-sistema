@@ -129,6 +129,8 @@ export function Listas() {
   const [remindersBusy, setRemindersBusy] = useState(false);
   const [remindersNotice, setRemindersNotice] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+  // Segunda confirmação (pedido do usuário: excluir lista pede dois "tem certeza").
+  const [removingFinal, setRemovingFinal] = useState<ListSummary | null>(null);
 
   // Filtro da listagem — pedido do usuário em 2026-09-03: com dezenas de
   // listas acumuladas, achar a de um médico/dia específico exigia rolar a
@@ -422,10 +424,12 @@ export function Listas() {
     try {
       await api.delete(`/api/lists/${removing.id}`);
       setRemoving(null);
+      setRemovingFinal(null);
       lists.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao excluir a lista.");
       setRemoving(null);
+      setRemovingFinal(null);
     } finally {
       setRemoveBusy(false);
     }
@@ -898,7 +902,7 @@ export function Listas() {
       <div className="grid grid-cols-1 gap-3">
         {filteredLists.map((list) => {
           const total = Object.values(list.counts).reduce((sum, value) => sum + value, 0);
-          const canDelete = list.status !== "DISPARADA" && list.status !== "CONCLUIDA";
+          const canDelete = true; // lista disparada também: o backend só recusa se algum paciente recebeu/respondeu
           return (
             <Link key={list.id} to={`/listas/${list.id}`} className="card block p-5 hover:border-accent">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -994,18 +998,37 @@ export function Listas() {
       </div>
 
       <ConfirmModal
-        open={removing !== null}
+        open={removing !== null && removingFinal === null}
         title="Excluir esta lista?"
         description={
           removing
-            ? `"${removing.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
+            ? removing.status === "DISPARADA" || removing.status === "CONCLUIDA"
+              ? `"${removing.originalName}" já foi disparada. Ela só pode ser excluída se NENHUMA mensagem chegou a paciente nem foi respondida (ex.: todas falharam no envio). Nesse caso a lista e todos os agendamentos dela somem, sem volta.`
+              : `"${removing.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
             : ""
         }
-        confirmLabel="Excluir"
+        confirmLabel="Continuar"
+        danger
+        onConfirm={() => setRemovingFinal(removing)}
+        onCancel={() => setRemoving(null)}
+      />
+
+      <ConfirmModal
+        open={removingFinal !== null}
+        title="Tem certeza absoluta?"
+        description={
+          removingFinal
+            ? `Última confirmação: excluir "${removingFinal.originalName}" e todos os agendamentos dela. Isso não pode ser desfeito.`
+            : ""
+        }
+        confirmLabel="Sim, excluir de vez"
         danger
         busy={removeBusy}
         onConfirm={handleRemove}
-        onCancel={() => setRemoving(null)}
+        onCancel={() => {
+          setRemovingFinal(null);
+          setRemoving(null);
+        }}
       />
 
       <ConfirmModal

@@ -265,7 +265,7 @@ export function Revisao() {
     scheduledAt: "",
   });
   const [removing, setRemoving] = useState<Appointment | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"dispatch" | "conclude" | "reprocess" | "delete" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"dispatch" | "conclude" | "reprocess" | "delete" | "delete_final" | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -779,10 +779,15 @@ export function Revisao() {
   }
 
   async function handleConfirmAction() {
+    // Excluir lista pede DUAS confirmações: a primeira só abre a segunda.
+    if (confirmAction === "delete") {
+      setConfirmAction("delete_final");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      if (confirmAction === "delete") {
+      if (confirmAction === "delete_final") {
         await api.delete(`/api/lists/${list.id}`);
         navigate("/listas");
         return;
@@ -941,16 +946,14 @@ export function Revisao() {
             >
               Exportar PDF
             </a>
-            {list.status !== "DISPARADA" && list.status !== "CONCLUIDA" && (
-              <button
-                type="button"
-                className="btn btn-quiet"
-                style={{ color: "var(--mark-red)" }}
-                onClick={() => setConfirmAction("delete")}
-              >
-                Excluir lista
-              </button>
-            )}
+            <button
+              type="button"
+              className="btn btn-quiet"
+              style={{ color: "var(--mark-red)" }}
+              onClick={() => setConfirmAction("delete")}
+            >
+              Excluir lista
+            </button>
             {list.status === "ERRO" && (
               <button type="button" className="btn btn-primary" onClick={() => setConfirmAction("reprocess")}>
                 Tentar novamente
@@ -1534,7 +1537,9 @@ export function Revisao() {
         title={
           confirmAction === "delete"
             ? "Excluir esta lista?"
-            : confirmAction === "reprocess"
+            : confirmAction === "delete_final"
+              ? "Tem certeza absoluta?"
+              : confirmAction === "reprocess"
               ? "Tentar a leitura de novo?"
               : confirmAction === "dispatch"
                 ? "Disparar as confirmações?"
@@ -1542,8 +1547,12 @@ export function Revisao() {
         }
         description={
           confirmAction === "delete"
-            ? `"${list.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
-            : confirmAction === "reprocess"
+            ? list.status === "DISPARADA" || list.status === "CONCLUIDA"
+              ? `"${list.originalName}" já foi disparada. Ela só pode ser excluída se NENHUMA mensagem chegou a paciente nem foi respondida (ex.: todas falharam no envio). Nesse caso a lista e todos os agendamentos dela somem, sem volta.`
+              : `"${list.originalName}" e todos os agendamentos dela somem, sem volta. Como ainda não foi disparada, nenhuma mensagem de WhatsApp foi enviada — nada se perde do lado do paciente.`
+            : confirmAction === "delete_final"
+              ? `Última confirmação: excluir "${list.originalName}" e todos os agendamentos dela. Isso não pode ser desfeito.`
+              : confirmAction === "reprocess"
               ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
               : confirmAction === "dispatch"
                 ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
@@ -1553,14 +1562,16 @@ export function Revisao() {
         }
         confirmLabel={
           confirmAction === "delete"
-            ? "Excluir"
-            : confirmAction === "reprocess"
+            ? "Continuar"
+            : confirmAction === "delete_final"
+              ? "Sim, excluir de vez"
+              : confirmAction === "reprocess"
               ? "Tentar novamente"
               : confirmAction === "dispatch"
                 ? "Disparar"
                 : "Concluir"
         }
-        danger={confirmAction === "delete"}
+        danger={confirmAction === "delete" || confirmAction === "delete_final"}
         busy={busy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
