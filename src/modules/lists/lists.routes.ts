@@ -22,6 +22,7 @@ import {
   removeAppointment,
   rescheduleAppointment,
   retryFailedAppointments,
+  updateListSettings,
 } from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
 import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
@@ -401,6 +402,24 @@ listsRouter.patch(
   asyncHandler(async (req, res) => {
     const data = parseBody(req, editSchema);
     await editAppointment(routeId(req), data, currentUserId(req));
+    res.json({ ok: true });
+  })
+);
+
+const listSettingsSchema = z.object({
+  municipalityId: z.number().int().positive(),
+  unitId: z.number().int().positive().nullable(),
+  unitAddress: z.string().nullish(),
+  doctorId: z.number().int().positive().optional(),
+  procedureId: z.number().int().positive().optional(),
+});
+
+/** "Configurações da lista" — município/unidade/endereço/médico/procedimento de uma vez, só em revisão. */
+listsRouter.patch(
+  "/api/lists/:id/settings",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, listSettingsSchema);
+    await updateListSettings(routeId(req), data, currentUserId(req));
     res.json({ ok: true });
   })
 );

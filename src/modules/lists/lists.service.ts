@@ -550,6 +550,155 @@ export async function editAppointment(
   }
 }
 
+export interface ListSettingsInput {
+  municipalityId: number;
+  /** null = lista sem unidade (a mensagem sai só com o nome do município). */
+  unitId: number | null;
+  /** Endereço da unidade escolhida (vai pra mensagem). undefined = não mexe. */
+  unitAddress?: string | null;
+  /** undefined = manter o que cada agendamento já tem (lista com vários). */
+  doctorId?: number;
+  procedureId?: number;
+}
+
+/**
+ * "Configurações da lista" (Revisão) — pedido do usuário em 2026-10-16:
+ * formatos que não trazem médico/procedimento (IDS, TABULAR) deixavam a
+ * equipe sem jeito de acertar isso na própria lista; só dava pra editar
+ * agendamento por agendamento ou mexer na agenda em Configurações.
+ *
+ * Aplica município/unidade/endereço/médico/procedimento de uma vez só: nos
+ * agendamentos da lista E na Agenda vinculada (senão "Importar mais
+ * pacientes" e a checagem de médico, que sempre leem a agenda, desfariam o
+ * que foi acertado aqui). Sem agenda e com unidade escolhida, cria a agenda
+ * (é ela que carrega a unidade pra mensagem). Só antes da aprovação — depois
+ * disso a mensagem já foi conferida e aprovada com os dados antigos.
+ */
+export async function updateListSettings(
+  listId: number,
+  input: ListSettingsInput,
+  userId: number
+): Promise<void> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+  if (list.status !== "EM_REVISAO") {
+    throw new AppError("Esta lista não está mais em revisão — as configurações já não podem mudar.", 409);
+  }
+
+  const municipality = await prisma.municipality.findUnique({ where: { id: input.municipalityId } });
+  if (!municipality) throw new AppError("Município não encontrado.", 404);
+
+  if (input.unitId !== null) {
+    const unit = await prisma.healthUnit.findUnique({ where: { id: input.unitId } });
+    if (!unit) throw new AppError("Unidade não encontrada.", 404);
+    if (unit.municipalityId !== input.municipalityId) {
+      throw new AppError(`A unidade "${unit.name}" não é do município ${municipality.name}.`, 400);
+    }
+  }
+  if (input.doctorId !== undefined && !(await prisma.doctor.findUnique({ where: { id: input.doctorId } }))) {
+    throw new AppError("Médico não encontrado.", 404);
+  }
+  if (input.procedureId !== undefined && !(await prisma.procedure.findUnique({ where: { id: input.procedureId } }))) {
+    throw new AppError("Procedimento não encontrado.", 404);
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: { listId },
+    orderBy: { scheduledAt: "asc" },
+    select: { id: true, scheduledAt: true, doctorId: true, rawLine: true },
+  });
+
+  await prisma.$transaction(
+    async (tx) => {
+      if (input.unitId !== null && input.unitAddress !== undefined) {
+        await tx.healthUnit.update({
+          where: { id: input.unitId },
+          data: { address: input.unitAddress?.trim() || null },
+        });
+      }
+
+      let agendaId = list.agendaId;
+      if (agendaId) {
+        await tx.agenda.update({
+          where: { id: agendaId },
+          data: {
+            municipalityId: input.municipalityId,
+            unitId: input.unitId,
+            ...(input.doctorId !== undefined && { doctorId: input.doctorId }),
+            ...(input.procedureId !== undefined && { procedureId: input.procedureId }),
+          },
+        });
+      } else if (input.unitId !== null) {
+        const doctorId = input.doctorId ?? appointments[0]?.doctorId;
+        const first = appointments.find((a) => a.scheduledAt.getTime() > 86_400_000);
+        if (!doctorId || !first) {
+          throw new AppError("Escolha o médico pra a unidade poder ser vinculada à lista.", 400);
+        }
+        const [year, month, day] = toBrasiliaDateString(first.scheduledAt).split("-").map(Number);
+        const agenda = await tx.agenda.create({
+          data: {
+            clientId: requireActiveClientId(),
+            doctorId,
+            municipalityId: input.municipalityId,
+            unitId: input.unitId,
+            procedureId: input.procedureId ?? null,
+            date: new Date(Date.UTC(year!, month! - 1, day!)),
+            shift: "INTEGRAL",
+          },
+        });
+        agendaId = agenda.id;
+      }
+
+      await tx.list.update({ where: { id: listId }, data: { municipalityId: input.municipalityId, agendaId } });
+      await tx.appointment.updateMany({
+        where: { listId },
+        data: {
+          municipalityId: input.municipalityId,
+          agendaId,
+          ...(input.doctorId !== undefined && { doctorId: input.doctorId }),
+          ...(input.procedureId !== undefined && { procedureId: input.procedureId }),
+        },
+      });
+
+      // Mesma razão de `clearResolvedIssues`: o aviso é um retrato da
+      // extração e ficaria preso depois de resolvido.
+      for (const appointment of appointments) {
+        const raw = appointment.rawLine;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const current = raw as unknown as RawLine;
+        const resolved = new Set<string>();
+        if (input.doctorId !== undefined) resolved.add("sem_medico");
+        if (input.procedureId !== undefined) resolved.add("sem_procedimento");
+        if (!current.issues?.some((issue) => resolved.has(issue))) continue;
+        await tx.appointment.update({
+          where: { id: appointment.id },
+          data: {
+            rawLine: {
+              ...current,
+              issues: current.issues.filter((issue) => !resolved.has(issue)),
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+    },
+    { maxWait: 10_000, timeout: 60_000 }
+  );
+
+  await recordAudit({
+    userId,
+    action: "update_list_settings",
+    entity: "List",
+    entityId: listId,
+    newValue: JSON.stringify({
+      municipalityId: input.municipalityId,
+      unitId: input.unitId,
+      unitAddress: input.unitAddress,
+      doctorId: input.doctorId,
+      procedureId: input.procedureId,
+    }),
+  });
+}
+
 /** Remove uma linha na revisão (duplicata, paciente que não é daquela agenda). */
 export async function removeAppointment(appointmentId: number, userId: number): Promise<void> {
   const appointment = await prisma.appointment.findUnique({

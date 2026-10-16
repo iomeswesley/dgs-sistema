@@ -176,6 +176,12 @@ export function Revisao() {
 
   const doctorsData = useApi<{ doctors: CatalogDoctor[] }>("/api/catalog/doctors");
   const proceduresData = useApi<{ procedures: CatalogProcedure[] }>("/api/catalog/procedures");
+  const municipalitiesData = useApi<{ municipalities: { id: number; name: string; active: boolean }[] }>(
+    "/api/catalog/municipalities"
+  );
+  const unitsData = useApi<{ units: { id: number; municipalityId: number; name: string; address: string | null; active: boolean }[] }>(
+    "/api/catalog/units"
+  );
 
   const [search, setSearch] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
@@ -190,6 +196,17 @@ export function Revisao() {
     procedureId: "",
     isFirstVisit: false,
   });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    municipalityId: "",
+    unitId: "",
+    address: "",
+    doctorId: "",
+    procedureId: "",
+  });
+  const [settingsPreview, setSettingsPreview] = useState<MessagePreview | null>(null);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addRawText, setAddRawText] = useState<string | null>(null);
@@ -498,6 +515,56 @@ export function Revisao() {
       setRescheduleError(err instanceof Error ? err.message : "Falha ao reagendar.");
     } finally {
       setRescheduleBusy(false);
+    }
+  }
+
+  /**
+   * "Configurações da lista": junta num lugar só tudo que entra na mensagem
+   * além do paciente (município, unidade, endereço, médico, procedimento).
+   * Médico/procedimento só vêm preenchidos quando a lista inteira concorda —
+   * com valores diferentes entre os agendamentos o campo fica em branco
+   * ("manter como está") até a equipe escolher um pra todos.
+   */
+  async function openSettings() {
+    const doctorIds = new Set(appointments.map((a) => a.doctor.id));
+    const procedureIds = new Set(appointments.map((a) => a.procedure.id));
+    const unit = list.agenda?.unit ?? null;
+    setSettingsForm({
+      municipalityId: String(list.municipality.id),
+      unitId: unit ? String(unit.id) : "",
+      address: unit?.address ?? "",
+      doctorId: doctorIds.size === 1 ? String(appointments[0]!.doctor.id) : "",
+      procedureId: procedureIds.size === 1 ? String(appointments[0]!.procedure.id) : "",
+    });
+    setSettingsError(null);
+    setSettingsPreview(null);
+    setSettingsOpen(true);
+    try {
+      setSettingsPreview(await api.get<MessagePreview>(`/api/lists/${list.id}/message-preview`));
+    } catch {
+      // prévia é só apoio visual — lista vazia (409) não impede abrir o formulário
+    }
+  }
+
+  async function submitSettings() {
+    setSettingsBusy(true);
+    setSettingsError(null);
+    try {
+      await api.patch(`/api/lists/${list.id}/settings`, {
+        municipalityId: Number(settingsForm.municipalityId),
+        unitId: settingsForm.unitId ? Number(settingsForm.unitId) : null,
+        ...(settingsForm.unitId ? { unitAddress: settingsForm.address } : {}),
+        ...(settingsForm.doctorId ? { doctorId: Number(settingsForm.doctorId) } : {}),
+        ...(settingsForm.procedureId ? { procedureId: Number(settingsForm.procedureId) } : {}),
+      });
+      setSettingsOpen(false);
+      setNotice("Configurações da lista atualizadas. Confira a mensagem em “Conferir mensagem antes de aprovar”.");
+      detail.reload();
+      unitsData.reload();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : "Falha ao salvar as configurações.");
+    } finally {
+      setSettingsBusy(false);
     }
   }
 
@@ -1055,8 +1122,8 @@ export function Revisao() {
               </dl>
             ) : null}
             <p className="mt-2 text-sm">
-              É esse endereço cadastrado que vai para a mensagem de WhatsApp. Se estiver errado, corrija a unidade
-              da agenda em Configurações → Agendas antes de aprovar.
+              É esse endereço cadastrado que vai para a mensagem de WhatsApp. Se estiver errado, corrija em
+              “Configurações da lista” (botão logo abaixo) antes de aprovar.
             </p>
             <label className="mt-3 flex items-center gap-2 text-sm font-medium">
               <input
@@ -1109,6 +1176,16 @@ export function Revisao() {
           manualmente" serve pra qualquer motivo de faltar alguém na lista,
           não só pra quem a leitura não reconheceu. */}
       <div className="mb-4">
+        {isReviewing && (
+          <button
+            type="button"
+            className="btn btn-quiet mr-2 px-3 py-1.5 text-sm"
+            onClick={() => void openSettings()}
+            title="Município, unidade, endereço, médico e procedimento — tudo que entra na mensagem além do paciente"
+          >
+            Configurações da lista
+          </button>
+        )}
         <button type="button" className="btn btn-quiet px-3 py-1.5 text-sm" onClick={() => openAddModal()}>
           + Adicionar paciente manualmente
         </button>
@@ -1816,6 +1893,105 @@ export function Revisao() {
             )}
           </div>
         )}
+      </FormModal>
+
+      <FormModal
+        open={settingsOpen}
+        title="Configurações da lista"
+        description="Tudo que vai na mensagem além do nome e do horário de cada paciente. Vale pra todos os pacientes da lista e também pra agenda vinculada."
+        submitLabel="Salvar"
+        busy={settingsBusy}
+        error={settingsError}
+        onSubmit={submitSettings}
+        onCancel={() => setSettingsOpen(false)}
+      >
+        {settingsPreview && (
+          <div className="rounded-lg bg-wa-bg p-3">
+            <p className="mb-1 text-xs font-semibold text-ink-muted">
+              Mensagem como está agora (com os dados de {settingsPreview.patientName}):
+            </p>
+            <div className="max-w-[90%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-ink shadow-sm">
+              <p className="whitespace-pre-wrap">{settingsPreview.text}</p>
+            </div>
+          </div>
+        )}
+        <Field label="Município">
+          <select
+            className="field"
+            value={settingsForm.municipalityId}
+            onChange={(e) => setSettingsForm({ ...settingsForm, municipalityId: e.target.value, unitId: "", address: "" })}
+            required
+          >
+            {municipalitiesData.data?.municipalities
+              .filter((m) => m.active || String(m.id) === settingsForm.municipalityId)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Unidade de atendimento" hint="Se a unidade não existe, cadastre em Configurações → Municípios.">
+          <select
+            className="field"
+            value={settingsForm.unitId}
+            onChange={(e) => {
+              const unit = unitsData.data?.units.find((u) => String(u.id) === e.target.value);
+              setSettingsForm({ ...settingsForm, unitId: e.target.value, address: unit?.address ?? "" });
+            }}
+          >
+            <option value="">Sem unidade (mensagem sai só com o município)</option>
+            {unitsData.data?.units
+              .filter((u) => String(u.municipalityId) === settingsForm.municipalityId && (u.active || String(u.id) === settingsForm.unitId))
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        {settingsForm.unitId && (
+          <Field label="Endereço da unidade" hint="Vai na mensagem. Corrigir aqui também corrige o cadastro da unidade.">
+            <input
+              className="field"
+              value={settingsForm.address}
+              onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
+              placeholder="Rua, número, bairro"
+            />
+          </Field>
+        )}
+        <Field label="Médico" hint={settingsForm.doctorId ? undefined : "Os pacientes têm médicos diferentes — escolha um pra igualar, ou deixe em branco pra manter."}>
+          <select
+            className="field"
+            value={settingsForm.doctorId}
+            onChange={(e) => setSettingsForm({ ...settingsForm, doctorId: e.target.value })}
+          >
+            <option value="">Manter como está</option>
+            {doctorsData.data?.doctors
+              .filter((d) => d.active || String(d.id) === settingsForm.doctorId)
+              .map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Procedimento" hint={settingsForm.procedureId ? undefined : "Os pacientes têm procedimentos diferentes — escolha um pra igualar, ou deixe em branco pra manter."}>
+          <select
+            className="field"
+            value={settingsForm.procedureId}
+            onChange={(e) => setSettingsForm({ ...settingsForm, procedureId: e.target.value })}
+          >
+            <option value="">Manter como está</option>
+            {proceduresData.data?.procedures
+              .filter((p) => p.active || String(p.id) === settingsForm.procedureId)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
+        </Field>
       </FormModal>
 
       <FormModal
