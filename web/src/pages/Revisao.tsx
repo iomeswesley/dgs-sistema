@@ -1948,24 +1948,6 @@ export function Revisao() {
             <Spinner />
           )}
         </div>
-        {settingsPreview && (
-          <div className="rounded-lg border border-rule px-3 py-2 text-sm">
-            <p className="mb-1 text-xs font-semibold text-ink-muted">O que entra em cada campo da mensagem</p>
-            <dl className="grid gap-x-3 gap-y-0.5 sm:grid-cols-[auto_1fr]">
-              {settingsPreview.fields
-                .filter((f) => f.label !== "Nome do paciente")
-                .map((f, i) => (
-                  <div key={i} className="contents">
-                    <dt className="text-ink-muted">{f.label}:</dt>
-                    <dd className="break-words">{f.value}</dd>
-                  </div>
-                ))}
-            </dl>
-            <p className="mt-2 text-xs text-ink-faint">
-              O nome do médico não aparece na mensagem — ele vale pro cadastro do agendamento e pros relatórios.
-            </p>
-          </div>
-        )}
         {settingsPreview?.warnings.map((w) => (
           <Callout key={w} tone="warn">
             {w}
