@@ -78,6 +78,7 @@ export async function extractAndStage(listId: number): Promise<void> {
         }
       }
     }
+    await fillProcedureFromAgenda(list.agendaId, mapped.drafts);
 
     await prisma.$transaction(
       async (tx) => {
@@ -234,6 +235,28 @@ export async function checkDoctorMatch(agendaId: number | null, pdfDoctor: strin
     mismatch: !!pdfDoctor && !namesMatch(pdfDoctor, agenda.doctor.name),
     noAgenda: false,
   };
+}
+
+/**
+ * Linha sem procedimento no arquivo (formato que nunca traz procedimento,
+ * tipo IDS/Ascurra 2026-10-16) herda o procedimento da Agenda vinculada,
+ * quando ela tem um — senão cada linha virava "Não informado" + aviso de
+ * "sem procedimento". Procedimento lido no arquivo nunca é sobrescrito.
+ */
+async function fillProcedureFromAgenda(agendaId: number | null, drafts: AppointmentDraft[]): Promise<void> {
+  if (!agendaId || drafts.every((draft) => draft.procedure)) return;
+  const agenda = await prisma.agenda.findUnique({ where: { id: agendaId }, include: { procedure: true } });
+  if (!agenda?.procedure) return;
+
+  for (const draft of drafts) {
+    if (draft.procedure) continue;
+    draft.procedure = agenda.procedure.name;
+    const idx = draft.issues.indexOf("sem_procedimento");
+    if (idx !== -1) {
+      draft.issues.splice(idx, 1);
+      draft.readyToSend = draft.issues.length === 0;
+    }
+  }
 }
 
 function doctorCheckWarnings(check: DoctorCheck): string[] {
@@ -758,6 +781,7 @@ export async function importAdditionalPatients(
   // lista já vinculada a uma Agenda usa sempre o médico dela, nunca o
   // texto solto do PDF importado — ver `checkDoctorMatch`.
   const doctorCheck = await checkDoctorMatch(list.agendaId, mapped.doctor);
+  await fillProcedureFromAgenda(list.agendaId, mapped.drafts);
 
   const dispatchNow = list.status !== "EM_REVISAO";
   const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";

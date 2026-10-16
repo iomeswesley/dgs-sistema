@@ -6,6 +6,8 @@ import type { ExtractionResult } from "../extraction.schema.js";
  */
 export function detectFormat(text: string): ExtractionResult["sourceFormat"] {
   if (/CELK\s+SA[ÚU]DE/i.test(text)) return "CELK";
+  // Rodapé do relatório "Agendamento de Consulta" do IDS Saúde (Ascurra, 2026-10-16).
+  if (/IDS\s+Sa[úu]de/i.test(text) && /TDmAgeCon/i.test(text)) return "IDS";
   // Checa ANTES do teste genérico de SISREG abaixo: esse formato tem
   // "SISREG" só como rótulo da primeira coluna (o código de solicitação),
   // não é o relatório fragmentado de verdade — o cabeçalho da tabela é o
