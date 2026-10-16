@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "npm run build",
+  "buildCommand": "npx prisma migrate deploy && npm run build",
   "regions": [
     "gru1"
   ],
