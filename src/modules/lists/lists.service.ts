@@ -550,6 +550,94 @@ export async function editAppointment(
   }
 }
 
+const PLACEHOLDER_NAME = "não informado";
+
+/**
+ * Depois de editar uma Agenda (Configurações → Agendas), leva médico e
+ * procedimento dela pros agendamentos das listas dela que ainda estão em
+ * revisão — achado real em 2026-10-16 (Tijucas): a equipe botou o
+ * procedimento na agenda e a lista aberta continuava "Não informado", porque
+ * o agendamento guarda o próprio procedimento no momento da leitura.
+ *
+ * Médico: a agenda sempre manda (mesma regra de `resolveCatalog`).
+ * Procedimento: só troca quem está "Não informado" ou com o procedimento
+ * antigo da própria agenda — o que foi lido do arquivo nunca é sobrescrito.
+ * Lista já aprovada/disparada não é tocada (a mensagem já saiu com os dados
+ * antigos). Roda a cada salvar, então salvar de novo conserta lista antiga.
+ */
+export async function syncAgendaToReviewLists(
+  agendaId: number,
+  previousProcedureId: number | null,
+  userId: number
+): Promise<{ doctor: number; procedure: number }> {
+  const agenda = await prisma.agenda.findUnique({ where: { id: agendaId } });
+  if (!agenda) return { doctor: 0, procedure: 0 };
+
+  const appointments = await prisma.appointment.findMany({
+    where: { agendaId, list: { status: "EM_REVISAO" } },
+    select: { id: true, doctorId: true, procedureId: true, rawLine: true, procedure: { select: { name: true } } },
+  });
+
+  const doctorIds: number[] = [];
+  const procedureIds: number[] = [];
+  for (const a of appointments) {
+    if (a.doctorId !== agenda.doctorId) doctorIds.push(a.id);
+    const isPlaceholder = a.procedure.name.trim().toLowerCase() === PLACEHOLDER_NAME;
+    if (
+      agenda.procedureId !== null &&
+      a.procedureId !== agenda.procedureId &&
+      (isPlaceholder || a.procedureId === previousProcedureId)
+    ) {
+      procedureIds.push(a.id);
+    }
+  }
+  if (doctorIds.length === 0 && procedureIds.length === 0) return { doctor: 0, procedure: 0 };
+
+  const doctorSet = new Set(doctorIds);
+  const procedureSet = new Set(procedureIds);
+  await prisma.$transaction(
+    async (tx) => {
+      if (doctorIds.length > 0) {
+        await tx.appointment.updateMany({ where: { id: { in: doctorIds } }, data: { doctorId: agenda.doctorId } });
+      }
+      if (procedureIds.length > 0) {
+        await tx.appointment.updateMany({
+          where: { id: { in: procedureIds } },
+          data: { procedureId: agenda.procedureId! },
+        });
+      }
+      for (const a of appointments) {
+        const raw = a.rawLine;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const current = raw as unknown as RawLine;
+        const resolved = new Set<string>();
+        if (doctorSet.has(a.id)) resolved.add("sem_medico");
+        if (procedureSet.has(a.id)) resolved.add("sem_procedimento");
+        if (!current.issues?.some((issue) => resolved.has(issue))) continue;
+        await tx.appointment.update({
+          where: { id: a.id },
+          data: {
+            rawLine: {
+              ...current,
+              issues: current.issues.filter((issue) => !resolved.has(issue)),
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+    },
+    { maxWait: 10_000, timeout: 60_000 }
+  );
+
+  await recordAudit({
+    userId,
+    action: "sync_agenda_to_lists",
+    entity: "Agenda",
+    entityId: agendaId,
+    newValue: JSON.stringify({ doctor: doctorIds.length, procedure: procedureIds.length }),
+  });
+  return { doctor: doctorIds.length, procedure: procedureIds.length };
+}
+
 export interface ListSettingsInput {
   municipalityId: number;
   /** null = lista sem unidade (a mensagem sai só com o nome do município). */

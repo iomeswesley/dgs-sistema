@@ -372,8 +372,20 @@ listsRouter.get(
         return intent !== "opt_out";
       });
       const last = unresolved[unresolved.length - 1];
+      // "sem médico"/"sem procedimento" é um retrato da leitura: depois que o
+      // cadastro resolveu (agenda, Configurações da lista, edição), o aviso
+      // ficava aparecendo mesmo com o dado certo na linha (Tijucas,
+      // 2026-10-16). Só vale enquanto o valor ainda é o "Não informado".
+      const isPlaceholder = (name: string) => name.trim().toLowerCase() === "não informado";
+      const rawLine = a.rawLine as { issues?: string[] } | null;
+      const issues = rawLine?.issues?.filter(
+        (issue) =>
+          !(issue === "sem_medico" && !isPlaceholder(a.doctor.name)) &&
+          !(issue === "sem_procedimento" && !isPlaceholder(a.procedure.name))
+      );
       return {
         ...a,
+        rawLine: rawLine && issues ? { ...rawLine, issues } : a.rawLine,
         hasUnclassifiedReply: unresolved.length > 0,
         lastReplyPreview: last ? (last.buttonPayload ?? last.body) : null,
       };

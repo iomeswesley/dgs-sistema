@@ -8,6 +8,7 @@ import { dateOnlySchema, parseBody, parseDateOnly, parseQuery, routeId } from "@
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { REFUSAL_REASON_LABEL } from "@/lib/labels.js";
+import { syncAgendaToReviewLists } from "@/modules/lists/lists.service.js";
 
 /*
   Agenda = escala do médico num município e data. É o que permite saber o
@@ -97,7 +98,9 @@ agendasRouter.patch(
       data: { ...data, date: data.date ? parseDateOnly(data.date) : undefined },
     });
     await recordAudit({ userId: currentUserId(req), action: "update", entity: "Agenda", entityId: id });
-    res.json({ agenda });
+    // Listas ainda em revisão passam a refletir o médico/procedimento novos.
+    const synced = await syncAgendaToReviewLists(id, before.procedureId, currentUserId(req));
+    res.json({ agenda, synced });
   })
 );
 
