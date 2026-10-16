@@ -744,6 +744,65 @@ export async function removeAppointment(appointmentId: number, userId: number): 
   });
 }
 
+/**
+ * Remove vários pacientes de uma vez na revisão (pedido do usuário em
+ * 2026-10-16: listas grandes com muita gente que não é da agenda). Mesmas
+ * regras de `removeAppointment` — só `EM_REVISAO`, tira "duplicado" de quem
+ * sobrou sozinho e deixa um `remove_review` por paciente na auditoria — mas
+ * numa transação só: ou saem todos ou nenhum.
+ */
+export async function removeAppointments(listId: number, appointmentIds: number[], userId: number): Promise<number> {
+  const list = await prisma.list.findUnique({ where: { id: listId }, select: { status: true } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+  if (list.status !== "EM_REVISAO") throw new AppError("Esta lista não está mais em revisão.", 409);
+
+  const ids = [...new Set(appointmentIds)];
+  const targets = await prisma.appointment.findMany({
+    where: { listId, id: { in: ids } },
+    select: { id: true, patientId: true },
+  });
+  if (targets.length !== ids.length) {
+    throw new AppError("Algum paciente selecionado não é mais desta lista — recarregue a página e tente de novo.", 409);
+  }
+
+  const patientIds = [...new Set(targets.map((t) => t.patientId))];
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.appointment.deleteMany({ where: { listId, id: { in: ids } } });
+
+      const remaining = await tx.appointment.findMany({ where: { listId, patientId: { in: patientIds } } });
+      const countByPatient = new Map<number, number>();
+      for (const a of remaining) countByPatient.set(a.patientId, (countByPatient.get(a.patientId) ?? 0) + 1);
+      for (const a of remaining) {
+        const rawLine = a.rawLine as RawLine | null;
+        if (countByPatient.get(a.patientId) === 1 && rawLine?.issues?.includes("duplicado")) {
+          await tx.appointment.update({
+            where: { id: a.id },
+            data: {
+              rawLine: {
+                ...rawLine,
+                issues: rawLine.issues.filter((i) => i !== "duplicado"),
+              } as unknown as Prisma.InputJsonValue,
+            },
+          });
+        }
+      }
+    },
+    { maxWait: 10_000, timeout: 60_000 }
+  );
+
+  for (const target of targets) {
+    await recordAudit({
+      userId,
+      action: "remove_review",
+      entity: "Appointment",
+      entityId: target.id,
+      oldValue: target.patientId,
+    });
+  }
+  return targets.length;
+}
+
 export interface ManualAppointmentInput {
   patientName: string;
   cns?: string | null;

@@ -20,6 +20,7 @@ import {
   importAdditionalPatients,
   previewScheduleReference,
   removeAppointment,
+  removeAppointments,
   rescheduleAppointment,
   retryFailedAppointments,
   updateListSettings,
@@ -403,6 +404,20 @@ listsRouter.patch(
     const data = parseBody(req, editSchema);
     await editAppointment(routeId(req), data, currentUserId(req));
     res.json({ ok: true });
+  })
+);
+
+const bulkRemoveSchema = z.object({
+  appointmentIds: z.array(z.number().int().positive()).min(1, "Selecione pelo menos um paciente.").max(2000),
+});
+
+/** Remove vários pacientes de uma vez (só em revisão). */
+listsRouter.post(
+  "/api/lists/:id/remove-appointments",
+  asyncHandler(async (req, res) => {
+    const { appointmentIds } = parseBody(req, bulkRemoveSchema);
+    const removed = await removeAppointments(routeId(req), appointmentIds, currentUserId(req));
+    res.json({ removed });
   })
 );
 

@@ -322,6 +322,11 @@ export function Revisao() {
     scheduledAt: "",
   });
   const [removing, setRemoving] = useState<Appointment | null>(null);
+  // Remoção em massa: botão "Remover pacientes" liga o modo (caixas de seleção
+  // ao lado de cada nome); clicar de novo, já vermelho, remove os marcados.
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"dispatch" | "conclude" | "reprocess" | "delete" | "delete_final" | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -860,6 +865,39 @@ export function Revisao() {
     }
   }
 
+  function exitBulkMode() {
+    setBulkMode(false);
+    setBulkSelected(new Set());
+    setBulkConfirmOpen(false);
+  }
+
+  function toggleBulk(id: number) {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkRemove() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.post<{ removed: number }>(`/api/lists/${list.id}/remove-appointments`, {
+        appointmentIds: [...bulkSelected],
+      });
+      exitBulkMode();
+      setNotice(`${result.removed} paciente(s) removido(s) da lista.`);
+      detail.reload();
+    } catch (err) {
+      setBulkConfirmOpen(false);
+      setError(err instanceof Error ? err.message : "Falha ao remover os pacientes.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleRemove() {
     if (!removing) return;
     setBusy(true);
@@ -1215,6 +1253,33 @@ export function Revisao() {
             Configurações da lista
           </button>
         )}
+        {isReviewing &&
+          (bulkMode ? (
+            <>
+              <button
+                type="button"
+                className="btn mr-2 px-3 py-1.5 text-sm text-white"
+                style={{ background: "var(--mark-red)" }}
+                disabled={bulkSelected.size === 0}
+                onClick={() => setBulkConfirmOpen(true)}
+                title={bulkSelected.size === 0 ? "Marque os pacientes nas caixas à esquerda dos nomes" : undefined}
+              >
+                Remover pacientes{bulkSelected.size > 0 ? ` (${bulkSelected.size})` : ""}
+              </button>
+              <button type="button" className="btn btn-quiet mr-2 px-3 py-1.5 text-sm" onClick={exitBulkMode}>
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-quiet mr-2 px-3 py-1.5 text-sm"
+              onClick={() => setBulkMode(true)}
+              title="Marcar vários pacientes e tirar da lista de uma vez"
+            >
+              Remover pacientes
+            </button>
+          ))}
         <button type="button" className="btn btn-quiet px-3 py-1.5 text-sm" onClick={() => openAddModal()}>
           + Adicionar paciente manualmente
         </button>
@@ -1390,6 +1455,20 @@ export function Revisao() {
           <Table
             head={
               <tr>
+                {bulkMode && (
+                  <Th className="w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Marcar todos os pacientes visíveis"
+                      checked={
+                        filteredAppointments.length > 0 && filteredAppointments.every((a) => bulkSelected.has(a.id))
+                      }
+                      onChange={(event) =>
+                        setBulkSelected(event.target.checked ? new Set(filteredAppointments.map((a) => a.id)) : new Set())
+                      }
+                    />
+                  </Th>
+                )}
                 <Th>Paciente</Th>
                 {/* No celular, telefone/data/procedimento entram dentro da
                     célula "Paciente" (ver abaixo) em vez de coluna própria —
@@ -1412,6 +1491,16 @@ export function Revisao() {
                   key={appointment.id}
                   style={issues.length > 0 ? { background: "var(--mark-yellow-soft)" } : undefined}
                 >
+                  {bulkMode && (
+                    <Td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Marcar ${appointment.patient.name}`}
+                        checked={bulkSelected.has(appointment.id)}
+                        onChange={() => toggleBulk(appointment.id)}
+                      />
+                    </Td>
+                  )}
                   <Td>
                     {isEditing ? (
                       <input
@@ -1616,6 +1705,17 @@ export function Revisao() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={bulkConfirmOpen}
+        title={`Remover ${bulkSelected.size} paciente(s) da lista?`}
+        description="Eles saem da lista e não recebem mensagem. Use para duplicidade ou gente que não é desta agenda."
+        confirmLabel="Remover"
+        danger
+        busy={busy}
+        onConfirm={handleBulkRemove}
+        onCancel={() => setBulkConfirmOpen(false)}
+      />
 
       <ConfirmModal
         open={removing !== null}
