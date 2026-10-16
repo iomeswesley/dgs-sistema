@@ -9,7 +9,7 @@ import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { parseBrasiliaDateTime, toBrasiliaDateString } from "@/lib/timezone.js";
 import { buildTemplateParams } from "@/modules/queue/queue.service.js";
-import { TEMPLATE_NAMES } from "@/lib/templates.js";
+import { TEMPLATE_FIELDS, TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { readPdfText } from "@/lib/pdf-text.js";
 import { matchScheduleReference, parseScheduleReference } from "@/lib/schedule-reference.js";
@@ -1211,6 +1211,10 @@ export interface MessagePreview {
   patientName: string;
   phone: string | null;
   totalPatients: number;
+  /** Cada variável que entra no template, na ordem — pra a equipe ver de onde vem cada pedaço da mensagem. */
+  fields: { label: string; value: string }[];
+  /** O que vai sair incompleto na mensagem (sem endereço, sem unidade…). */
+  warnings: string[];
 }
 
 /**
@@ -1224,7 +1228,7 @@ export interface MessagePreview {
  * lógica usada no envio de verdade (`queue.service.ts`), pra garantir que a
  * prévia bate exatamente com o que o paciente recebe, sem duplicar regra.
  */
-export async function getMessagePreview(listId: number): Promise<MessagePreview> {
+export async function getMessagePreview(listId: number, draft?: ListSettingsInput): Promise<MessagePreview> {
   const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true } });
   if (!list) throw new AppError("Lista não encontrada", 404);
 
@@ -1242,9 +1246,50 @@ export async function getMessagePreview(listId: number): Promise<MessagePreview>
   });
   if (!appointment) throw new AppError("Essa lista ainda não tem nenhum paciente.", 409);
 
+  // Prévia "e se": aplica em memória o que está no formulário de
+  // "Configurações da lista" (nada é gravado) — a equipe vê a mensagem mudar
+  // enquanto escolhe, antes de salvar. Mesma `buildTemplateParams` do envio.
+  let source: Parameters<typeof buildTemplateParams>[1] = appointment;
+  if (draft) {
+    const [municipality, unit, procedure] = await Promise.all([
+      prisma.municipality.findUnique({ where: { id: draft.municipalityId } }),
+      draft.unitId !== null ? prisma.healthUnit.findUnique({ where: { id: draft.unitId } }) : null,
+      draft.procedureId !== undefined ? prisma.procedure.findUnique({ where: { id: draft.procedureId } }) : null,
+    ]);
+    if (!municipality) throw new AppError("Município não encontrado.", 404);
+    source = {
+      ...appointment,
+      municipality,
+      procedure: procedure ?? appointment.procedure,
+      agenda: {
+        ...(appointment.agenda ?? {}),
+        unit: unit
+          ? {
+              name: unit.name,
+              address: draft.unitAddress !== undefined ? draft.unitAddress?.trim() || null : unit.address,
+            }
+          : null,
+      },
+    } as Parameters<typeof buildTemplateParams>[1];
+  }
+
   const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
-  const params = buildTemplateParams(template, appointment);
+  const params = buildTemplateParams(template, source);
   const text = renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body);
+
+  const labels = TEMPLATE_FIELDS[template];
+  const fields = [
+    ...(params.header ?? []).map((value, i) => ({ label: `Título — ${labels.header?.[i] ?? "variável"}`, value })),
+    ...params.body.map((value, i) => ({ label: labels.body[i] ?? "variável", value })),
+  ];
+
+  const unit = source.agenda?.unit ?? null;
+  const warnings: string[] = [];
+  if (!unit) {
+    warnings.push("Sem unidade: o campo Local sai só com o nome do município, sem endereço.");
+  } else if (!unit.address) {
+    warnings.push(`A unidade "${unit.name}" não tem endereço: o campo Local sai só com o nome dela.`);
+  }
 
   const totalPatients = await prisma.appointment.count({ where: { listId } });
 
@@ -1254,6 +1299,8 @@ export async function getMessagePreview(listId: number): Promise<MessagePreview>
     patientName: appointment.patient.name,
     phone: appointment.selectedPhone,
     totalPatients,
+    fields,
+    warnings,
   };
 }
 

@@ -105,6 +105,8 @@ interface MessagePreview {
   patientName: string;
   phone: string | null;
   totalPatients: number;
+  fields: { label: string; value: string }[];
+  warnings: string[];
 }
 
 interface ScheduleReferenceMatch {
@@ -165,6 +167,18 @@ const STATUS_EXPLANATION: { status: string; text: string }[] = [
   { status: "CANCELADO", text: "A agenda inteira foi cancelada pela equipe (módulo de Cancelamento), não depende de resposta do paciente." },
 ];
 
+type SettingsForm = { municipalityId: string; unitId: string; address: string; doctorId: string; procedureId: string };
+
+function settingsPayload(form: SettingsForm) {
+  return {
+    municipalityId: Number(form.municipalityId),
+    unitId: form.unitId ? Number(form.unitId) : null,
+    ...(form.unitId ? { unitAddress: form.address } : {}),
+    ...(form.doctorId ? { doctorId: Number(form.doctorId) } : {}),
+    ...(form.procedureId ? { procedureId: Number(form.procedureId) } : {}),
+  };
+}
+
 export function Revisao() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -205,8 +219,34 @@ export function Revisao() {
     procedureId: "",
   });
   const [settingsPreview, setSettingsPreview] = useState<MessagePreview | null>(null);
+  const [settingsPreviewLoading, setSettingsPreviewLoading] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  // Prévia viva: a cada mudança no formulário de "Configurações da lista",
+  // remonta a mensagem com o que está selecionado (sem gravar nada) — a
+  // equipe vê o efeito antes de salvar. Pequeno atraso pra não chamar a cada
+  // tecla do endereço; o contador descarta resposta de uma chamada antiga.
+  const settingsPreviewSeq = useRef(0);
+  useEffect(() => {
+    if (!settingsOpen || !id || !settingsForm.municipalityId) return;
+    const seq = ++settingsPreviewSeq.current;
+    setSettingsPreviewLoading(true);
+    const timer = setTimeout(() => {
+      api
+        .post<MessagePreview>(`/api/lists/${id}/settings-preview`, settingsPayload(settingsForm))
+        .then((result) => {
+          if (seq === settingsPreviewSeq.current) setSettingsPreview(result);
+        })
+        .catch(() => {
+          // prévia é só apoio visual — o erro de verdade aparece ao salvar
+        })
+        .finally(() => {
+          if (seq === settingsPreviewSeq.current) setSettingsPreviewLoading(false);
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [settingsOpen, settingsForm, id]);
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addRawText, setAddRawText] = useState<string | null>(null);
@@ -539,24 +579,13 @@ export function Revisao() {
     setSettingsError(null);
     setSettingsPreview(null);
     setSettingsOpen(true);
-    try {
-      setSettingsPreview(await api.get<MessagePreview>(`/api/lists/${list.id}/message-preview`));
-    } catch {
-      // prévia é só apoio visual — lista vazia (409) não impede abrir o formulário
-    }
   }
 
   async function submitSettings() {
     setSettingsBusy(true);
     setSettingsError(null);
     try {
-      await api.patch(`/api/lists/${list.id}/settings`, {
-        municipalityId: Number(settingsForm.municipalityId),
-        unitId: settingsForm.unitId ? Number(settingsForm.unitId) : null,
-        ...(settingsForm.unitId ? { unitAddress: settingsForm.address } : {}),
-        ...(settingsForm.doctorId ? { doctorId: Number(settingsForm.doctorId) } : {}),
-        ...(settingsForm.procedureId ? { procedureId: Number(settingsForm.procedureId) } : {}),
-      });
+      await api.patch(`/api/lists/${list.id}/settings`, settingsPayload(settingsForm));
       setSettingsOpen(false);
       setNotice("Configurações da lista atualizadas. Confira a mensagem em “Conferir mensagem antes de aprovar”.");
       detail.reload();
@@ -1905,16 +1934,43 @@ export function Revisao() {
         onSubmit={submitSettings}
         onCancel={() => setSettingsOpen(false)}
       >
-        {settingsPreview && (
-          <div className="rounded-lg bg-wa-bg p-3">
-            <p className="mb-1 text-xs font-semibold text-ink-muted">
-              Mensagem como está agora (com os dados de {settingsPreview.patientName}):
-            </p>
+        <div className="rounded-lg bg-wa-bg p-3">
+          <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-ink-muted">
+            Mensagem com o que está selecionado abaixo
+            {settingsPreview ? ` (dados de ${settingsPreview.patientName})` : ""}:
+            {settingsPreviewLoading && <span className="font-normal text-ink-faint">atualizando…</span>}
+          </p>
+          {settingsPreview ? (
             <div className="max-w-[90%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-ink shadow-sm">
               <p className="whitespace-pre-wrap">{settingsPreview.text}</p>
             </div>
+          ) : (
+            <Spinner />
+          )}
+        </div>
+        {settingsPreview && (
+          <div className="rounded-lg border border-rule px-3 py-2 text-sm">
+            <p className="mb-1 text-xs font-semibold text-ink-muted">O que entra em cada campo da mensagem</p>
+            <dl className="grid gap-x-3 gap-y-0.5 sm:grid-cols-[auto_1fr]">
+              {settingsPreview.fields
+                .filter((f) => f.label !== "Nome do paciente")
+                .map((f, i) => (
+                  <div key={i} className="contents">
+                    <dt className="text-ink-muted">{f.label}:</dt>
+                    <dd className="break-words">{f.value}</dd>
+                  </div>
+                ))}
+            </dl>
+            <p className="mt-2 text-xs text-ink-faint">
+              O nome do médico não aparece na mensagem — ele vale pro cadastro do agendamento e pros relatórios.
+            </p>
           </div>
         )}
+        {settingsPreview?.warnings.map((w) => (
+          <Callout key={w} tone="warn">
+            {w}
+          </Callout>
+        ))}
         <Field label="Município">
           <select
             className="field"

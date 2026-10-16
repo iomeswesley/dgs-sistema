@@ -414,6 +414,15 @@ const listSettingsSchema = z.object({
   procedureId: z.number().int().positive().optional(),
 });
 
+/** Prévia da mensagem COM o que está no formulário, sem gravar nada — a equipe vê o efeito antes de salvar. */
+listsRouter.post(
+  "/api/lists/:id/settings-preview",
+  asyncHandler(async (req, res) => {
+    const data = parseBody(req, listSettingsSchema);
+    res.json(await getMessagePreview(routeId(req), data));
+  })
+);
+
 /** "Configurações da lista" — município/unidade/endereço/médico/procedimento de uma vez, só em revisão. */
 listsRouter.patch(
   "/api/lists/:id/settings",
