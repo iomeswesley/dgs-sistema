@@ -1,4 +1,4 @@
-# Onboarding de cliente novo — sistema de confirmação por WhatsApp
+# Onboarding de cliente novo — sistema de oferta de consultas por WhatsApp
 
 Documento de trabalho (rascunho 2026-10-07). Três partes: **A)** perguntas para o cliente, **B)** o que o cliente precisa saber, **C)** pontos de atenção internos. Itens marcados com **(?)** são o que ainda não foi confirmado com a Meta.
 
@@ -24,43 +24,41 @@ Se você configurar o número na SUA conta (modelo 2): o cliente não cadastra c
 1. Razão social, CNPJ e município. É prefeitura, consórcio ou clínica?
 2. Quem assina o contrato e quem é o responsável técnico/operacional?
 3. Quem é o **encarregado de dados (LGPD)** do órgão?
-4. Como será a contratação (licitação, dispensa, contrato direto)?
 
 ### A2. Operação
-5. Quantos pacientes e quantas agendas por dia? Em quais unidades, com quais médicos e procedimentos?
-6. Qual é o horário de atendimento da central e quem acompanha as respostas dos pacientes?
-7. Hoje, como é feita a confirmação e qual é o índice de faltas?
-8. Há instrução de preparo por exame? O paciente precisa levar documentos? (a mensagem manda conferir a guia do exame)
-9. Com quanta antecedência querem o lembrete? (hoje é na véspera)
-10. O que fazer com paciente que recusa? (vaga fica disponível para reposição)
+4. Quantos pacientes e quantas agendas por dia? Em quais unidades?
+   - **Procedimento:** exame que vai ser realizado (ex.: ultrassonografia)
+5. Qual é o horário de atendimento da central e quem acompanha as respostas dos pacientes?
+6. Com quanta antecedência querem o lembrete? (hoje é na véspera)
+7. O que fazer com paciente que diz que **não tem interesse**? (a vaga fica disponível para reposição)
 
 ### A3. Origem das listas
-11. De onde vem a lista: SISREG, CELK, Excel, outro sistema?
-12. Em que formato chega: **PDF nativo** (dá para selecionar o texto), planilha, ou PDF escaneado/foto? (escaneado **não** é lido automaticamente)
-13. Pode mandar **2 ou 3 arquivos reais de exemplo** (com dados reais ou fictícios) de dias diferentes?
-14. Um mesmo PDF traz mais de um procedimento ou mais de um médico?
-15. O telefone vem completo, com DDD? Há mais de um telefone por paciente?
+8. De onde vem a lista (ex.: SISREG, CELK, Excel, outro sistema)?
+9. Em que formato chega: **PDF nativo** (dá para selecionar o texto), planilha, ou PDF escaneado/foto? (escaneado **não** é lido automaticamente)
+10. Pode mandar **2 ou 3 arquivos reais de exemplo** (com dados reais ou fictícios) de dias diferentes?
+11. Um mesmo PDF traz mais de um procedimento?
+12. O telefone vem completo, com DDD? Há mais de um telefone por paciente?
 
 ### A4. WhatsApp
-16. Existe um número exclusivo para o WhatsApp da secretaria? Ele já está em uso (pessoal, WhatsApp Business) ou será um chip novo?
-17. Quem é administrador do **Facebook** e do **portfólio de negócios (Meta Business)** da prefeitura? Em qual conta de Facebook será feita a conexão?
-18. Esse portfólio já passou por **verificação do negócio** na Meta? (aumenta limites e libera o nome de exibição)
-19. Quem vai cadastrar o **cartão de pagamento** na conta do WhatsApp na Meta? (ver seção 0)
-20. Qual **nome de exibição** deve aparecer para o paciente (ex.: "Secretaria de Saúde de Penha")?
+13. Existe um número exclusivo para o WhatsApp da secretaria? Ele já está em uso (pessoal, WhatsApp Business) ou será um chip novo?
+14. Quem é administrador do **Facebook** e do **portfólio de negócios (Meta Business)** da prefeitura? Em qual conta de Facebook será feita a conexão?
+15. Esse portfólio já passou por **verificação do negócio** na Meta? (aumenta limites e libera o nome de exibição)
+16. Quem vai cadastrar o **cartão de pagamento** na conta do WhatsApp na Meta? (ver seção 0)
+17. Qual **nome de exibição** deve aparecer para o paciente (ex.: "Secretaria de Saúde de Penha")?
 
 ### A5. Segurança e dados
-21. Quantos usuários vão usar o sistema? Quem terá acesso?
-22. Os pacientes já foram avisados de que receberão mensagem por WhatsApp? Existe base legal/consentimento definido?
-23. Qual é a política de retenção dos dados do órgão? (o sistema apaga dados e mídia por prazo configurável)
+18. Quantos usuários vão usar o sistema? Quem terá acesso?
+19. Os pacientes já foram avisados de que receberão mensagem por WhatsApp? Existe base legal/consentimento definido?
+20. Qual é a política de retenção dos dados do órgão? (o sistema apaga dados e mídia por prazo configurável)
 
 ---
 
 ## B) O que o cliente precisa saber
 
 **O que o sistema faz**
-- Lê a lista de agendamentos, mostra para a equipe conferir e, depois de aprovada, envia a confirmação por WhatsApp com os botões **Sim / Não poderei ir**.
-- Envia lembrete na véspera para quem confirmou, com a orientação de levar documentos e **conferir o preparo na guia do exame**.
-- Quem recusa libera a vaga, e a equipe vê tudo em Acompanhamento. Também é possível cancelar a agenda inteira e avisar todos.
+- Lê a lista de pacientes e horários, mostra para a equipe conferir e, depois de aprovada, **oferece a consulta/exame** ao paciente por WhatsApp e pergunta se ele **tem interesse**, com os botões **Sim, tenho interesse / Não tenho interesse**. Não é a confirmação de uma consulta que já foi marcada: é uma oferta, e o paciente decide se quer.
+- Envia lembrete na véspera para quem tem interesse, com a orientação de levar documentos e **conferir o preparo na guia do exame**.
+- Quem não tem interesse libera a vaga, e a equipe vê tudo em Acompanhamento. Também é possível cancelar a agenda inteira e avisar todos.
 - A equipe pode conversar com o paciente em Conversas dentro da janela de 24h.
 
 **O que o sistema NÃO faz**
@@ -71,7 +69,7 @@ Se você configurar o número na SUA conta (modelo 2): o cliente não cadastra c
 **Formato das listas aceitas**
 - PDF nativo do **SISREG**, do **CELK**, ou de um relatório de **uma linha por paciente**.
 - **Planilha Excel** no modelo padrão (botão "Baixar modelo Excel" em Listas), com menus do cadastro dele. Regras principais: Município só com o nome (sem "-SC"), datas em DD/MM/AAAA, horário HH:MM, telefone com DDD.
-- A lista precisa ter: **nome, telefone (com DDD), data e horário, procedimento, médico e unidade**.
+- A lista precisa ter: **nome, telefone (com DDD), data e horário, procedimento e unidade**.
 
 **Sobre o WhatsApp (Meta)**
 - O WhatsApp é cobrado pela **Meta**, não por nós. Hoje o cliente cadastra o **cartão** na conta do WhatsApp dele.
@@ -120,6 +118,10 @@ Se você configurar o número na SUA conta (modelo 2): o cliente não cadastra c
 2. Rode o leitor (`extractList`) nele e confira, linha por linha: nome, telefone, data/hora, procedimento, médico, unidade. O que não bater vira correção de parser ou orientação ao cliente (como no caso Timbó e no caso Penha).
 3. Se for planilha com layout próprio, o cliente copia para o **modelo Excel padrão** (colunas e formatos já definidos).
 4. Só depois cadastre a agenda e dispare para os números da equipe.
+
+### Pendência: textos de WhatsApp da "oferta de consulta"
+- Hoje os templates aprovados ainda falam em **confirmação de consulta marcada**: `confirmacao_consulta` ("Você tem uma consulta marcada… Podemos confirmar sua presença?", botões "Sim, vou comparecer" / "Não poderei ir"). O texto da oferta ("Sim, tenho interesse" / "Não tenho interesse") **ainda não existe**; o mais próximo é `convite_vaga_aberta` ("Abriu uma vaga… Você tem interesse nesse horário?", botões "Sim, quero a vaga" / "Não, obrigado").
+- Mudar isso exige **template novo aprovado pela Meta** (cerca de 1 dia) e ajustar o reconhecimento das respostas (`classifyReply`). Este documento já descreve o fluxo como oferta; a mensagem de verdade só muda depois disso.
 
 ### Decisões comerciais ainda em aberto
 - Modelo de cobrança: cliente paga a Meta direto (modelo 1) × você paga e repassa (modelos 2 e 3).
