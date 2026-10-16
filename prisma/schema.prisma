@@ -819,6 +819,9 @@ enum SourceFormat {
   // (unidade → data → horário → paciente → telefones), uma informação por
   // linha. Achado em 2026-10-16 (Ascurra).
   IDS
+  // Relatório "Agendamento de Exames" do CISAMVE (exame, data, horário, nome;
+  // sem telefone). Achado em 2026-10-16 (Doppler, Vale Europeu).
+  CISAMVE
   // Planilha no modelo oficial da plataforma (modelo-importacao-dgs.xlsx) —
   // o cliente converte o Excel da secretaria pra esse formato padrão.
   EXCEL

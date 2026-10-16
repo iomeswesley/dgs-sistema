@@ -507,7 +507,7 @@ export function Listas() {
         <div className="mt-3">
           <Field
             label="Arquivo"
-            hint="PDF da agenda (SISREG, CELK ou IDS Saúde) ou planilha no nosso modelo Excel (.xlsx), até 20 MB. Escolher o arquivo já tenta preencher o resto sozinho."
+            hint="PDF da agenda (SISREG, CELK, IDS Saúde ou CISAMVE) ou planilha no nosso modelo Excel (.xlsx), até 20 MB. Escolher o arquivo já tenta preencher o resto sozinho."
           >
             <input
               ref={fileRef}

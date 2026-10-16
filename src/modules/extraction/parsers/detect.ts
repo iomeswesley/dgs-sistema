@@ -13,6 +13,10 @@ export function detectFormat(text: string): ExtractionResult["sourceFormat"] {
   // não é o relatório fragmentado de verdade — o cabeçalho da tabela é o
   // sinal confiável (achado em 2026-09-16, lista de Botuverá).
   if (/Nome\s+Data\s+nasc\.\s+Telefone\s+Procedimento\s+Data\s+Hor[aá]rio/i.test(text)) return "TABULAR";
+  // Relatório "Agendamento de Exames" do CISAMVE (exame, data, horário, nome — sem telefone).
+  if (/Agendamento de Exames/i.test(text) && /Descri[cç][aã]o do Exame\s+Data\s+Hor[aá]rio\s+Nome do Usu[aá]rio/i.test(text)) {
+    return "CISAMVE";
+  }
   if (/SISREG/i.test(text) || /PROPRIEDADES DA AGENDA/i.test(text)) return "SISREG";
   return "OUTRO";
 }

@@ -31,6 +31,13 @@ Leia isto no início de qualquer sessão nova. O desenho completo do produto est
 - **Causa 2**: `rawLine.issues` é um retrato da leitura. `GET /api/lists/:id` agora filtra `sem_medico`/`sem_procedimento` quando o médico/procedimento da linha já não é o placeholder "Não informado" (só exibição; nada é gravado).
 - Sem acesso ao banco/PDF de Tijucas nesta sessão: o diagnóstico vem do código e do relato, não foi reproduzido com o arquivo real. Sem teste automatizado de banco (padrão de `lists`).
 
+## Sessão de 2026-10-16 (5) — formato novo "CISAMVE" (Agendamento de Exames, Doppler 17/10)
+
+- **Relato**: o cliente subiu o PDF "17.10.26 - DOPPLER" e deu errado. Causa: caía em "formato não reconhecido" (`OUTRO`) → lista vazia. É o relatório **"Agendamento de Exames" do CISAMVE** (mesmo IDS Saúde, programa TDmAgeExa): `EXAME  DD/MM/AAAA HH:MM:SS  NOME`, **sem telefone/CNS/nascimento/município/médico**; 49 pacientes, 5 exames diferentes.
+- **`parsers/cisamve.ts`** (`SourceFormat.CISAMVE`, migration `20261016010000_cisamve_source_format`, aplicada no deploy): exame por linha (sem restringir caracteres — "ATÉ 3 VASOS", parênteses), data/hora por paciente, aviso fixo de que não traz telefone. Pacientes entram `sem_telefone` (+ `sem_medico` até escolher a agenda). Detecção por "Agendamento de Exames" + cabeçalho "Descrição do Exame Data Horário Nome do Usuário". 4 testes (dados fictícios); validado com o PDF real (49/49).
+- **Já funcionava**: esse mesmo PDF como **lista de referência de horário** ("Atualizar horários por lista de referência", `schedule-reference.ts`) — 49 linhas lidas. Só o upload como lista nova falhava.
+- **Em aberto (perguntado ao usuário)**: buscar o telefone pelo nome em pacientes já cadastrados (nome exato único) pra não digitar 49 telefones — não feito por risco de mandar dado de saúde pra pessoa errada sem confirmação.
+
 ## Sessão de 2026-10-07 (4) — chamado enviado à Meta sobre Solution Partner / linha de crédito
 
 - O usuário enviou (via Partner Center → Support → "Program support" → "Program Info and Benefits" → "Requirement Inquiry") um chamado perguntando: requisitos e processo pra virar **Solution Partner com linha de crédito**; se o **Badged** (Path A: 2.500 msgs/dia + 10 negócios ativos) é pré-requisito; volume mínimo/prazo/como aplicar; moedas de crédito pro Brasil (BRL). Mkt `981536728049005` está inscrito em **Agency** desde 06/10 (benefícios: vouchers Meta Certification, Blueprint, suporte técnico de API; requisitos de desempenho de Agency são gasto em anúncios — não se aplicam). **Aguardando resposta por escrito da Meta** — registrar aqui e na memória `solution-partner-candidatura-2026-10-06` quando chegar.
