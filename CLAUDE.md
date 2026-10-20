@@ -2,6 +2,13 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-10-20 — módulos por cliente (base do fluxo de "oferta")
+
+- **Pedido**: novo cliente (município) não confirma consulta já marcada, **oferece** a consulta ("Sim, tenho interesse"/"Não tenho interesse"), com o nome do município como remetente (não "DGS"); lembrete e cancelamento também saem com o nome do município. O super admin (Wesley) precisa ligar/desligar módulos por cliente em `/admin` (DGS: confirmação, sem oferta).
+- **Feito (base)**: `AppSettings` ganhou `messageFlow` (`CONFIRMACAO`|`OFERTA`, default CONFIRMACAO), `senderName`, `moduleLembrete`, `moduleCancelamento` (migration `20261020000000_client_modules`, aditiva, aplicada no deploy). `/admin` → botão **Módulos** por cliente (`PATCH /api/admin/clients/:id/features`, `client-features.service.ts`, AuditLog `admin.edit_client_features`). `GET /api/settings` devolve `features`. Cancelamento desligado: some do menu e `/api/cancellations` responde 403; lembrete desligado: `enqueueReminders()` não cria jobs.
+- **PENDENTE**: o fluxo OFERTA em si (template novo aprovado na Meta, botões, `classifyReply`, seleção de template na fila/lista, nome do remetente como variável nos templates) — depende do texto do template e do nome do cliente, que o usuário vai mandar. Hoje `messageFlow`/`senderName` só são gravados, ainda não mudam o envio.
+- **Mover a conta #9 (+55 47 98865-6379) pro novo cliente**: ajuste único via SQL (`UPDATE whatsapp_accounts SET "clientId" = <novo>, active = true WHERE id = 9;`), sem botão. Bloqueios da Meta (pagamento, verificação, templates) continuam valendo.
+
 ## Sessão de 2026-10-16 — formato novo de extração "IDS" (IDS Saúde, Ascurra)
 
 - **Pedido**: Ascurra mandou a agenda de neurologia (19–23/10/2026, 122 pacientes, 10 páginas) no relatório "Agendamento de Consulta" do **IDS Saúde** (rodapé "IDS Saúde … TDmAgeCon5181"). Nada numa linha só: `código - UNIDADE` → `DD/MM/AAAA` → `HH:MM:SS` → `código - NOME` → linha de telefones (Telefone/Celular/Contato, coluna vazia some do texto). PDF nativo, com camada de texto.

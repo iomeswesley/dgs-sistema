@@ -32,7 +32,15 @@ interface BillingConfig {
   creditsBalance: number | null;
 }
 
+interface ClientFeatures {
+  messageFlow: "CONFIRMACAO" | "OFERTA";
+  senderName: string | null;
+  moduleLembrete: boolean;
+  moduleCancelamento: boolean;
+}
+
 interface AdminClient {
+  features: ClientFeatures | null;
   id: number;
   name: string;
   active: boolean;
@@ -62,6 +70,7 @@ export function Admin() {
   const [toggling, setToggling] = useState<AdminClient | null>(null);
   const [managingAccess, setManagingAccess] = useState<AdminClient | null>(null);
   const [managingBilling, setManagingBilling] = useState<AdminClient | null>(null);
+  const [managingFeatures, setManagingFeatures] = useState<AdminClient | null>(null);
 
   async function createClient() {
     setBusy(true);
@@ -162,6 +171,13 @@ export function Admin() {
                   </button>
                   <button
                     type="button"
+                    className="text-xs text-accent underline underline-offset-2"
+                    onClick={() => setManagingFeatures(c)}
+                  >
+                    Módulos
+                  </button>
+                  <button
+                    type="button"
                     className="text-xs text-ink-muted underline underline-offset-2"
                     onClick={() => setToggling(c)}
                   >
@@ -233,6 +249,17 @@ export function Admin() {
           onClose={() => setManagingBilling(null)}
           onSaved={() => {
             setManagingBilling(null);
+            clients.reload();
+          }}
+        />
+      )}
+
+      {managingFeatures && (
+        <ClientFeaturesModal
+          client={managingFeatures}
+          onClose={() => setManagingFeatures(null)}
+          onSaved={() => {
+            setManagingFeatures(null);
             clients.reload();
           }}
         />
@@ -322,6 +349,85 @@ function BillingSummary({ billing, error }: { billing: BillingStatus; error: str
       <div className={billing.blocked ? "font-medium text-rose-600" : "text-ink"}>{label}</div>
       {billing.blocked && <div className="text-rose-600">Bloqueado</div>}
     </div>
+  );
+}
+
+function ClientFeaturesModal({
+  client,
+  onClose,
+  onSaved,
+}: {
+  client: AdminClient;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const current = client.features;
+  const [flow, setFlow] = useState<ClientFeatures["messageFlow"]>(current?.messageFlow ?? "CONFIRMACAO");
+  const [senderName, setSenderName] = useState(current?.senderName ?? "");
+  const [lembrete, setLembrete] = useState(current?.moduleLembrete ?? true);
+  const [cancelamento, setCancelamento] = useState(current?.moduleCancelamento ?? true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.patch(`/api/admin/clients/${client.id}/features`, {
+        messageFlow: flow,
+        senderName: senderName.trim() || null,
+        moduleLembrete: lembrete,
+        moduleCancelamento: cancelamento,
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <FormModal
+      open
+      title={`Módulos — ${client.name}`}
+      description="O que este cliente enxerga e usa. Desligar um módulo esconde a tela e bloqueia o envio dele."
+      busy={busy}
+      error={error}
+      onSubmit={save}
+      onCancel={onClose}
+    >
+      <div className="space-y-4">
+        <Field label="Tipo de mensagem principal">
+          <select className="field" value={flow} onChange={(e) => setFlow(e.target.value as ClientFeatures["messageFlow"])}>
+            <option value="CONFIRMACAO">Confirmação de consulta já marcada (Sim, vou comparecer / Não poderei ir)</option>
+            <option value="OFERTA">Oferta de consulta (Sim, tenho interesse / Não tenho interesse)</option>
+          </select>
+        </Field>
+        <Field label="Nome do remetente nas mensagens (município)">
+          <input
+            className="field"
+            value={senderName}
+            onChange={(e) => setSenderName(e.target.value)}
+            placeholder="Vazio = DGS"
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" checked={lembrete} onChange={(e) => setLembrete(e.target.checked)} />
+          Lembrete de véspera
+        </label>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" checked={cancelamento} onChange={(e) => setCancelamento(e.target.checked)} />
+          Cancelamento de agenda
+        </label>
+        {flow === "OFERTA" && (
+          <Callout tone="warn">
+            O texto da oferta e o nome do remetente nos templates dependem do template aprovado na Meta; esta escolha
+            registra a configuração do cliente.
+          </Callout>
+        )}
+      </div>
+    </FormModal>
   );
 }
 

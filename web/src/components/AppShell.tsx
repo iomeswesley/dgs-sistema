@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -56,6 +57,14 @@ export function AppShell() {
   // borda da tela); agora é um botão de hambúrguer que abre/fecha a lista
   // de páginas, igual um menu retrátil. Não afeta o menu lateral do desktop.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Módulos ligados pro cliente ativo (decididos pelo super admin em /admin).
+  const [modules, setModules] = useState<{ moduleCancelamento: boolean } | null>(null);
+  useEffect(() => {
+    api
+      .get<{ features: { moduleCancelamento: boolean } }>("/api/settings")
+      .then((data) => setModules(data.features))
+      .catch(() => setModules(null));
+  }, [user?.activeClientId]);
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
@@ -138,7 +147,9 @@ export function AppShell() {
         <ul
           className={`${mobileMenuOpen ? "flex" : "hidden"} flex-col gap-1 px-3 pb-3 md:flex md:gap-0.5 md:pb-0`}
         >
-          {(user?.isSuperAdmin ? [...NAV, ADMIN_NAV_ITEM] : NAV).map((item) => {
+          {(user?.isSuperAdmin ? [...NAV, ADMIN_NAV_ITEM] : NAV)
+            .filter((item) => item.to !== "/cancelamentos" || modules?.moduleCancelamento !== false)
+            .map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.to}>

@@ -548,6 +548,13 @@ model MessageJob {
 // comercial de mensagens (ver modules/billing).
 model AppSettings {
   id                 Int      @id @default(autoincrement())
+  // Módulos por cliente (2026-10-20) — editável só pelo super admin em
+  // /admin. Defaults preservam o comportamento de todo cliente existente.
+  messageFlow        MessageFlow @default(CONFIRMACAO)
+  // Nome que aparece como remetente nas mensagens (município). Null = "DGS".
+  senderName         String?
+  moduleLembrete     Boolean  @default(true)
+  moduleCancelamento Boolean  @default(true)
   // Uma linha por cliente (antes era linha unica com id fixo 1).
   clientId           Int      @unique
   mediaRetentionDays Int      @default(7)
@@ -898,6 +905,11 @@ enum DeliveryStatus {
 }
 
 // Modo de limite comercial de mensagens por cliente (ver AppSettings).
+enum MessageFlow {
+  CONFIRMACAO
+  OFERTA
+}
+
 enum BillingMode {
   JANELA
   CREDITOS

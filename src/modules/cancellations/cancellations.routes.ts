@@ -3,6 +3,8 @@ import { z } from "zod";
 import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
+import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 import {
   dispatchCancellation,
   getCancellationBatch,
@@ -15,6 +17,20 @@ import { generateCancellationPdf } from "./cancellations.pdf.js";
 
 export const cancellationsRouter = Router();
 cancellationsRouter.use("/api/cancellations", requireAuth);
+// Módulo ligável por cliente em /admin.
+cancellationsRouter.use(
+  "/api/cancellations",
+  asyncHandler(async (_req, _res, next) => {
+    const modules = await prisma.appSettings.findUnique({
+      where: { clientId: requireActiveClientId() },
+      select: { moduleCancelamento: true },
+    });
+    if (modules && !modules.moduleCancelamento) {
+      throw new AppError("O módulo de cancelamento não está ativo para este cliente.", 403);
+    }
+    next();
+  })
+);
 
 cancellationsRouter.get(
   "/api/cancellations",

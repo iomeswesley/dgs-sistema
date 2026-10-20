@@ -48,6 +48,13 @@ export interface CadenceResult {
  * secretaria repor a vaga.
  */
 export async function enqueueReminders(): Promise<CadenceResult> {
+  // Módulo desligado pelo super admin pra este cliente (/admin).
+  const modules = await prisma.appSettings.findUnique({
+    where: { clientId: requireActiveClientId() },
+    select: { moduleLembrete: true },
+  });
+  if (modules && !modules.moduleLembrete) return { queued: 0, skipped: 0 };
+
   const tomorrow = startOfBrasiliaDay(new Date());
   tomorrow.setDate(tomorrow.getDate() + 1);
   const dayAfter = new Date(tomorrow);

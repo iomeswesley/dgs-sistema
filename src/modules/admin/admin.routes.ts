@@ -25,6 +25,7 @@ import {
 import { getCancellationReceivedBreakdown } from "@/modules/cancellations/cancellations.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { listContactLeads } from "@/modules/leads/leads.service.js";
+import { getClientFeatures, setClientFeatures } from "./client-features.service.js";
 import { addClientCredits, getBillingStatus, setClientBilling } from "@/modules/billing/billing.service.js";
 
 export const adminRouter = Router();
@@ -85,7 +86,8 @@ adminRouter.get(
         billingError = err instanceof Error ? err.message : "Falha ao calcular status de cobrança.";
         console.error(`[ADMIN] Falha ao calcular billing do cliente ${client.id} (${client.name}):`, billingError);
       }
-      withBilling.push({ ...client, billing, billingError, billingConfig: configByClient.get(client.id) ?? null });
+      const features = await getClientFeatures(client.id).catch(() => null);
+      withBilling.push({ ...client, billing, billingError, billingConfig: configByClient.get(client.id) ?? null, features });
     }
 
     res.json({ clients: withBilling });
@@ -189,6 +191,24 @@ adminRouter.patch(
     const data = parseBody(req, setBillingSchema);
     const billing = await runWithClient(clientId, () => setClientBilling(data, currentUserId(req)));
     res.json({ billing });
+  })
+);
+
+const setFeaturesSchema = z.object({
+  messageFlow: z.enum(["CONFIRMACAO", "OFERTA"]).optional(),
+  senderName: z.string().max(80).nullable().optional(),
+  moduleLembrete: z.boolean().optional(),
+  moduleCancelamento: z.boolean().optional(),
+});
+
+adminRouter.patch(
+  "/api/admin/clients/:id/features",
+  asyncHandler(async (req, res) => {
+    const clientId = routeId(req);
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new AppError("Cliente não encontrado.", 404);
+    const features = await setClientFeatures(clientId, parseBody(req, setFeaturesSchema), currentUserId(req));
+    res.json({ features });
   })
 );
 

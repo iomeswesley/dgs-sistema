@@ -12,6 +12,24 @@ import { AppError } from "@/middleware/errorHandler.js";
 
 export interface AppSettings {
   mediaRetentionDays: number;
+  /** Módulos do cliente — só leitura aqui; quem edita é o super admin (client-features.service.ts). */
+  features: ClientFeatures;
+}
+
+export interface ClientFeatures {
+  messageFlow: "CONFIRMACAO" | "OFERTA";
+  senderName: string | null;
+  moduleLembrete: boolean;
+  moduleCancelamento: boolean;
+}
+
+export function toFeatures(row: ClientFeatures): ClientFeatures {
+  return {
+    messageFlow: row.messageFlow,
+    senderName: row.senderName,
+    moduleLembrete: row.moduleLembrete,
+    moduleCancelamento: row.moduleCancelamento,
+  };
 }
 
 export async function getSettings(): Promise<AppSettings> {
@@ -21,7 +39,7 @@ export async function getSettings(): Promise<AppSettings> {
   // banco restaurado sem a migration). Não inventa um default silencioso
   // pra não mascarar isso.
   if (!settings) throw new AppError("Configurações do sistema não encontradas pra este cliente.", 500);
-  return { mediaRetentionDays: settings.mediaRetentionDays };
+  return { mediaRetentionDays: settings.mediaRetentionDays, features: toFeatures(settings) };
 }
 
 export interface UpdateSettingsInput {
@@ -37,5 +55,5 @@ export async function updateSettings(input: UpdateSettingsInput): Promise<AppSet
     where: { clientId: requireActiveClientId() },
     data: { mediaRetentionDays: input.mediaRetentionDays },
   });
-  return { mediaRetentionDays: settings.mediaRetentionDays };
+  return { mediaRetentionDays: settings.mediaRetentionDays, features: toFeatures(settings) };
 }
