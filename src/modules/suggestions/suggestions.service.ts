@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma.js";
+import { toBrasiliaDateString } from "@/lib/timezone.js";
 import {
   estimateAttendanceRate,
   suggestConfirmations,
@@ -22,6 +23,11 @@ function historyStart(): Date {
   const date = new Date();
   date.setDate(date.getDate() - HISTORY_WEEKS * 7);
   return date;
+}
+
+// Coluna @db.Date: lê os componentes UTC (ver closings.service.ts).
+function closingDay(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 async function sampleFor(where: {
@@ -49,14 +55,26 @@ async function sampleFor(where: {
     attended += Math.max(0, (closing.attendedReported ?? 0) - closing.extrasCount);
   }
 
-  // Confirmados do mesmo recorte e período.
-  const confirmed = await prisma.appointment.count({
-    where: {
-      ...where,
-      status: "CONFIRMADO",
-      scheduledAt: { gte: historyStart() },
-    },
+  // Confirmados SÓ dos dias que têm fechamento (mesmo médico × município ×
+  // procedimento × dia). Antes contava todo CONFIRMADO do período: como só
+  // uma fração dos dias tem fechamento lançado, o numerador (atendidos de
+  // poucos dias) era dividido por confirmados de todos os dias e a taxa
+  // saía absurda (1%), sugerindo ~18 mil confirmações pra 100 atendimentos.
+  const closingKeys = new Set(
+    closings.map((c) => `${c.doctorId}|${c.municipalityId}|${c.procedureId ?? "*"}|${closingDay(c.date)}`)
+  );
+  const confirmedAppointments = await prisma.appointment.findMany({
+    where: { ...where, status: "CONFIRMADO", scheduledAt: { gte: historyStart() } },
+    select: { doctorId: true, municipalityId: true, procedureId: true, scheduledAt: true },
   });
+  let confirmed = 0;
+  for (const appointment of confirmedAppointments) {
+    const day = toBrasiliaDateString(appointment.scheduledAt);
+    const base = `${appointment.doctorId}|${appointment.municipalityId}|`;
+    if (closingKeys.has(`${base}${appointment.procedureId}|${day}`) || closingKeys.has(`${base}*|${day}`)) {
+      confirmed++;
+    }
+  }
 
   return { confirmed, attended };
 }
