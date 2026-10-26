@@ -294,8 +294,75 @@ export async function registerPhoneNumber(phoneNumberId: string, accessToken: st
  * um número que já passou por aqui antes): trata como sucesso, não trava a
  * conexão. Cada template é independente — falha em um não impede os outros.
  */
-export async function submitDefaultTemplates(wabaId: string, accessToken: string): Promise<void> {
-  await submitTemplates(DEFAULT_TEMPLATES, wabaId, accessToken);
+export async function submitDefaultTemplates(
+  wabaId: string,
+  accessToken: string,
+  senderName?: string | null
+): Promise<void> {
+  await submitTemplates(brandTemplates(DEFAULT_TEMPLATES, senderName), wabaId, accessToken);
+}
+
+const DGS_INTRO = "Aqui é a DGS, que organiza os atendimentos da Secretaria de Saúde de {{2}}.";
+const DGS_FOOTER = "DGS - D'Artibale Gestão em Saúde";
+const FOOTER_MAX = 60;
+
+/**
+ * Cliente que não é a DGS (ex.: uma prefeitura contratando direto) não pode
+ * aparecer como "DGS" pro paciente. Rodapé de template NÃO aceita variável na
+ * Meta, mas template é por WABA — então o texto é montado por cliente na hora
+ * da submissão: rodapé = `senderName` (ex.: "Secretaria de Saúde de Botuverá")
+ * e a apresentação no corpo perde o "DGS" (a ordem das variáveis não muda).
+ * Sem `senderName`, devolve os templates da DGS intactos.
+ */
+export function brandTemplates(templates: TemplateDefinition[], senderName?: string | null): TemplateDefinition[] {
+  const sender = senderName?.trim();
+  if (!sender) return templates;
+  if (sender.length > FOOTER_MAX) {
+    throw new Error(`Nome do remetente passa de ${FOOTER_MAX} caracteres (limite do rodapé da Meta).`);
+  }
+  return JSON.parse(
+    JSON.stringify(templates)
+      .split(DGS_INTRO)
+      .join("Aqui é a Secretaria de Saúde de {{2}}.")
+      .split(DGS_FOOTER)
+      .join(JSON.stringify(sender).slice(1, -1))
+  ) as TemplateDefinition[];
+}
+
+/**
+ * Edita (em vez de criar) templates que já existem na WABA — a Meta não deixa
+ * resubmeter o mesmo nome. Template aprovado editado volta pra revisão.
+ */
+export async function editTemplates(
+  templates: TemplateDefinition[],
+  wabaId: string,
+  accessToken: string
+): Promise<{ name: string; ok: boolean; detail?: string }[]> {
+  const list = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/message_templates?fields=name,id&limit=100`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const found = ((await list.json()) as { data?: { name: string; id: string }[] }).data ?? [];
+  const results: { name: string; ok: boolean; detail?: string }[] = [];
+  for (const template of templates) {
+    const existing = found.find((t) => t.name === template.name);
+    if (!existing) {
+      results.push({ name: template.name, ok: false, detail: "não existe nesta WABA" });
+      continue;
+    }
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${existing.id}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ components: template.components }),
+    });
+    const payload = (await res.json().catch(() => ({}))) as { error?: { message?: string; error_user_msg?: string } };
+    results.push({
+      name: template.name,
+      ok: res.ok,
+      detail: res.ok ? undefined : (payload.error?.error_user_msg ?? payload.error?.message),
+    });
+  }
+  return results;
 }
 
 export async function submitTemplates(

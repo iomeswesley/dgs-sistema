@@ -109,7 +109,8 @@ whatsappSignupRouter.post(
       }
     }
     try {
-      await submitDefaultTemplates(body.wabaId, accessToken);
+      const settings = await prisma.appSettings.findUnique({ where: { clientId: requireActiveClientId() } });
+      await submitDefaultTemplates(body.wabaId, accessToken, settings?.senderName);
     } catch (err) {
       console.error("[WHATSAPP SIGNUP] Falha ao submeter templates padrão:", (err as Error).message);
     }
