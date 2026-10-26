@@ -1731,7 +1731,7 @@ function WhatsappTab() {
   return (
     <>
       <Callout>
-        Conecte a conta do WhatsApp Business da DGS pra habilitar o envio de mensagens. Dá pra conectar um
+        Conecte a conta do WhatsApp Business pra habilitar o envio de mensagens. Dá pra conectar um
         segundo número de reserva e trocar qual está em uso a qualquer momento, sem mexer em nada além
         desta tela — útil se o número em uso for bloqueado pela Meta.
       </Callout>
