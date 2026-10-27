@@ -1351,12 +1351,6 @@ export function Revisao() {
         )}
       </div>
 
-      {suggestion.data?.suggestion && (
-        <div className="mb-4">
-          <Callout>{suggestion.data.suggestion.explanation}</Callout>
-        </div>
-      )}
-
       <div className="card mb-5 p-5">
         <StatusBand counts={toBandCounts(counts)} unrecognizedCount={unrecognizedCount} />
         {pending > 0 && isReviewing && (
