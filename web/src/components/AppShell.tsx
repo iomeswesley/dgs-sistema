@@ -77,7 +77,7 @@ export function AppShell() {
   const menu = (
     <>
       <div className="px-2.5 pb-[22px]">
-        <img src="/dgs-logo-branco.png" alt="DGS" className="h-10 w-auto" />
+        <img src="/regulacao-logo-escuro.png" alt="RegulAção" className="h-auto w-[180px]" />
       </div>
       {activeClient && (
         <div className="truncate px-2.5 pb-2.5 text-[12px] text-[#8FA0C4]">{activeClient.name}</div>
@@ -187,7 +187,7 @@ export function AppShell() {
         >
           <Menu size={22} />
         </button>
-        <img src="/dgs-logo-branco.png" alt="DGS" className="h-8 w-auto" />
+        <img src="/regulacao-logo-escuro.png" alt="RegulAção" className="h-auto w-[130px]" />
         {activeClient && (
           <span className="ml-auto truncate text-[12px] text-[#8FA0C4]">{activeClient.name}</span>
         )}

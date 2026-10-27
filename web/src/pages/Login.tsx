@@ -41,9 +41,10 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-board px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          {/* Logo em branco sobre a moldura marinho (as faixas verde/amarelo/
-              vermelho saíram: essas cores são só de status de paciente). */}
-          <img src="/dgs-logo-branco.png" alt="DGS" className="mx-auto h-12 w-auto" />
+          {/* Logo RegulAção sem fundo, com "Regul" em branco pra ler sobre a
+              moldura marinho (as faixas verde/amarelo/vermelho saíram: essas
+              cores são só de status de paciente). */}
+          <img src="/regulacao-logo-escuro.png" alt="RegulAção" className="mx-auto h-auto w-[280px] max-w-full" />
           <p className="mt-4 text-[14px] text-[var(--frame-text)]">Confirmação de consultas e conciliação de atendimentos</p>
         </div>
 

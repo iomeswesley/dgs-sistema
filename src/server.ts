@@ -5,5 +5,5 @@ import { createApp } from "./app.js";
 const app = createApp();
 
 app.listen(env.PORT, () => {
-  console.log(`Sistema DGS (API) em http://localhost:${env.PORT}`);
+  console.log(`RegulAção (API) em http://localhost:${env.PORT}`);
 });

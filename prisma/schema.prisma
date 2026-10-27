@@ -1,4 +1,4 @@
-// Schema do Sistema DGS — ver PLANO.md para o desenho completo.
+// Schema do RegulAção — ver PLANO.md para o desenho completo.
 //
 // Princípio central: contagens derivadas (planejados, confirmados, recusados,
 // sem resposta) NUNCA são colunas — sempre calculadas a partir de Appointment.

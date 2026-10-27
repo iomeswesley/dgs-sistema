@@ -7,7 +7,7 @@ export const PRIVACY_POLICY_HTML = /* html */ `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Política de Privacidade — Sistema DGS</title>
+<title>Política de Privacidade — RegulAção</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; line-height: 1.6; color: #1a1a1a; }
   h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
@@ -18,12 +18,12 @@ export const PRIVACY_POLICY_HTML = /* html */ `<!doctype html>
 </style>
 </head>
 <body>
-  <h1>Política de Privacidade — Sistema DGS</h1>
+  <h1>Política de Privacidade — RegulAção</h1>
   <p class="updated">Última atualização: 26 de julho de 2026</p>
 
   <p>
     Esta política descreve como a <strong>D'Artibale Gestão em Saúde (DGS)</strong> trata dados pessoais
-    no Sistema DGS, ferramenta interna usada para organizar o agendamento de consultas e exames
+    na RegulAção, ferramenta interna usada para organizar o agendamento de consultas e exames
     intermediados entre secretarias municipais de saúde e médicos contratados em Santa Catarina.
   </p>
 
