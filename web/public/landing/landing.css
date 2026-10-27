@@ -522,3 +522,57 @@ p { margin: 0 0 1em; }
   .form-row { grid-template-columns: 1fr; }
   .spotlight, .plan, .contact-form { padding: 22px; }
 }
+
+/* Selo do topo (hero) */
+.hero-tag {
+  display: inline-block;
+  margin: 0 0 18px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  background: var(--blue-soft);
+  color: var(--navy);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.btn-block { width: 100%; max-width: 440px; justify-content: center; }
+
+/* Números (logo depois do simulador) */
+.numbers-section { padding-top: 8px; }
+.numbers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.number-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.number-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+}
+.number-icon svg { width: 32px; height: 32px; }
+.icon-blue { background: var(--blue-soft); color: var(--blue); }
+.icon-green { background: #e8f6ee; color: #25a35a; }
+.number-card strong {
+  display: block;
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--blue);
+  letter-spacing: -0.02em;
+}
+.number-card .num-dark { color: var(--navy); }
+.number-card div > span:not(.num-dark) { display: block; margin-top: 4px; color: var(--ink-muted); font-size: 0.95rem; }
+@media (max-width: 860px) {
+  .numbers { grid-template-columns: 1fr; }
+  .btn-block { max-width: none; }
+}
