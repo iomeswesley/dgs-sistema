@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "npx prisma migrate deploy && npm run build",
+  "buildCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then npx prisma migrate deploy; fi && npm run build",
   "regions": [
     "gru1"
   ],
