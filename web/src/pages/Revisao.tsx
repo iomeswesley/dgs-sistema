@@ -142,6 +142,14 @@ interface ListDetail {
   unitCheck: UnitCheck;
 }
 
+// Aviso por linha (handoff 1b): telefone inválido na cor de "recusado";
+// sem horário/duplicado e o resto na cor de "aguardando".
+function issueColor(issues: string[]): string {
+  return issues.some((issue) => issue === "telefone_invalido" || issue === "sem_telefone")
+    ? "var(--st-recusado-text)"
+    : "var(--st-aguardando-text)";
+}
+
 const ISSUE_LABEL: Record<string, string> = {
   sem_telefone: "sem telefone",
   telefone_invalido: "telefone inválido",
@@ -198,6 +206,8 @@ export function Revisao() {
   );
 
   const [search, setSearch] = useState("");
+  // Abaixo de 1280px o PDF fica escondido atrás do botão "Ver PDF" (handoff 1b).
+  const [showPdf, setShowPdf] = useState(false);
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -395,6 +405,8 @@ export function Revisao() {
   const pending = appointments.filter(
     (appointment) => (appointment.rawLine?.issues?.length ?? 0) > 0
   ).length;
+  // Quem recebe a confirmação no disparo: linhas com telefone, ainda pendentes.
+  const dispatchCount = appointments.filter((a) => a.status === "PENDENTE").length;
   const isReviewing = list.status === "EM_REVISAO";
   // Inclui SEM_TELEFONE junto com FALHA — sem telefone nenhum nunca chega
   // a entrar na fila, e depois do disparo a edição normal ("Corrigir") já
@@ -1083,7 +1095,7 @@ export function Revisao() {
             <button
               type="button"
               className="btn btn-quiet"
-              style={{ color: "var(--mark-red)" }}
+              style={{ color: "var(--danger-text)" }}
               onClick={() => setConfirmAction("delete")}
             >
               Excluir lista
@@ -1217,7 +1229,7 @@ export function Revisao() {
             {unrecognized.length > 0 && (
               <div className="mt-3 space-y-2">
                 {unrecognized.map((guess, i) => (
-                  <div key={i} className="rounded-md bg-sheet px-3 py-2">
+                  <div key={i} className="rounded-[8px] bg-sheet px-3 py-2">
                     <p className="truncate text-xs italic text-ink-faint" title={guess.rawText}>
                       "{guess.rawText}"
                     </p>
@@ -1258,8 +1270,7 @@ export function Revisao() {
             <>
               <button
                 type="button"
-                className="btn mr-2 px-3 py-1.5 text-sm text-white"
-                style={{ background: "var(--mark-red)" }}
+                className="btn btn-irreversible mr-2 px-3 py-1.5 text-sm"
                 disabled={bulkSelected.size === 0}
                 onClick={() => setBulkConfirmOpen(true)}
                 title={bulkSelected.size === 0 ? "Marque os pacientes nas caixas à esquerda dos nomes" : undefined}
@@ -1352,7 +1363,7 @@ export function Revisao() {
       </div>
 
       <div className="card mb-5 p-5">
-        <StatusBand counts={toBandCounts(counts)} unrecognizedCount={unrecognizedCount} />
+        <StatusBand counts={toBandCounts(counts)} unrecognizedCount={unrecognizedCount} size="lg" />
         {pending > 0 && isReviewing && (
           <p className="mt-3 text-sm text-ink-muted">
             <span className="font-semibold text-ink">{pending}</span> de {appointments.length} linhas
@@ -1388,9 +1399,9 @@ export function Revisao() {
             type="button"
             onClick={() => setOnlyIssues((prev) => !prev)}
             aria-pressed={onlyIssues}
-            className={`btn px-3 py-1.5 text-sm ${onlyIssues ? "btn-primary" : "btn-quiet"}`}
+            className="chip"
           >
-            Filtrar erros{pending > 0 ? ` (${pending})` : ""}
+            Precisa de conferência {pending > 0 && <span className="num">{pending}</span>}
           </button>
         </div>
         {(search || onlyIssues || statusFilter) && (
@@ -1405,10 +1416,10 @@ export function Revisao() {
           <button
             type="button"
             aria-pressed={statusFilter === ""}
-            className={`btn px-3 py-1.5 text-sm ${statusFilter === "" ? "btn-primary" : "btn-quiet"}`}
+            className="chip"
             onClick={() => setStatusFilter("")}
           >
-            Todas ({appointments.length})
+            Todos <span className="num">{appointments.length}</span>
           </button>
           {STATUS_FILTER_OPTIONS.map((status) => {
             const count = appointments.filter((a) => a.status === status).length;
@@ -1418,10 +1429,10 @@ export function Revisao() {
                 key={status}
                 type="button"
                 aria-pressed={statusFilter === status}
-                className={`btn px-3 py-1.5 text-sm ${statusFilter === status ? "btn-primary" : "btn-quiet"}`}
+                className="chip"
                 onClick={() => setStatusFilter(status)}
               >
-                {STATUS_LABEL[status] ?? status} ({count})
+                {STATUS_LABEL[status] ?? status} <span className="num">{count}</span>
               </button>
             );
           })}
@@ -1429,11 +1440,11 @@ export function Revisao() {
             <button
               type="button"
               aria-pressed={statusFilter === "RESPONDIDO"}
-              className={`btn px-3 py-1.5 text-sm ${statusFilter === "RESPONDIDO" ? "btn-primary" : "btn-quiet"}`}
+              className="chip"
               onClick={() => setStatusFilter("RESPONDIDO")}
               title="Escreveu algo, mas não deu pra entender se confirma ou recusa — precisa alguém conferir e decidir."
             >
-              {STATUS_LABEL.RESPONDIDO} ({respondedUnclassifiedCount})
+              {STATUS_LABEL.RESPONDIDO} <span className="num">{respondedUnclassifiedCount}</span>
             </button>
           )}
         </div>
@@ -1444,7 +1455,12 @@ export function Revisao() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_minmax(320px,420px)]">
+      <div className="mb-3 xl:hidden">
+        <button type="button" className="btn btn-quiet" aria-expanded={showPdf} onClick={() => setShowPdf((v) => !v)}>
+          {showPdf ? "Esconder PDF" : "Ver PDF"}
+        </button>
+      </div>
+      <div className="grid grid-cols-1 gap-[14px] xl:grid-cols-[1fr_400px]">
         <div className="min-w-0">
           <Table
             head={
@@ -1483,7 +1499,10 @@ export function Revisao() {
               return (
                 <tr
                   key={appointment.id}
-                  style={issues.length > 0 ? { background: "var(--mark-yellow-soft)" } : undefined}
+                  className="transition-colors duration-[120ms] ease-out hover:bg-[color-mix(in_srgb,var(--row-selected)_50%,transparent)]"
+                  style={
+                    isEditing || bulkSelected.has(appointment.id) ? { background: "var(--row-selected)" } : undefined
+                  }
                 >
                   {bulkMode && (
                     <Td>
@@ -1506,12 +1525,17 @@ export function Revisao() {
                       <>
                         <button
                           type="button"
-                          className="font-medium text-accent underline-offset-2 hover:underline"
+                          className="text-left font-bold text-[var(--text)] underline-offset-2 hover:underline"
                           onClick={() => setConversationAppointment(appointment)}
                           title="Ver a conversa com esse paciente"
                         >
                           {appointment.patient.name}
                         </button>
+                        {appointment.patient.cns && (
+                          <p className="text-[12px] text-[var(--text-muted)]">
+                            CNS <span className="num">…{appointment.patient.cns.slice(-4)}</span>
+                          </p>
+                        )}
                         {appointment.patient.optedOut && (
                           <span className="ml-2 text-xs text-mark-red">não quer receber</span>
                         )}
@@ -1519,7 +1543,7 @@ export function Revisao() {
                           <span className="ml-2 text-xs text-ink-faint">corrigido</span>
                         )}
                         {issues.length > 0 && (
-                          <p className="mt-0.5 text-xs text-ink-muted">
+                          <p className="mt-0.5 text-[13px] font-bold" style={{ color: issueColor(issues) }}>
                             {issues.map((issue) => ISSUE_LABEL[issue] ?? issue).join(" · ")}
                           </p>
                         )}
@@ -1673,9 +1697,12 @@ export function Revisao() {
           </Table>
         </div>
 
-        <div className="xl:sticky xl:top-6 xl:self-start">
-          <p className="eyebrow mb-2">Arquivo original</p>
-          <div className="card overflow-hidden" style={{ height: "70vh" }}>
+        <div className={`${showPdf ? "" : "hidden"} xl:sticky xl:top-6 xl:block xl:self-start`}>
+          <div className="card overflow-hidden">
+            <div className="flex justify-between border-b border-[var(--border-row)] px-4 py-3 text-[13px] font-bold">
+              <span>{list.mimeType === "application/pdf" ? "PDF original" : "Arquivo original"}</span>
+            </div>
+          <div className="bg-[#E9EDF4]" style={{ height: "70vh" }}>
             {list.mimeType === "application/pdf" ? (
               <iframe
                 title="Arquivo original da lista"
@@ -1696,6 +1723,7 @@ export function Revisao() {
                 </a>
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>
@@ -1768,10 +1796,10 @@ export function Revisao() {
               : confirmAction === "reprocess"
               ? "Tentar novamente"
               : confirmAction === "dispatch"
-                ? "Disparar"
+                ? `Disparar e avisar ${dispatchCount} paciente${dispatchCount === 1 ? "" : "s"}`
                 : "Concluir"
         }
-        danger={confirmAction === "delete" || confirmAction === "delete_final"}
+        irreversible={confirmAction === "delete" || confirmAction === "delete_final" || confirmAction === "dispatch"}
         busy={busy}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
@@ -1832,7 +1860,7 @@ export function Revisao() {
             {pendingResponseAppointments.map((a) => {
               const otherPhones = a.patient.phones.filter((p) => p !== a.selectedPhone);
               return (
-                <div key={a.id} className="rounded-md border border-rule p-3">
+                <div key={a.id} className="rounded-[10px] border border-rule p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="font-medium text-ink">{a.patient.name}</p>

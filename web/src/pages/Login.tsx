@@ -41,17 +41,10 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-board px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          {/* Mesmo chip branco do menu lateral — o logo é pra fundo claro,
-              e o fundo aqui é sempre escuro (bg-board). */}
-          <div className="inline-block rounded-lg bg-white px-4 py-2.5">
-            <img src="/dgs-logo.png" alt="DGS" className="h-9 w-auto" />
-          </div>
-          <div className="mt-2 flex justify-center gap-0.5" aria-hidden>
-            <span className="h-1 w-10 rounded-full bg-mark-green" />
-            <span className="h-1 w-5 rounded-full bg-mark-yellow" />
-            <span className="h-1 w-3 rounded-full bg-mark-red" />
-          </div>
-          <p className="mt-3 text-sm text-board-ink-muted">Confirmação de consultas e conciliação de atendimentos</p>
+          {/* Logo em branco sobre a moldura marinho (as faixas verde/amarelo/
+              vermelho saíram: essas cores são só de status de paciente). */}
+          <img src="/dgs-logo-branco.png" alt="DGS" className="mx-auto h-12 w-auto" />
+          <p className="mt-4 text-[14px] text-[var(--frame-text)]">Confirmação de consultas e conciliação de atendimentos</p>
         </div>
 
         {expiredNotice && (
@@ -87,7 +80,7 @@ export function Login() {
           </label>
 
           {error && (
-            <p role="alert" className="mt-4 rounded-md bg-mark-red-soft px-3 py-2 text-sm text-mark-red">
+            <p role="alert" className="mt-4 rounded-[10px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3.5 py-3 text-[14px] text-[var(--danger-text)]">
               {error}
             </p>
           )}
@@ -97,7 +90,7 @@ export function Login() {
           </button>
         </form>
 
-        <p className="mt-5 text-center text-xs text-board-ink-muted">
+        <p className="mt-5 text-center text-[13px] text-[var(--frame-text)]">
           Perdeu a senha? Peça a redefinição para alguém da equipe.
         </p>
       </div>

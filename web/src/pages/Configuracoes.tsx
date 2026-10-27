@@ -1811,7 +1811,7 @@ function WhatsappTab() {
               {templates.data.templates.map((t) => (
                 <li key={t.name} className="flex items-center justify-between gap-3">
                   <span>{TEMPLATE_LABEL[t.name] ?? t.name}</span>
-                  <span className={t.status === "REJECTED" ? "font-semibold text-mark-red" : "text-ink-faint"}>
+                  <span className={t.status === "REJECTED" ? "font-bold text-[var(--danger-text)]" : "text-ink-faint"}>
                     {TEMPLATE_STATUS_LABEL[t.status]}
                   </span>
                 </li>

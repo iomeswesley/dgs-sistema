@@ -334,7 +334,7 @@ function ContactLeads() {
 
 /** Resumo curto do status de cobrança pra tabela de clientes. */
 function BillingSummary({ billing, error }: { billing: BillingStatus; error: string | null }) {
-  if (error) return <span className="text-xs text-rose-600" title={error}>⚠️ Erro ao calcular</span>;
+  if (error) return <span className="text-xs text-[var(--danger-text)]" title={error}>⚠️ Erro ao calcular</span>;
   if (!billing.mode) return <span className="text-xs text-ink-muted">Sem limite</span>;
 
   const label =
@@ -346,8 +346,8 @@ function BillingSummary({ billing, error }: { billing: BillingStatus; error: str
 
   return (
     <div className="text-xs">
-      <div className={billing.blocked ? "font-medium text-rose-600" : "text-ink"}>{label}</div>
-      {billing.blocked && <div className="text-rose-600">Bloqueado</div>}
+      <div className={billing.blocked ? "font-medium text-[var(--danger-text)]" : "text-ink"}>{label}</div>
+      {billing.blocked && <div className="text-[var(--danger-text)]">Bloqueado</div>}
     </div>
   );
 }

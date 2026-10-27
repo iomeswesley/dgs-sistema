@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { UploadCloud } from "lucide-react";
 import { EmptyState, PageHeader } from "../components/AppShell";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FormModal } from "../components/FormModal";
@@ -145,6 +146,7 @@ export function Listas() {
   // Preview: lê o arquivo na hora (rápido, local, sem IA) assim que
   // escolhido, pra sugerir município/agenda antes do envio de verdade.
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<ListPreview | null>(null);
 
@@ -504,24 +506,51 @@ export function Listas() {
       <div className="card mb-6 p-5">
         <p className="eyebrow">Enviar lista</p>
 
-        <div className="mt-3">
-          <Field
-            label="Arquivo"
-            hint="PDF da agenda (SISREG, CELK, IDS Saúde ou CISAMVE) ou planilha no nosso modelo Excel (.xlsx), até 20 MB. Escolher o arquivo já tenta preencher o resto sozinho."
-          >
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="field"
-              disabled={uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleFileSelected(file);
-              }}
-            />
-          </Field>
-        </div>
+        {/* Área tracejada de arrastar/clicar (handoff 1b, tela 2a). */}
+        <label
+          className={`mt-3 flex cursor-pointer flex-wrap items-center gap-4 rounded-[10px] border-[1.5px] border-dashed px-5 py-4 transition-colors duration-[120ms] ease-out ${
+            dragOver ? "border-[var(--action)] bg-[var(--row-selected)]" : "border-[var(--border-strong)] bg-[var(--surface-header)]"
+          }`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragOver(false);
+            const file = event.dataTransfer.files?.[0];
+            if (file && !uploading) void handleFileSelected(file);
+          }}
+        >
+          <UploadCloud size={28} strokeWidth={1.75} className="shrink-0 text-[var(--text-muted)]" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-bold text-[var(--text)]">
+              {pendingFile ? pendingFile.name : "Arraste o PDF do dia aqui ou clique para escolher"}
+            </span>
+            <span className="block text-[13px] text-[var(--text-muted)]">
+              Escolher o arquivo já tenta preencher município, unidade e agenda sozinho. Até 20 MB.
+            </span>
+          </span>
+          <span className="flex flex-wrap gap-1.5">
+            {["SISREG", "CELK", "IDS Saúde", "CISAMVE", "Excel"].map((format) => (
+              <span key={format} className="rounded-full bg-[var(--surface-muted)] px-2.5 py-[3px] text-[12px] font-bold text-[var(--text-2)]">
+                {format}
+              </span>
+            ))}
+          </span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="sr-only"
+            disabled={uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleFileSelected(file);
+            }}
+          />
+        </label>
 
         <p className="mt-2 text-sm text-ink-muted">
           A secretaria mandou um Excel?{" "}
@@ -584,10 +613,10 @@ export function Listas() {
         </div>
 
         {agendaId && (
-          <div className="mt-3 rounded-lg border-l-4 px-4 py-3 text-sm" style={
+          <div className="mt-3 rounded-[10px] border px-3.5 py-3 text-[14px]" style={
             unitMismatch
-              ? { background: "var(--mark-yellow-soft)", borderColor: "var(--mark-yellow)" }
-              : { background: "var(--sheet-2, var(--sheet))", borderColor: "var(--ink-faint)" }
+              ? { background: "var(--warn-bg)", borderColor: "var(--warn-border)", color: "var(--warn-text)" }
+              : { background: "var(--surface-muted)", borderColor: "var(--border)" }
           }>
             <p>
               <span className="text-ink-muted">Endereço que vai na mensagem: </span>
@@ -741,7 +770,7 @@ export function Listas() {
                 value={newUnit.address}
                 onChange={(e) => setNewUnit({ ...newUnit, address: e.target.value })}
               />
-              {newUnitError && <p className="text-xs text-mark-red">{newUnitError}</p>}
+              {newUnitError && <p className="text-[13px] text-[var(--danger-text)]">{newUnitError}</p>}
               <div className="flex gap-2">
                 <button type="button" className="btn btn-primary px-3 py-1 text-xs" disabled={newUnitBusy} onClick={() => void createUnitInline()}>
                   {newUnitBusy ? "Salvando…" : "Salvar unidade"}
@@ -812,7 +841,7 @@ export function Listas() {
       {allLists.length === 0 && !lists.loading && (
         <EmptyState
           title="Nenhuma lista ainda"
-          description="Envie o PDF (ou a planilha no modelo Excel) da agenda acima. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
+          description="Arraste o PDF do dia exportado do SISREG, CELK, IDS Saúde ou CISAMVE. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
         />
       )}
 
@@ -899,12 +928,12 @@ export function Listas() {
           2026-08-29, print real do celular: só os cards da lista cortavam,
           o formulário de upload acima — fora desse grid — não). O utilitário
           `grid-cols-1` do Tailwind já usa `minmax(0, 1fr)`, que corrige isso. */}
-      <div className="grid grid-cols-1 gap-3">
+      <div className="grid grid-cols-1 gap-[14px] md:grid-cols-2 2xl:grid-cols-3">
         {filteredLists.map((list) => {
           const total = Object.values(list.counts).reduce((sum, value) => sum + value, 0);
           const canDelete = true; // lista disparada também: o backend só recusa se algum paciente recebeu/respondeu
           return (
-            <Link key={list.id} to={`/listas/${list.id}`} className="card block p-5 hover:border-accent">
+            <Link key={list.id} to={`/listas/${list.id}`} className="card flex flex-col p-[18px]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 {/* `flex-1`, não só `min-w-0` — sem largura definida na
                     linha flex, o item cresce pro tamanho do próprio
@@ -913,7 +942,7 @@ export function Listas() {
                     caixa nenhuma pra cortar (achado pelo usuário em
                     2026-08-27, com print real do celular). */}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-ink">
+                  <p className="truncate text-[17px] font-bold text-ink">
                     {list.originalName}
                     {list.isComplementary && (
                       <span className="ml-2 align-middle text-xs font-normal text-accent">complementar</span>
@@ -921,7 +950,7 @@ export function Listas() {
                     {list.usedInCancellation && (
                       <span
                         className="ml-2 inline-block whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-xs font-semibold"
-                        style={{ background: "var(--mark-red-soft)", color: "var(--mark-red)" }}
+                        style={{ background: "var(--info-bg)", color: "var(--info-text)" }}
                         title="Todos os agendamentos dessa lista foram cancelados — não é uma lista de confirmação normal."
                       >
                         agenda cancelada
@@ -951,7 +980,7 @@ export function Listas() {
                       onChange={(next) => (next ? setConfirmingReminders(list) : void setReminders(list.id, false))}
                     />
                   </span>
-                  <span className="eyebrow">{LIST_STATUS_LABEL[list.status] ?? list.status}</span>
+                  <ListStatusBadge status={list.status} />
                   {canDelete && (
                     <button
                       type="button"
@@ -970,7 +999,7 @@ export function Listas() {
               </div>
 
               {list.extractionError && (
-                <p className="mt-3 rounded-md bg-mark-red-soft px-3 py-2 text-sm text-mark-red">
+                <p className="mt-3 rounded-[10px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3.5 py-3 text-[14px] text-[var(--danger-text)]">
                   {list.extractionError}
                 </p>
               )}
@@ -987,7 +1016,7 @@ export function Listas() {
                 )
               ) : (
                 total > 0 && (
-                  <div className="mt-4">
+                  <div className="mt-auto pt-4">
                     <StatusBand counts={toBandCounts(list.counts)} />
                   </div>
                 )
@@ -1045,5 +1074,23 @@ export function Listas() {
         onCancel={() => setConfirmingReminders(null)}
       />
     </>
+  );
+}
+
+// Badge de estado da LISTA (sistema, nunca cor de status de paciente):
+// em revisão = azul de sistema; disparada/concluída = marinho; resto = neutro.
+function ListStatusBadge({ status }: { status: string }) {
+  const style =
+    status === "EM_REVISAO"
+      ? { background: "var(--info-bg)", color: "var(--info-text)" }
+      : status === "DISPARADA" || status === "CONCLUIDA"
+        ? { background: "var(--frame)", color: "#FFFFFF" }
+        : status === "ERRO"
+          ? { background: "var(--danger-bg)", color: "var(--danger-text)" }
+          : { background: "var(--surface-muted)", color: "var(--text-muted)" };
+  return (
+    <span className="inline-block whitespace-nowrap rounded-full px-2.5 py-[3px] text-[13px] font-bold" style={style}>
+      {LIST_STATUS_LABEL[status] ?? status}
+    </span>
   );
 }

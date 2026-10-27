@@ -90,11 +90,11 @@ export function PatientConversationModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
-        className="flex h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-xl shadow-xl"
+        className="flex h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] shadow-[var(--shadow-modal)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-3 bg-wa-header px-4 py-3">

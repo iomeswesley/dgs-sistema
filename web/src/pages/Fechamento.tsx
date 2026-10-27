@@ -138,7 +138,7 @@ export function Fechamento() {
           {data.data?.rows.map((row) => (
             <tr
               key={`${row.doctorId}-${row.municipalityId}-${row.procedureId}-${row.date}`}
-              style={row.alerts.length > 0 ? { background: "var(--mark-yellow-soft)" } : undefined}
+              style={row.alerts.length > 0 ? { background: "var(--info-bg)" } : undefined}
             >
               <Td>
                 <span className="font-medium">{formatCalendarDate(row.date)}</span> · {row.doctorName}
@@ -147,7 +147,7 @@ export function Fechamento() {
                   {row.procedureName && ` · ${row.procedureName}`}
                 </p>
                 {row.alerts.map((alert) => (
-                  <p key={alert} className="mt-0.5 text-xs text-mark-red">
+                  <p key={alert} className="mt-0.5 text-[13px] font-bold text-[var(--info-text)]">
                     {alert}
                   </p>
                 ))}

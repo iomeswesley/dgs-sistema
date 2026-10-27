@@ -69,7 +69,7 @@ export function FormModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4"
       onMouseDown={(event) => {
         mouseDownOnBackdrop.current = event.target === event.currentTarget;
       }}
@@ -82,16 +82,16 @@ export function FormModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="form-modal-title"
-        className={`card max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-lg"} overflow-y-auto p-5 shadow-xl`}
+        className={`max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-[560px]"} overflow-y-auto rounded-[14px] border border-transparent bg-[var(--surface-raised)] p-6 shadow-[var(--shadow-modal)] sm:p-7 dark:border-[var(--border)]`}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="form-modal-title" className="text-base font-semibold text-ink">
+        <h2 id="form-modal-title" className="text-[24px] font-bold leading-tight text-[var(--text)]">
           {title}
         </h2>
-        {description && <p className="mt-1 text-sm text-ink-muted">{description}</p>}
+        {description && <p className="mt-1.5 text-[15px] leading-relaxed text-[var(--text-2)]">{description}</p>}
 
         <form
-          className="mt-4 grid gap-3"
+          className="mt-[18px] grid gap-3.5"
           onSubmit={(event) => {
             event.preventDefault();
             onSubmit();
@@ -100,7 +100,7 @@ export function FormModal({
           {children}
 
           {error && (
-            <p role="alert" className="rounded-md bg-mark-red-soft px-3 py-2 text-sm text-mark-red">
+            <p role="alert" className="rounded-[10px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3.5 py-3 text-[14px] text-[var(--danger-text)]">
               {error}
             </p>
           )}

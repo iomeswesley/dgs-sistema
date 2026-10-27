@@ -482,7 +482,7 @@ export function Cancelamentos() {
 
       <ConfirmModal
         open={confirming}
-        title="Cancelar e notificar?"
+        title="Cancelar esta agenda?"
         description={
           preview.data
             ? (() => {
@@ -496,8 +496,17 @@ export function Cancelamentos() {
               })()
             : ""
         }
-        confirmLabel="Sim, cancelar e notificar"
-        danger
+        confirmLabel={
+          preview.data
+            ? (() => {
+                const notifiable = preview.data.patients.filter((p) => p.notifiable).length;
+                return `Cancelar agenda e avisar ${notifiable} paciente${notifiable === 1 ? "" : "s"}`;
+              })()
+            : "Cancelar agenda"
+        }
+        quote={reason.trim() ? <>Motivo enviado aos pacientes: <b>{reason.trim()}</b></> : undefined}
+        typedConfirmation="CANCELAR"
+        irreversible
         busy={dispatching}
         onConfirm={() => void dispatch()}
         onCancel={() => setConfirming(false)}

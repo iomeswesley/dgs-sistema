@@ -230,7 +230,7 @@ export function Hoje() {
     <>
       <PageHeader
         eyebrow="Operação"
-        title="Acompanhamento"
+        title="Hoje"
         description="Como está a resposta das listas disparadas, por período."
         actions={
           <div className="flex gap-2">
@@ -352,7 +352,7 @@ export function Hoje() {
 
         {summary.data && (
           <div className="mt-5">
-            <StatusBand counts={toBandCounts(summary.data.counts)} />
+            <StatusBand counts={toBandCounts(summary.data.counts)} size="sm" />
           </div>
         )}
       </div>
@@ -461,7 +461,7 @@ export function Hoje() {
                       {lastReply.raw.aiReasoning}
                     </p>
                   )}
-                  {lastError && <p className="text-xs text-mark-red">{lastError.errorMessage}</p>}
+                  {lastError && <p className="text-[13px] text-[var(--danger-text)]">{lastError.errorMessage}</p>}
                 </Td>
                 <Td align="right">
                   {appointment.status === "CANCELADO" ? (

@@ -37,7 +37,7 @@ export function DeleteButton({ title, description, path, onDeleted }: DeleteButt
 
   return (
     <>
-      <button type="button" className="btn btn-quiet px-2 py-1 text-xs text-mark-red" onClick={() => setOpen(true)}>
+      <button type="button" className="btn btn-quiet px-2 py-1 text-xs text-[var(--danger-text)]" onClick={() => setOpen(true)}>
         Excluir
       </button>
       <ConfirmModal

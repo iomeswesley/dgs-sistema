@@ -1,133 +1,65 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /*
-  Linguagem visual: prancheta.
-
-  A operação hoje é uma folha impressa presa numa prancheta, marcada com
-  caneta marca-texto (contatado), vermelha (recusou) e verde (ok). O sistema
-  herda isso literalmente: a navegação é a prancheta escura, o conteúdo é a
-  folha, e as três cores saturadas são reservadas EXCLUSIVAMENTE para status
-  de paciente. Nada mais na interface usa cor forte — assim a cor sempre
-  significa a mesma coisa e é lida de longe.
+  Linguagem visual: direção 1b "Marinho institucional" (design_handoff_regulacao_1b).
+  tokens.css é a fonte da verdade; aqui os nomes antigos (board/sheet/ink/
+  mark/accent) viram apelidos dos tokens novos pra repintar o sistema inteiro
+  de uma vez. Verde, amarelo, vermelho e cinza (--st-*) são EXCLUSIVOS de
+  status de paciente — estado de sistema usa --info-*.
 */
 
 :root {
   color-scheme: light;
 
-  /* Azul-marinho da marca (#042951) — mesmo tom no menu lateral tanto no
-     modo claro quanto no escuro (pedido do usuário em 2026-08-27: antes
-     só o modo escuro usava essa cor, no claro o menu ficava num
-     cinza-chumbo quase preto, sem bater com o resto da marca). O menu é
-     sempre escuro, então esses tokens não mudam dentro de `.dark`. */
-  --board: #042951;
-  --board-raised: #2c4b6d;
-  --board-line: #4f6985;
-  --board-ink: #e8edf2;
-  --board-ink-muted: #8fa1b3;
+  --board: var(--frame);
+  --board-raised: var(--frame-active-bg);
+  --board-line: rgba(255, 255, 255, 0.12);
+  --board-ink: #ffffff;
+  --board-ink-muted: var(--frame-text);
 
-  --sheet: #ffffff;
-  --sheet-alt: #f4f6f8;
-  --sheet-sunken: #eef1f5;
-  --rule: #dde3e9;
+  --sheet: var(--surface);
+  --sheet-alt: var(--surface-header);
+  --sheet-sunken: var(--bg);
+  --rule: var(--border);
 
-  --ink: #16202c;
-  --ink-muted: #5a6875;
-  --ink-faint: #8a97a3;
+  --ink: var(--text);
+  --ink-muted: var(--text-muted);
+  --ink-faint: var(--text-placeholder);
 
-  /* Marca-texto — só status de paciente. */
-  --mark-green: #1f9d6b;
-  --mark-yellow: #e0a800;
-  --mark-red: #d64545;
-  --mark-gray: #94a3b0;
-  --mark-green-soft: #e3f5ed;
-  --mark-yellow-soft: #fdf3d8;
-  --mark-red-soft: #fbe7e7;
-  --mark-gray-soft: #eef1f4;
+  /* Status de paciente: --mark-X é a cor de TEXTO (legível sobre o fundo
+     suave); barras usam --st-X direto (ver StatusBand). */
+  --mark-green: var(--st-confirmado-text);
+  --mark-yellow: var(--st-aguardando-text);
+  --mark-red: var(--st-recusado-text);
+  --mark-gray: var(--st-acao-text);
+  --mark-green-soft: var(--st-confirmado-bg);
+  --mark-yellow-soft: var(--st-aguardando-bg);
+  --mark-red-soft: var(--st-recusado-bg);
+  --mark-gray-soft: var(--st-acao-bg);
 
-  /* Interativo — teal sóbrio, distinto das cores de status. */
-  --accent: #0e7c86;
-  --accent-hover: #0b626a;
-  --accent-soft: #e0f1f2;
+  --accent: var(--action);
+  --accent-hover: var(--action-hover);
+  --accent-soft: var(--info-bg);
 
-  /* Identidade de TEMPLATE de mensagem (gráfico "mensagens enviadas por
-     dia" em Indicadores) — pedido explícito do usuário em 2026-09-03:
-     reaproveitar o mesmo verde/amarelo/vermelho do marca-texto de status
-     aqui (cancelamento=vermelho, confirmação=verde, lembrete=amarelo),
-     com azul novo só pra vaga aberta. Nasceu como paleta categórica
-     própria, sem tocar nas cores de status (comentário antigo);
-     substituído por decisão direta do usuário — mesma exceção deliberada
-     já documentada pra tela de Conversas (`--wa-*` abaixo). Repete os
-     valores exatos de --mark-green/yellow/red de propósito, pra ficar
-     sempre igual ao resto do sistema. */
-  --chart-confirmacao: #1f9d6b;
-  --chart-lembrete: #e0a800;
-  --chart-vaga-aberta: #2a78d6;
-  --chart-cancelamento: #d64545;
+  /* Gráfico "mensagens enviadas por dia" — séries não-status (README 2f). */
+  --chart-confirmacao: var(--chart-1);
+  --chart-lembrete: var(--chart-2);
+  --chart-vaga-aberta: var(--chart-3);
+  --chart-cancelamento: var(--chart-4);
 
-  /* Exceção deliberada à regra "sem cor decorativa": a tela de Conversas
-     imita a janela do WhatsApp de propósito (pedido do usuário, 2026-08-25,
-     mesmo padrão visual do barbearia-saas/odonto-saas) — cores do próprio
-     WhatsApp, não do marca-texto de status. */
-  --wa-header: #075e54;
-  --wa-bg: #e5ddd5;
-  --wa-bubble-out: #dcf8c6;
-  --wa-bubble-in: #ffffff;
+  /* WhatsApp — exceção deliberada, igual nos dois temas. */
+  --wa-bg: var(--wa-wallpaper);
+  --wa-bubble-out: var(--wa-out);
+  --wa-bubble-in: var(--wa-in);
   --wa-input-bar: #f0f2f5;
 
-  /* Sombras de elevação — discretas, só pra separar cartão do fundo e dar
-     feedback de hover. Mesma escala usada nos produtos irmãos (agenda-saas/
-     odonto-saas): 2 camadas, a de baixo mais espalhada e mais fraca. */
-  --shadow-card: 0 1px 2px 0 rgb(22 32 44 / 0.08), 0 1px 3px 1px rgb(22 32 44 / 0.05);
-  --shadow-hover: 0 1px 3px 0 rgb(22 32 44 / 0.12), 0 4px 8px 3px rgb(22 32 44 / 0.06);
+  --shadow-hover: var(--shadow-pop);
 }
 
-.dark {
+[data-theme="dark"] {
   color-scheme: dark;
-
-  /* --board* não repete aqui — já é o mesmo azul-marinho em `:root`
-     (o menu lateral é sempre escuro, não muda com o tema, ver comentário
-     lá). O resto do tema escuro deriva dessa mesma base #042951, mantendo
-     a mesma hierarquia de contraste que já existia (sheet mais claro que
-     board, sheet-alt um degrau acima, sheet-sunken o mais escuro). */
-  --board-ink: #e8edf2;
-  --board-ink-muted: #8fa1b3;
-
-  --sheet: #13365b;
-  --sheet-alt: #254568;
-  --sheet-sunken: #032141;
-  --rule: #345272;
-
-  --ink: #e6ecf2;
-  --ink-muted: #9aa8b6;
-  --ink-faint: #6b7987;
-
-  --mark-green: #35c08a;
-  --mark-yellow: #e8b933;
-  --mark-red: #f06a6a;
-  --mark-gray: #7b8794;
-  --mark-green-soft: #14312a;
-  --mark-yellow-soft: #33290e;
-  --mark-red-soft: #34191c;
-  --mark-gray-soft: #1c242e;
-
-  --accent: #2aa5b0;
-  --accent-hover: #38b9c4;
-  --accent-soft: #10303a;
-
-  --chart-confirmacao: #35c08a;
-  --chart-lembrete: #e8b933;
-  --chart-vaga-aberta: #3987e5;
-  --chart-cancelamento: #f06a6a;
-
-  /* WhatsApp Web tema escuro. */
-  --wa-header: #202c33;
-  --wa-bg: #0b141a;
-  --wa-bubble-out: #005c4b;
-  --wa-bubble-in: #202c33;
-  --wa-input-bar: #202c33;
-
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 3px 1px rgb(0 0 0 / 0.18);
-  --shadow-hover: 0 1px 3px 0 rgb(0 0 0 / 0.45), 0 4px 8px 3px rgb(0 0 0 / 0.22);
 }
 
 @theme inline {
@@ -170,8 +102,14 @@
   --color-wa-bubble-in: var(--wa-bubble-in);
   --color-wa-input-bar: var(--wa-input-bar);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --color-info: var(--info-text);
+  --color-info-soft: var(--info-bg);
+  --color-action: var(--action);
+  --color-surface-muted: var(--surface-muted);
+  --color-row-selected: var(--row-selected);
+
+  --font-sans: var(--font-text);
+  --font-mono: var(--font-code);
 }
 
 @layer base {
@@ -181,25 +119,29 @@
 
   body {
     margin: 0;
-    background: var(--sheet-sunken);
-    color: var(--ink);
-    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-text);
+    font-size: var(--fs-ui);
     -webkit-font-smoothing: antialiased;
   }
 
   /*
-    Todo número tabular por padrão. Numa ferramenta de conciliação as colunas
-    de contagem têm que alinhar dígito com dígito — é o que permite comparar
-    confirmados, atendidos e pagos de relance.
+    Todo número em Source Sans 3 tabular (README: "Todo número usa .num") —
+    as colunas de contagem alinham dígito com dígito e o zero não tem risco.
+    Tabela e campo entram por padrão; .tabular é o apelido antigo de .num.
   */
-  table,
+  table td,
   input,
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  .tabular {
+    font-family: var(--font-num);
+  }
 
   :focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--action);
     outline-offset: 2px;
     border-radius: 2px;
   }
@@ -215,29 +157,26 @@
 }
 
 @layer components {
-  /*
-    Rótulo de coluna — caixa alta e entreletra larga, ecoando os cabeçalhos
-    dos relatórios impressos do SISREG ("COD. SOLIC.", "DATA/HORA", "CNS").
-    É o elo tipográfico entre a folha de papel e a tela.
-  */
+  /* Rótulo de campo/cabeçalho: 12px/700 --text-muted (sem caixa alta). */
   .eyebrow {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
+    font-size: var(--fs-label);
+    font-weight: 700;
+    color: var(--text-muted);
   }
 
   .card {
-    background-color: var(--sheet);
-    border: 1px solid var(--rule);
-    border-radius: 12px;
+    background-color: var(--surface);
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+  }
+  [data-theme="dark"] .card {
+    border-color: var(--border);
   }
   a.card:hover,
   button.card:hover {
-    box-shadow: var(--shadow-hover);
+    background-color: var(--row-selected);
   }
 
   .btn {
@@ -245,65 +184,133 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 8px;
-    padding: 0.5rem 0.9rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    padding: 10px 16px;
+    font-size: var(--fs-ui);
+    font-weight: 700;
+    line-height: 1.2;
+    border: 0;
     cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: background-color 120ms ease-out, color 120ms ease-out;
   }
 
   .btn-primary {
-    background-color: var(--accent);
-    color: #fff;
+    background-color: var(--action);
+    color: var(--on-action);
   }
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--accent-hover);
-    box-shadow: var(--shadow-card);
+    background-color: var(--action-hover);
   }
 
   .btn-quiet {
-    background-color: var(--sheet);
-    border-color: var(--rule);
-    color: var(--ink);
+    background-color: var(--surface-muted);
+    color: var(--text);
   }
   .btn-quiet:hover:not(:disabled) {
-    background-color: var(--sheet-alt);
+    background-color: var(--row-selected);
+  }
+
+  /* Ação irreversível (disparar lista, cancelar agenda) — sempre em modal. */
+  .btn-irreversible {
+    background-color: var(--irreversible);
+    color: var(--on-irreversible);
   }
 
   .btn:disabled {
-    opacity: 0.55;
+    background-color: #e6eaf2;
+    color: #8a94a8;
     cursor: not-allowed;
+  }
+  [data-theme="dark"] .btn:disabled {
+    background-color: #1a2438;
+    color: #5f6d8a;
+  }
+
+  /* Chip de filtro: pílula, rótulo + contagem .num. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: var(--radius-pill);
+    padding: 5px 12px;
+    font-size: var(--fs-small);
+    font-weight: 700;
+    background-color: var(--surface-muted);
+    color: var(--text);
+    cursor: pointer;
+    transition: background-color 120ms ease-out, color 120ms ease-out;
+  }
+  .chip[aria-pressed="true"],
+  .chip-active {
+    background-color: var(--frame);
+    color: #ffffff;
+  }
+  [data-theme="dark"] .chip[aria-pressed="true"],
+  [data-theme="dark"] .chip-active {
+    background-color: #e6eaf2;
+    color: #0b1424;
+  }
+
+  /* Badge de estado de SISTEMA (Conectado, Aprovado) — azul, nunca status. */
+  .badge-info {
+    display: inline-block;
+    border-radius: var(--radius-pill);
+    padding: 3px 10px;
+    font-size: var(--fs-small);
+    font-weight: 700;
+    background-color: var(--info-bg);
+    color: var(--info-text);
   }
 
   .field {
     width: 100%;
-    background-color: var(--sheet);
-    border: 1px solid var(--rule);
-    border-radius: 8px;
-    padding: 0.55rem 0.75rem;
-    /* 16px, não 15px (0.9375rem) — abaixo de 16px o Safari/iOS dá zoom
-       automático sozinho ao focar o campo (pra "ajudar" a digitar) e não
-       desfaz o zoom depois, deixando a página cortada até a pessoa dar
-       zoom pra fora na mão (achado pelo usuário em 2026-08-27, no
-       dropdown de município em Listas). */
+    min-height: 42px;
+    background-color: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    /* 16px no celular: abaixo disso o Safari/iOS dá zoom sozinho ao focar
+       o campo e não desfaz (achado em 2026-08-27). */
     font-size: 1rem;
-    color: var(--ink);
+    color: var(--text);
+    transition: border-color 120ms ease-out;
+  }
+  @media (min-width: 768px) {
+    .field {
+      font-size: var(--fs-ui);
+    }
+  }
+  [data-theme="dark"] .field {
+    background-color: #0b1424;
   }
   .field::placeholder {
-    color: var(--ink-faint);
+    color: var(--text-placeholder);
+  }
+  .field:focus,
+  .field:focus-visible {
+    outline: none;
+    border-color: var(--action);
+    box-shadow: 0 0 0 1px var(--action), 0 0 0 4px var(--focus-ring);
   }
 
   /*
     Todo <select> precisa de color-scheme e fundo sólido: sem isso o popup
-    nativo abre com fundo branco no dark mode (o navegador ignora fundo
-    transparente no dropdown). Regra herdada dos outros projetos.
+    nativo abre com fundo branco no dark mode.
   */
   select.field,
   select.field option {
     color-scheme: light dark;
-    background-color: var(--sheet);
-    color: var(--ink);
+    background-color: var(--surface);
+    color: var(--text);
+  }
+  [data-theme="dark"] select.field,
+  [data-theme="dark"] select.field option {
+    background-color: #0b1424;
+  }
+
+  input[type="checkbox"] {
+    accent-color: var(--action);
+    width: 16px;
+    height: 16px;
   }
 }

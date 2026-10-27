@@ -57,7 +57,7 @@ function MessageStatusBadge({ status }: { status: string }) {
   const tone = MESSAGE_STATUS_TONE[status] ?? { bg: "var(--mark-gray-soft)", fg: "var(--mark-gray)" };
   return (
     <span
-      className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold"
+      className="inline-block whitespace-nowrap rounded-full px-2.5 py-[3px] text-[13px] font-bold"
       style={{ background: tone.bg, color: tone.fg }}
     >
       {MESSAGE_STATUS_LABEL[status] ?? status}
@@ -331,10 +331,10 @@ export function CancelamentoDetalhe() {
                     key={opt.value}
                     type="button"
                     aria-pressed={messageFilter === opt.value}
-                    className={`btn px-3 py-1.5 text-sm ${messageFilter === opt.value ? "btn-primary" : "btn-quiet"}`}
+                    className="chip"
                     onClick={() => setMessageFilter(opt.value)}
                   >
-                    {opt.label} ({count})
+                    {opt.label} <span className="num">{count}</span>
                   </button>
                 );
               })}
@@ -502,7 +502,7 @@ export function CancelamentoDetalhe() {
             ) : (
               <div className="grid grid-cols-1 gap-2">
                 {pendingResponseAppointments.map((a) => (
-                  <div key={a.id} className="rounded-md border border-rule p-3">
+                  <div key={a.id} className="rounded-[10px] border border-rule p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <p className="font-medium text-ink">{a.patientName}</p>

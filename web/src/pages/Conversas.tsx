@@ -356,6 +356,15 @@ export function Conversas() {
                     <p className="truncate text-xs text-white/70">{selected?.phoneFormatted}</p>
                   )}
                 </div>
+                {/* Janela de 24h da Meta: fechada = só template reabre. */}
+                {selected && (
+                  <span
+                    className="shrink-0 rounded-full bg-white/15 px-2.5 py-[3px] text-[12px] font-bold text-white"
+                    title="A Meta só aceita mensagem livre até 24h depois da última mensagem do paciente."
+                  >
+                    {selected.withinWindow ? "Janela aberta" : "Janela fechada"}
+                  </span>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto bg-wa-bg p-4">

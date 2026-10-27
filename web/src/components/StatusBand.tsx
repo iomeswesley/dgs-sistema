@@ -23,15 +23,18 @@ export interface StatusCounts {
 // comum: nenhuma resolve sozinha, precisa de alguém mexer (completar
 // telefone, reenviar, ligar). Detalhe da composição no `title` (tooltip),
 // pra não estourar o espaço nos cards compactos de Listas.
+// Ordem do handoff 1b: Confirmado → Aguardando → Recusado → Precisa de ação.
+// `color` é a cor da barra (--st-X); `text` a do número na legenda.
 const SEGMENTS = [
-  { key: "confirmados", label: "Confirmados", color: "var(--mark-green)" },
-  { key: "recusados", label: "Recusados", color: "var(--mark-red)" },
-  { key: "aguardando", label: "Aguardando", color: "var(--mark-yellow)" },
+  { key: "confirmados", label: "confirmados", color: "var(--st-confirmado)", text: "var(--st-confirmado-text)" },
+  { key: "aguardando", label: "aguardando", color: "var(--st-aguardando)", text: "var(--st-aguardando-text)" },
+  { key: "recusados", label: "recusados", color: "var(--st-recusado)", text: "var(--st-recusado-text)" },
   {
     key: "semTelefone",
-    label: "Precisa de ação",
+    label: "precisam de ação",
     title: "Sem telefone + falhou + estourou prazo sem resposta",
-    color: "var(--mark-gray)",
+    color: "var(--st-acao)",
+    text: "var(--st-acao-text)",
   },
 ] as const;
 
@@ -39,6 +42,7 @@ export interface StatusSegment {
   key: string;
   label: string;
   color: string;
+  text?: string;
   title?: string;
 }
 
@@ -49,13 +53,14 @@ export interface StatusSegment {
  * nenhum ali). Pedido do usuário em 2026-08-27.
  */
 export const CANCELLATION_SEGMENTS: StatusSegment[] = [
-  { key: "cientes", label: "Cientes", color: "var(--mark-green)" },
-  { key: "enviados", label: "Enviados", color: "var(--mark-yellow)" },
+  { key: "cientes", label: "cientes", color: "var(--st-confirmado)", text: "var(--st-confirmado-text)" },
+  { key: "enviados", label: "enviados", color: "var(--st-aguardando)", text: "var(--st-aguardando-text)" },
   {
     key: "precisaDeAcao",
-    label: "Precisa de ação",
+    label: "precisam de ação",
     title: "Falhou, ou não tinha telefone cadastrado — não deu pra avisar",
-    color: "var(--mark-gray)",
+    color: "var(--st-acao)",
+    text: "var(--st-acao-text)",
   },
 ];
 
@@ -65,6 +70,7 @@ export function StatusBand({
   showPercent = false,
   unrecognizedCount = 0,
   segments = SEGMENTS,
+  size = "md",
 }: {
   counts: Record<string, number>;
   showLegend?: boolean;
@@ -88,13 +94,17 @@ export function StatusBand({
   unrecognizedCount?: number;
   /** Segmentos a desenhar — padrão é confirmação; `CANCELLATION_SEGMENTS` pra lista usada em cancelamento. */
   segments?: readonly StatusSegment[];
+  /** Altura da barra: lg 14px (cabeçalho da Revisão), md 10px (card de lista), sm 8px (resumos). */
+  size?: "lg" | "md" | "sm";
 }) {
+  const height = size === "lg" ? 14 : size === "sm" ? 8 : 10;
   const total = segments.reduce((sum, segment) => sum + (counts[segment.key] ?? 0), 0);
 
   return (
     <div>
       <div
-        className="flex h-2.5 w-full overflow-hidden rounded-full bg-sheet-sunken"
+        className="flex w-full overflow-hidden bg-[var(--surface-muted)]"
+        style={{ height, borderRadius: height / 2 }}
         role="img"
         aria-label={
           total === 0
@@ -112,7 +122,7 @@ export function StatusBand({
             return (
               <div
                 key={segment.key}
-                style={{ width: `${(value / total) * 100}%`, background: segment.color }}
+                style={{ flex: value, background: segment.color }}
                 className="h-full"
               />
             );
@@ -120,11 +130,11 @@ export function StatusBand({
       </div>
 
       {showLegend && (
-        <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
+        <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1.5">
           {segments.map((segment) => (
             <div
               key={segment.key}
-              className="flex items-center gap-1.5 text-xs"
+              className="flex items-baseline gap-1.5 text-[14px] text-[var(--text)]"
               title={
                 segment.title !== undefined
                   ? segment.title +
@@ -134,20 +144,18 @@ export function StatusBand({
                   : undefined
               }
             >
-              <span className="h-2 w-2 rounded-full" style={{ background: segment.color }} aria-hidden />
-              <span className="text-ink-muted">{segment.label}</span>
-              <span className="tabular font-semibold text-ink">
+              <b className="num text-[19px] font-bold" style={{ color: segment.text ?? segment.color }}>
                 {counts[segment.key] ?? 0}
-                {showPercent && total > 0 && (
-                  <span className="font-normal text-ink-muted"> · {Math.round(((counts[segment.key] ?? 0) / total) * 100)}%</span>
-                )}
                 {segment.key === "semTelefone" && unrecognizedCount > 0 && (
-                  <>
-                    {" "}
-                    + <span className="text-mark-red">{unrecognizedCount}</span>
-                  </>
+                  <span style={{ color: "var(--st-recusado-text)" }}> + {unrecognizedCount}</span>
                 )}
-              </span>
+              </b>
+              <span>{segment.label}</span>
+              {showPercent && total > 0 && (
+                <span className="num text-[var(--text-muted)]">
+                  · {Math.round(((counts[segment.key] ?? 0) / total) * 100)}%
+                </span>
+              )}
             </div>
           ))}
         </div>

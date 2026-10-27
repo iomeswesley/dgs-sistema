@@ -1,0 +1,120 @@
+/* RegulAção · Direção 1b "Marinho institucional" · tokens */
+
+:root {
+  /* Tipografia */
+  --font-text: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-num: 'Source Sans 3', system-ui, sans-serif; /* sempre com font-variant-numeric: tabular-nums */
+  --font-code: 'IBM Plex Mono', ui-monospace, monospace; /* só nomes técnicos (templates) */
+
+  --fs-display: 26px;  /* título de página, 700 */
+  --fs-title: 17px;    /* título de cartão, 700 */
+  --fs-body: 15px;     /* célula de tabela, menu */
+  --fs-ui: 14px;       /* botões, campos, texto corrido */
+  --fs-small: 13px;    /* chips, avisos, metadados */
+  --fs-label: 12px;    /* cabeçalho de tabela, 700 */
+  --fs-kpi: 46px;      /* número de indicador, --font-num 600 */
+
+  /* Forma */
+  --radius-sm: 4px;    /* checkbox */
+  --radius-md: 8px;    /* botões, campos, itens de menu */
+  --radius-lg: 10px;   /* cartões, callouts */
+  --radius-xl: 14px;   /* modais */
+  --radius-pill: 999px;/* chips, badges de status */
+  --row-h: 44px;       /* linha de tabela padrão */
+  --row-h-compact: 36px;
+  --sidebar-w: 228px;
+
+  /* Espaçamento (base 2px) */
+  --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 10px; --sp-5: 12px;
+  --sp-6: 14px; --sp-7: 16px; --sp-8: 18px; --sp-9: 20px; --sp-10: 24px; --sp-11: 28px;
+
+  /* Neutros e ação — CLARO */
+  --frame: #0F1E3D;
+  --frame-text: #B7C3DD;
+  --frame-active-bg: rgba(255,255,255,.12);
+  --bg: #F2F4F8;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-muted: #EEF2FA;
+  --surface-header: #F7F9FC;
+  --border: #DDE2EC;
+  --border-row: #EEF1F6;
+  --border-strong: #A9B3C7;
+  --text: #0F1E3D;
+  --text-2: #26324D;
+  --text-muted: #5B6B8C;
+  --text-placeholder: #8A94A8;
+  --action: #2D5BD0;
+  --action-hover: #1F48B0;
+  --on-action: #FFFFFF;
+  --focus-ring: rgba(45,91,208,.18);
+  --info-bg: #E4EAF7;    /* badges de sistema: Conectado, Aprovado */
+  --info-text: #1C3B8A;
+  --row-selected: #EEF3FF;
+  --irreversible: #0F1E3D;
+  --on-irreversible: #FFFFFF;
+  --overlay: rgba(7,15,34,.55);
+  --shadow-card: 0 1px 2px rgba(14,27,54,.08);
+  --shadow-pop: 0 4px 14px rgba(14,27,54,.14);
+  --shadow-modal: 0 20px 50px rgba(7,15,34,.35);
+
+  /* Callouts */
+  --warn-bg: #FFF4DB; --warn-border: #E8C77A; --warn-text: #5C4208;
+  --danger-bg: #FBE9E7; --danger-border: #E7A59F; --danger-text: #6E1B16;
+
+  /* Status de paciente — EXCLUSIVO. Nunca usar para decoração ou estado de sistema. */
+  --st-confirmado: #1E7A46; --st-confirmado-text: #1E7A46; --st-confirmado-bg: #E6F2EA;
+  --st-aguardando: #D4A029; --st-aguardando-text: #94650F; --st-aguardando-bg: #FBF1DC;
+  --st-recusado: #B3332C;   --st-recusado-text: #B3332C;   --st-recusado-bg: #F8E5E3;
+  --st-acao: #A3AAB6;       --st-acao-text: #5E6573;       --st-acao-bg: #ECEEF1;
+
+  /* Gráficos (séries não-status) */
+  --chart-1: #0F1E3D; --chart-2: #2D5BD0; --chart-3: #8FAAE8; --chart-4: #CBD4E6;
+
+  /* WhatsApp — exceção deliberada, igual nos dois temas */
+  --wa-header: #0B5C4B; --wa-wallpaper: #E9DFD1; --wa-in: #FFFFFF; --wa-out: #D6F5C4;
+  --wa-button-text: #0A7CBF; --wa-date-chip: #F6F0E4;
+}
+
+[data-theme="dark"] {
+  --frame: #070F22;
+  --frame-text: #A9B6D3;
+  --frame-active-bg: rgba(127,162,245,.16);
+  --bg: #0B1424;
+  --surface: #131D33;
+  --surface-raised: #17223A;
+  --surface-muted: #1E2A45;
+  --surface-header: #131D33;
+  --border: #1E2A45;
+  --border-row: #1C2740;
+  --border-strong: #33405E;
+  --text: #E6EAF2;
+  --text-2: #C3CCDD;
+  --text-muted: #94A3C0;
+  --text-placeholder: #5F6D8A;
+  --action: #7FA2F5;
+  --action-hover: #A3BDF8;
+  --on-action: #0B1424;
+  --focus-ring: rgba(127,162,245,.22);
+  --info-bg: #1E2A45;
+  --info-text: #A3BDF8;
+  --row-selected: #1A2846;
+  --irreversible: #E6EAF2;
+  --on-irreversible: #0B1424;
+  --overlay: rgba(0,0,0,.55);
+  --shadow-card: none;      /* no escuro, elevação = borda + superfície mais clara */
+  --shadow-pop: none;
+  --shadow-modal: none;
+
+  --warn-bg: #2E2410; --warn-border: #6B5320; --warn-text: #F1DDAE;
+  --danger-bg: #341917; --danger-border: #7A3A33; --danger-text: #F8CFCA;
+
+  --st-confirmado: #4CC38A; --st-confirmado-text: #6FD6A2; --st-confirmado-bg: #123222;
+  --st-aguardando: #E0B054; --st-aguardando-text: #EBC26E; --st-aguardando-bg: #352A10;
+  --st-recusado: #F07A70;   --st-recusado-text: #F59A91;   --st-recusado-bg: #3C1C1A;
+  --st-acao: #6B7488;       --st-acao-text: #B4BCCB;       --st-acao-bg: #252E40;
+
+  --chart-1: #E6EAF2; --chart-2: #7FA2F5; --chart-3: #4A64A8; --chart-4: #2A3756;
+}
+
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
