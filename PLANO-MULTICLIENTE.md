@@ -206,7 +206,7 @@ internet:
 - **Aplicação:** **deploy de preview da Vercel** a partir da branch
   `multicliente`, com as variáveis de ambiente apontando pro Supabase de teste.
   Isso dá uma URL própria, acessível de qualquer lugar, sem afetar
-  `sistema-dgs.vercel.app`.
+  `regulacao.vercel.app`.
 
 ⚠️ **Primeiro passo da próxima sessão:** criar o projeto Supabase de teste e
 configurar as variáveis do preview na Vercel. Enquanto isso não existir,

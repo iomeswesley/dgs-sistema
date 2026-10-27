@@ -26,4 +26,4 @@ jobs:
         run: |
           curl --fail --silent --show-error --max-time 70 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://sistema-dgs.vercel.app/api/cron/queue
+            https://regulacao.vercel.app/api/cron/queue
