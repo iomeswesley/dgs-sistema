@@ -666,3 +666,94 @@ p { margin: 0 0 1em; }
   .feature-icon { width: 54px; height: 54px; border-radius: 15px; }
   .feature-icon svg { width: 32px; height: 32px; }
 }
+
+/* Painel de exemplo no topo */
+.hero-visual { position: relative; justify-self: center; width: 100%; max-width: 520px; padding-bottom: 72px; }
+.dash {
+  padding: 18px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgb(15 29 51 / 0.12);
+}
+.dash-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.dash-head img { height: 22px; width: auto; }
+.dash-title { text-align: right; }
+.dash-title strong { display: block; color: var(--navy); font-size: 0.85rem; }
+.dash-title span { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; color: var(--ink-muted); font-size: 0.78rem; }
+.dash-title svg { width: 14px; height: 14px; }
+.dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.dash-stat { padding: 10px 6px; border-radius: 12px; text-align: center; }
+.dash-stat strong { display: block; font-size: 1.6rem; line-height: 1.1; font-weight: 800; }
+.dash-stat span:last-child { display: block; font-size: 0.7rem; color: var(--ink-muted); line-height: 1.2; }
+.dash-ico {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.st-green { background: #e8f6ee; } .st-green strong { color: #16884a; } .st-green .dash-ico { background: #1fa45a; }
+.st-red { background: var(--red-soft); } .st-red strong { color: var(--red); } .st-red .dash-ico { background: var(--red); }
+.st-yellow { background: #fff6dd; } .st-yellow strong { color: #d99300; } .st-yellow .dash-ico { background: #f2b100; }
+.dash-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.dash-row {
+  display: grid;
+  grid-template-columns: 24px 1.2fr 1fr 0.8fr 1.2fr;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.72rem;
+}
+.dash-th { border-top: 0; background: #f6f8fb; color: var(--ink-muted); }
+.dash-avatar { width: 22px; height: 22px; border-radius: 50%; background: #e3e8ef; }
+.dash-bar { display: block; height: 7px; width: var(--w); border-radius: 4px; background: #e3e8ef; }
+.dash-status { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); white-space: nowrap; }
+.dash-status i { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.dot-green { background: #1fa45a; }
+.dot-red { background: var(--red); }
+.dot-yellow { background: #f2b100; }
+.notif {
+  position: absolute;
+  left: -24px;
+  bottom: 0;
+  width: min(300px, 78%);
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgb(15 29 51 / 0.16);
+}
+.notif-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.notif-head strong { color: var(--navy); font-size: 0.9rem; }
+.notif-wa { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: #25d366; color: #fff; }
+.notif-wa svg { width: 18px; height: 18px; }
+.notif-time { margin-left: auto; color: var(--ink-muted); font-size: 0.75rem; }
+.notif-title { display: block; color: var(--navy); font-size: 0.9rem; margin-bottom: 2px; }
+.notif p { margin: 0; color: var(--ink); font-size: 0.85rem; line-height: 1.4; }
+.hero-visual .demo-note { position: absolute; right: 0; bottom: 0; margin: 0; }
+
+/* Simulador (seção própria) */
+.patient-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; }
+
+@media (max-width: 860px) {
+  .hero-visual { margin-top: 12px; }
+  .patient-grid { grid-template-columns: 1fr; gap: 32px; }
+}
+@media (max-width: 560px) {
+  .dash { padding: 14px; }
+  .dash-stats { gap: 6px; }
+  .dash-stat strong { font-size: 1.3rem; }
+  .dash-stat span:last-child { font-size: 0.62rem; }
+  .dash-row { grid-template-columns: 20px 1fr 0.9fr 1.3fr; gap: 8px; padding: 8px 10px; }
+  .dash-row > :nth-child(4) { display: none; }
+  .dash-avatar { width: 18px; height: 18px; }
+  .notif { left: -6px; width: 84%; }
+  .hero-visual .demo-note { position: static; margin-top: 10px; text-align: center; }
+  .hero-visual { padding-bottom: 0; }
+  .notif { position: relative; margin: -40px 0 0 -6px; }
+}
