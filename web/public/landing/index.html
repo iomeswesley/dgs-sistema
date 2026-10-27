@@ -21,16 +21,19 @@
       <a href="#topo" class="brand" aria-label="RegulAção — início">
         <img src="/landing/regulacao-marca.png" alt="RegulAção" width="720" height="125" />
       </a>
-      <nav class="nav" aria-label="Seções">
+      <nav class="nav" id="site-nav" aria-label="Seções">
+        <a href="#recursos">Recursos</a>
         <a href="#como-funciona">Como funciona</a>
         <a href="#resultados">Resultados</a>
         <a href="#planos">Planos</a>
         <a href="#duvidas">Dúvidas</a>
+        <a href="/entrar" class="nav-mobile-only">Entrar</a>
       </nav>
       <div class="header-actions">
         <a href="/entrar" class="btn btn-ghost">Entrar</a>
         <a href="#contato" class="btn btn-primary">Peça uma demonstração</a>
       </div>
+      <button type="button" class="menu-toggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="site-nav"><span></span><span></span><span></span></button>
     </div>
   </header>
 
@@ -40,10 +43,10 @@
       <div class="container hero-grid">
         <div class="hero-copy">
           <p class="hero-tag">Confirmação inteligente de agendas</p>
-          <h1>Simplifique a confirmação de consultas, reduza a burocracia e <span class="hl-blue">ganhe eficiência na gestão das agendas.</span></h1>
-          <p class="lead">Automatize a comunicação com seus pacientes pelo WhatsApp, reduza tarefas manuais, a dependência de múltiplos números e os riscos de bloqueio. Mais agilidade para sua equipe e mais organização para seus atendimentos.</p>
+          <h1>Diminua as faltas automatizando sua <span class="hl-red">comunicação</span></h1>
+          <p class="lead">Envie confirmações de consultas pelo WhatsApp, reduza tarefas manuais e tenha mais eficiência na gestão das agendas.</p>
           <div class="hero-cta">
-            <a href="#contato" class="btn btn-primary btn-lg btn-block">Solicitar demonstração gratuita</a>
+            <a href="#contato" class="btn btn-primary btn-lg">Peça uma demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
           </div>
         </div>
 
@@ -84,6 +87,73 @@
           </span>
           <div><strong><span class="num-dark">cerca de</span> 70%</strong><span>confirmam sua consulta pelo WhatsApp</span></div>
         </div>
+      </div>
+    </section>
+
+    <!-- RECURSOS -->
+    <section class="section" id="recursos">
+      <div class="container features-wrap reveal">
+        <p class="eyebrow">Recursos</p>
+        <h2>Tudo o que a sua equipe precisa para gerir as agendas</h2>
+        <ol class="features">
+          <li class="feature">
+            <span class="feature-icon tile-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="15" height="14" rx="2.5"/><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4"/><circle cx="18" cy="17.5" r="4.5" fill="#22a85a" stroke="#fff" stroke-width="1.5"/><path d="m16 17.6 1.4 1.4 2.6-2.6" stroke="#fff" stroke-width="1.8"/></svg></span>
+            <span class="feature-num" aria-hidden="true">1</span>
+            <div>
+              <h3>Envio da confirmação de consultas</h3>
+              <p>Envie automaticamente a confirmação das consultas pelo WhatsApp oficial.</p>
+            </div>
+          </li>
+          <li class="feature">
+            <span class="feature-icon tile-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="15" height="14" rx="2.5"/><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4"/><circle cx="18" cy="17.5" r="4.5" fill="currentColor" stroke="#fff" stroke-width="1.5"/><path d="m16.4 15.9 3.2 3.2M19.6 15.9l-3.2 3.2" stroke="#fff" stroke-width="1.8"/></svg></span>
+            <span class="feature-num" aria-hidden="true">2</span>
+            <div>
+              <h3>Cancelamento das consultas</h3>
+              <p>O paciente avisa com um toque que não poderá ir, e a vaga fica livre para outro paciente.</p>
+            </div>
+          </li>
+          <li class="feature">
+            <span class="feature-icon tile-green" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M8 18.5h2"/><path d="M15 8h6l-2-2M21 13h-6l2 2"/></svg></span>
+            <span class="feature-num" aria-hidden="true">3</span>
+            <div>
+              <h3>Troca de número</h3>
+              <p>Atualize o número de WhatsApp do paciente em caso de troca e reenvie a mensagem.</p>
+            </div>
+          </li>
+          <li class="feature">
+            <span class="feature-icon tile-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="7.5" r="4"/><path d="M2.5 20.5a7 7 0 0 1 11-5.7"/><circle cx="17.5" cy="17" r="4.5" fill="currentColor" stroke="#fff" stroke-width="1.5"/><path d="M17.5 15v4M15.5 17h4" stroke="#fff" stroke-width="1.8"/></svg></span>
+            <span class="feature-num" aria-hidden="true">4</span>
+            <div>
+              <h3>Inclusão de novos números</h3>
+              <p>Adicione novos números mesmo após o envio da lista, sem precisar refazer tudo.</p>
+            </div>
+          </li>
+          <li class="feature">
+            <span class="feature-icon tile-purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5H6.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8z"/><path d="M14 2.5V8h5.5"/><path d="M9 17.5v-3M12 17.5v-5M15 17.5v-2"/></svg></span>
+            <span class="feature-num" aria-hidden="true">5</span>
+            <div>
+              <h3>Relatórios sobre as agendas</h3>
+              <p>Acompanhe confirmações, cancelamentos, faltas e a situação das agendas em tempo real.</p>
+            </div>
+          </li>
+          <li class="feature">
+            <span class="feature-icon tile-orange" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5a6 6 0 0 0-6 6v3.6L4.3 15a1 1 0 0 0 .9 1.5h13.6a1 1 0 0 0 .9-1.5L18 12.1V8.5a6 6 0 0 0-6-6Z"/><path d="M9.5 18.5a2.5 2.5 0 0 0 5 0z"/></svg></span>
+            <span class="feature-num" aria-hidden="true">6</span>
+            <div>
+              <h3>Lembrete antes da consulta</h3>
+              <p>Envie lembretes automáticos antes das consultas para reduzir as faltas.</p>
+            </div>
+          </li>
+          <li class="feature">
+            <span class="feature-icon tile-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="13" width="4.5" height="8" rx="1"/><rect x="9.75" y="8.5" width="4.5" height="12.5" rx="1"/><rect x="16.5" y="3" width="4.5" height="18" rx="1"/></svg></span>
+            <span class="feature-num" aria-hidden="true">7</span>
+            <div>
+              <h3>Indicadores</h3>
+              <p>Visualize em tempo real os principais indicadores de desempenho das agendas.</p>
+            </div>
+          </li>
+        </ol>
+        <a href="#contato" class="btn btn-primary btn-lg btn-block features-cta">Solicitar demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
       </div>
     </section>
 

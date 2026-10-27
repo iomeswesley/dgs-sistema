@@ -3,6 +3,24 @@
 
   var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* ---------- Menu do celular ---------- */
+
+  var header = document.querySelector(".site-header");
+  var menuToggle = document.querySelector(".menu-toggle");
+  if (header && menuToggle) {
+    var setMenu = function (open) {
+      header.classList.toggle("menu-open", open);
+      menuToggle.setAttribute("aria-expanded", String(open));
+      menuToggle.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu");
+    };
+    menuToggle.addEventListener("click", function () {
+      setMenu(!header.classList.contains("menu-open"));
+    });
+    header.querySelectorAll(".nav a").forEach(function (link) {
+      link.addEventListener("click", function () { setMenu(false); });
+    });
+  }
+
   /* ---------- Simulador de WhatsApp (dados fictícios) ---------- */
 
   function dayMonth(offsetDays) {
