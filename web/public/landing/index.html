@@ -23,8 +23,6 @@
       </a>
       <nav class="nav" id="site-nav" aria-label="Seções">
         <a href="#recursos">Recursos</a>
-        <a href="#como-funciona">Como funciona</a>
-        <a href="#resultados">Resultados</a>
         <a href="#planos">Planos</a>
         <a href="#duvidas">Dúvidas</a>
         <a href="/entrar" class="nav-mobile-only">Entrar</a>
@@ -136,13 +134,13 @@
           <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong class="hl-red">Tenha mais tempo</strong> para tarefas em que a sua decisão fará a diferença.</p></li>
           <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong class="hl-red">Ganhe tempo</strong> para os seus pacientes, mesmo nos dias mais corridos.</p></li>
         </ul>
-        <a href="#contato" class="btn btn-primary btn-lg btn-block">Solicitar demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
       </div>
     </section>
 
     <!-- RECURSOS -->
     <section class="section" id="recursos">
-      <div class="container features-wrap reveal">
+      <div class="container features-grid">
+        <div class="features-wrap reveal">
         <p class="eyebrow">Recursos</p>
         <h2>Tudo o que a sua equipe precisa para gerir as agendas</h2>
         <ol class="features">
@@ -204,89 +202,26 @@
           </li>
         </ol>
         <a href="#contato" class="btn btn-primary btn-lg btn-block features-cta">Solicitar demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      </div>
-    </section>
-
-    <!-- NO WHATSAPP DO PACIENTE -->
-    <section class="section section-alt" id="no-whatsapp">
-      <div class="container patient-grid">
-        <div class="reveal">
-          <p class="eyebrow">No WhatsApp do paciente</p>
-          <h2>Uma mensagem clara, com resposta em um toque</h2>
-          <p class="lead">O paciente recebe os dados da consulta e responde com os botões. A confirmação ou a desistência aparece na hora para a equipe, e na véspera chega um lembrete com o que levar.</p>
         </div>
-        <div class="hero-demo" aria-label="Demonstração de conversa no WhatsApp com dados fictícios">
-          <div class="phone">
-            <div class="phone-screen">
-              <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
-              <div class="wa-head">
-                <span class="wa-back" aria-hidden="true">‹</span>
-                <span class="wa-avatar" aria-hidden="true">RA</span>
-                <div class="wa-who">
-                  <strong>Central de Regulação <span class="wa-verified" aria-hidden="true">✓</span></strong>
-                  <span>conta comercial oficial</span>
+          <div class="hero-demo" aria-label="Demonstração de conversa no WhatsApp com dados fictícios">
+            <div class="phone">
+              <div class="phone-screen">
+                <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
+                <div class="wa-head">
+                  <span class="wa-back" aria-hidden="true">‹</span>
+                  <span class="wa-avatar" aria-hidden="true">RA</span>
+                  <div class="wa-who">
+                    <strong>Central de Regulação <span class="wa-verified" aria-hidden="true">✓</span></strong>
+                    <span>conta comercial oficial</span>
+                  </div>
                 </div>
+                <div class="wa-body" id="wa-body" aria-live="off"></div>
+                <div class="wa-input" aria-hidden="true"><span class="wa-field">Mensagem</span><span class="wa-mic"></span></div>
+                <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
               </div>
-              <div class="wa-body" id="wa-body" aria-live="off"></div>
-              <div class="wa-input" aria-hidden="true"><span class="wa-field">Mensagem</span><span class="wa-mic"></span></div>
-              <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
             </div>
+            <p class="demo-note">Demonstração com dados fictícios</p>
           </div>
-          <p class="demo-note">Demonstração com dados fictícios</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- COMO FUNCIONA -->
-    <section class="section" id="como-funciona">
-      <div class="container reveal">
-        <p class="eyebrow">Como funciona</p>
-        <h2>Da lista da agenda ao paciente confirmado, sem digitar mensagem</h2>
-        <ol class="steps">
-          <li class="step">
-            <span class="step-num">1</span>
-            <h3>A secretaria envia a lista</h3>
-            <p>O PDF da agenda (SISREG ou sistemas similares) é lido automaticamente: nome, telefone, data, horário e exame. A equipe confere na tela e aprova antes de qualquer envio.</p>
-          </li>
-          <li class="step">
-            <span class="step-num">2</span>
-            <h3>O paciente responde com um toque</h3>
-            <p>Mensagem oficial no WhatsApp com os dados da consulta e os botões <em>Sim, vou comparecer</em> e <em>Não poderei ir</em>. Na véspera, um lembrete com o que levar.</p>
-          </li>
-          <li class="step">
-            <span class="step-num">3</span>
-            <h3>A agenda se reorganiza a tempo</h3>
-            <p>Quem confirmou, quem avisou que não vai e quem não respondeu aparecem ao vivo. A vaga liberada é oferecida a outro paciente dias antes da consulta.</p>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- RESULTADOS -->
-    <section class="section section-alt" id="resultados">
-      <div class="container reveal">
-        <p class="eyebrow">Resultados na operação</p>
-        <h2>O que acontece quando o paciente é avisado do jeito certo</h2>
-        <div class="stats">
-          <div class="stat"><strong>8 em 10</strong><span>pacientes respondem pelo WhatsApp</span></div>
-          <div class="stat"><strong>cerca de 70%</strong><span>confirmam presença</span></div>
-          <div class="stat"><strong>cerca de 87%</strong><span>das mensagens entregues na hora</span></div>
-          <div class="stat"><strong>até 90%</strong><span>menos tempo da equipe por lista</span></div>
-        </div>
-
-        <div class="spotlight">
-          <div class="spotlight-copy">
-            <p class="eyebrow eyebrow-red">A vaga que não se perde</p>
-            <h3>Quem avisa que não vai é um atendimento a mais — se você souber a tempo</h3>
-            <p>Sem aviso, o horário fica vazio no dia. Com o RegulAção, o paciente diz que não pode ir com dias de antecedência, e a unidade tem tempo de chamar outra pessoa da fila, com preparo e autorização em dia. Mais atendimentos por médico, na mesma agenda.</p>
-          </div>
-          <div class="spotlight-stats">
-            <div class="stat stat-red"><strong>cerca de 15%</strong><span>avisam que não poderão ir</span></div>
-            <div class="stat stat-red"><strong>quase 3 dias</strong><span>de antecedência, em média</span></div>
-            <div class="stat stat-red"><strong>mais de 80%</strong><span>desses avisos chegam antes do dia da consulta</span></div>
-          </div>
-        </div>
-        <p class="fineprint">Percentuais aproximados, medidos na operação real em municípios de Santa Catarina.</p>
       </div>
     </section>
 

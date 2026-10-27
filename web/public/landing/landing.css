@@ -774,3 +774,26 @@ p { margin: 0 0 1em; }
   .benefits li { gap: 16px; padding: 18px 0; }
   .benefit-check { width: 42px; height: 42px; font-size: 1.3rem; }
 }
+
+/* Espaçamentos mais compactos */
+.section { padding: 56px 0; }
+.hero { padding: 48px 0 56px; }
+.numbers-section { padding: 0 0 8px; }
+.benefits-section { padding-top: 32px; }
+.benefits { margin-bottom: 0; }
+
+/* Recursos + simulador lado a lado */
+.features-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 48px; align-items: start; }
+.features-grid .features-wrap { max-width: none; }
+.features-grid .hero-demo { position: sticky; top: 96px; margin-top: 64px; }
+@media (max-width: 860px) {
+  .section { padding: 44px 0; }
+  .hero { padding: 32px 0 40px; }
+  .features-grid { grid-template-columns: 1fr; gap: 32px; }
+  .features-grid .hero-demo { position: static; margin-top: 0; }
+}
+.section.numbers-section { padding: 0; }
+.section.benefits-section { padding: 32px 0 8px; }
+@media (max-width: 860px) {
+  .section.benefits-section { padding: 24px 0 0; }
+}
