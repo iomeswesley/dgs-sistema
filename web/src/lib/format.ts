@@ -81,7 +81,7 @@ export const STATUS_LABEL: Record<string, string> = {
   SEM_TELEFONE: "Sem telefone",
   SEM_DATA: "Sem data",
   FALHA: "Falha no envio",
-  CANCELADO: "Cancelado pela DGS",
+  CANCELADO: "Cancelado pela equipe",
   // Não é um `Appointment.status` de verdade — filtro sintético (Revisão,
   // Acompanhamento) pra quem escreveu algo mas o sistema não entendeu como
   // confirmação/recusa clara. Ver `hasUnclassifiedReply` no backend.

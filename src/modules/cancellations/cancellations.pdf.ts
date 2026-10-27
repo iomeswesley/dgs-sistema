@@ -2,6 +2,8 @@ import { formatPhone } from "@/lib/phone.js";
 import {
   createReportDocument,
   drawBrandHeader,
+  footerLine,
+  getActiveClientName,
   drawLabeledText,
   drawLegend,
   drawMetaRows,
@@ -56,7 +58,7 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     label: "Enviado",
     color: "#b45309",
     bg: "#fdf1e2",
-    explanation: "Saiu do número da DGS, ainda sem confirmação de chegada.",
+    explanation: "Saiu do nosso número, ainda sem confirmação de chegada.",
   },
   {
     key: "FALHOU",
@@ -107,7 +109,12 @@ function formatCalendarDate(isoDate: string): string {
 export async function generateCancellationPdf(detail: CancellationBatchDetail): Promise<Buffer> {
   const { doc, finished } = createReportDocument(`Cancelamento — ${detail.source.doctorName}`);
 
-  drawBrandHeader(doc, "Cancelamento de Agenda", `Lote #${detail.id} · gerado em ${formatDateTime(new Date())}`);
+  drawBrandHeader(
+    doc,
+    "Cancelamento de Agenda",
+    `Lote #${detail.id} · gerado em ${formatDateTime(new Date())}`,
+    await getActiveClientName()
+  );
 
   const rows: [string, string][] = [
     ["Médico", detail.source.doctorName],
@@ -157,7 +164,7 @@ export async function generateCancellationPdf(detail: CancellationBatchDetail): 
 
   drawPageNumbers(
     doc,
-    (page, total) => `DGS — D'Artibale Gestão em Saúde · Cancelamento #${detail.id} · página ${page} de ${total}`
+    (page, total) => footerLine(`Cancelamento #${detail.id}`, page, total)
   );
 
   doc.end();

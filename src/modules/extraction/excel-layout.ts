@@ -1,5 +1,5 @@
 /*
-  Layout do modelo Excel de importação ("modelo-importacao-dgs.xlsx").
+  Layout do modelo Excel de importação ("modelo-importacao.xlsx").
 
   Fonte única de verdade: o gerador do modelo (`excel-template.ts`) e o
   leitor (`parsers/excel.ts`) usam as mesmas definições, então o arquivo

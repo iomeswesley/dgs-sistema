@@ -5,6 +5,7 @@ import { formatPhone } from "@/lib/phone.js";
 import { REFUSAL_REASON_LABEL, STATUS_LABEL, STATUS_ORDER } from "@/lib/labels.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
 import { slugify } from "@/lib/slug.js";
+import { getActiveClientName } from "@/lib/report-pdf.js";
 
 /*
   Relatório de uma lista pra devolver à secretaria — hoje em dois formatos
@@ -145,7 +146,7 @@ export async function buildListReportCsv(listId: number): Promise<{ csv: string;
   const data = await getListReportData(listId);
 
   const lines: (string | number | null)[][] = [
-    ["DGS — D'Artibale Gestão em Saúde"],
+    [await getActiveClientName()],
     ["Relatório de Confirmações"],
     [],
     ["Município", data.municipalityName],
@@ -174,6 +175,7 @@ export async function buildListReportCsv(listId: number): Promise<{ csv: string;
     }
     lines.push([]);
   }
+  lines.push(["Gerado pela RegulAção"]);
 
   return {
     csv: buildCsv(lines),

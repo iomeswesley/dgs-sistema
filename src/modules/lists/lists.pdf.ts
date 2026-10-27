@@ -3,6 +3,8 @@ import { STATUS_COLOR, STATUS_EXPLANATION, STATUS_LABEL } from "@/lib/labels.js"
 import {
   createReportDocument,
   drawBrandHeader,
+  footerLine,
+  getActiveClientName,
   drawLegend,
   drawMetaRows,
   drawPageNumbers,
@@ -40,7 +42,12 @@ export async function generateListReportPdf(listId: number): Promise<{ pdf: Buff
   // Sem "Lista #<id>" no cabeçalho nem no rodapé (pedido do usuário em
   // 2026-08-27) — o município/médico/data já identificam o documento, o
   // id interno não diz nada pra quem recebe de fora.
-  drawBrandHeader(doc, "Relatório de Confirmações", `Gerado em ${formatDateTimeBrasilia(new Date())}`);
+  drawBrandHeader(
+    doc,
+    "Relatório de Confirmações",
+    `Gerado em ${formatDateTimeBrasilia(new Date())}`,
+    await getActiveClientName()
+  );
 
   const rows: [string, string][] = [
     ["Médico", data.doctorName],
@@ -81,7 +88,7 @@ export async function generateListReportPdf(listId: number): Promise<{ pdf: Buff
 
   drawPageNumbers(
     doc,
-    (page, total) => `DGS — D'Artibale Gestão em Saúde · Relatório de Confirmações · página ${page} de ${total}`
+    (page, total) => footerLine("Relatório de Confirmações", page, total)
   );
 
   doc.end();

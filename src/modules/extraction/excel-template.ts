@@ -9,7 +9,7 @@ import {
 } from "./excel-layout.js";
 
 /*
-  Gera o "modelo-importacao-dgs.xlsx" — a planilha padrão que o cliente
+  Gera o "modelo-importacao.xlsx" — a planilha padrão que o cliente
   preenche copiando os dados do Excel da secretaria, pra subir na
   plataforma sem depender da gente a cada layout novo.
 
@@ -52,7 +52,7 @@ const MAX_LIST_ITEMS = 2000;
 
 export async function buildImportTemplate(catalog?: TemplateCatalog): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "DGS";
+  workbook.creator = "RegulAção";
   workbook.title = "Modelo de importação de agenda";
 
   /* ---------------- Listas (oculta): opções dos menus ---------------- */

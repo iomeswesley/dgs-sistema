@@ -1,12 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
 import PDFDocument from "pdfkit";
+import { prisma } from "@/lib/prisma.js";
+import { requireActiveClientId } from "@/lib/tenant-context.js";
 
 /*
   Motor comum dos relatórios em PDF pra devolver à secretaria — usado por
   `cancellations.pdf.ts` e `lists.pdf.ts` (pedido do usuário em 2026-08-27:
-  "mesmo tempero, mesmo layout" nos dois). Cabeçalho azul-marinho com o logo
-  num chip branco, bloco de metadados, legenda por situação, seções
+  "mesmo tempero, mesmo layout" nos dois). Cabeçalho azul-marinho com o nome do
+  cliente, bloco de metadados, legenda por situação, seções
   agrupadas com paginação, rodapé numerado — tudo genérico aqui, cada
   chamador só entra com o texto e as cores da própria classificação.
 
@@ -29,21 +29,15 @@ export const RULE = "#e2e4e9";
 export const HEADER_BG = "#042951";
 export const ROW_ALT_BG = "#f7f7f8";
 
-/**
- * Logo oficial (fundo branco, letras em azul-marinho) — vive num chip
- * branco no cabeçalho, porque o fundo dele não é transparente e o
- * cabeçalho é escuro. Resolve tanto em produção (`dist-web/`, gerado pelo
- * build do Vite, já incluso em `includeFiles` no vercel.json) quanto em
- * dev local (`web/public/`, antes do build existir). `null` se nenhum dos
- * dois existir — nesse caso o cabeçalho cai pra um texto "DGS" simples,
- * nunca quebra a geração do PDF por causa de um arquivo faltando.
- */
-export function resolveLogoPath(): string | null {
-  const candidates = [
-    path.join(process.cwd(), "dist-web", "dgs-logo.png"),
-    path.join(process.cwd(), "web", "public", "dgs-logo.png"),
-  ];
-  return candidates.find((p) => fs.existsSync(p)) ?? null;
+/** Nome do cliente ativo (município/consórcio), usado no cabeçalho dos relatórios. */
+export async function getActiveClientName(): Promise<string> {
+  const client = await prisma.client.findUnique({ where: { id: requireActiveClientId() }, select: { name: true } });
+  return client?.name ?? "";
+}
+
+/** Rodapé comum: a marca da plataforma, o documento e a paginação. */
+export function footerLine(documentLabel: string, page: number, total: number): string {
+  return `RegulAção · ${documentLabel} · página ${page} de ${total}`;
 }
 
 export function createReportDocument(title: string): { doc: PDFKit.PDFDocument; finished: Promise<Buffer> } {
@@ -69,28 +63,19 @@ export function ruleLine(doc: PDFKit.PDFDocument): void {
 }
 
 /**
- * Faixa azul-marinho no topo com o logo (chip branco) à esquerda e o
+ * Faixa azul-marinho no topo com o nome do cliente à esquerda e o
  * título/subtítulo à direita. Deixa `doc.y` logo abaixo da faixa, pronto
  * pro bloco de metadados de cada relatório.
  */
-export function drawBrandHeader(doc: PDFKit.PDFDocument, title: string, subtitle: string): void {
+export function drawBrandHeader(doc: PDFKit.PDFDocument, title: string, subtitle: string, clientName: string): void {
   doc.rect(0, 0, doc.page.width, 84).fill(HEADER_BG);
 
-  // O arquivo já tem "D'ARTIBALE GESTÃO EM SAÚDE" desenhado dentro dele,
-  // não precisa de tagline separada do lado.
-  const logoPath = resolveLogoPath();
-  if (logoPath) {
-    const chipW = 78;
-    const chipH = 46;
-    const chipX = PAGE_MARGIN;
-    const chipY = (84 - chipH) / 2;
-    doc.roundedRect(chipX, chipY, chipW, chipH, 4).fill("#ffffff");
-    doc.image(logoPath, chipX + 8, chipY + 7, { fit: [chipW - 16, chipH - 14], align: "center", valign: "center" });
-  } else {
-    // Nunca deveria faltar (o arquivo vai junto do deploy), mas se faltar
-    // não trava a geração do PDF — cai num texto simples.
-    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(22).text("DGS", PAGE_MARGIN, 30);
-  }
+  const half = CONTENT_WIDTH / 2 - 8;
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(15).text(clientName, PAGE_MARGIN, 30, {
+    width: half,
+    height: 40,
+    ellipsis: true,
+  });
 
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(13).text(title, PAGE_MARGIN, 22, {
     width: CONTENT_WIDTH,

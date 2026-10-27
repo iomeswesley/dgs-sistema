@@ -222,7 +222,7 @@ listsRouter.delete(
 );
 
 /**
- * Baixa o modelo Excel de importação (modelo-importacao-dgs.xlsx), já com
+ * Baixa o modelo Excel de importação (modelo-importacao.xlsx), já com
  * menus de opções (município, unidade, médico, procedimento) montados a
  * partir do cadastro DESTE cliente — escolher no menu evita erro de
  * digitação. Declarada antes das rotas com `:id` pra "excel-template" não
@@ -244,7 +244,7 @@ listsRouter.get(
       procedures: procedures.map((p) => p.name),
     });
     res.setHeader("Content-Type", EXCEL_MIME);
-    res.setHeader("Content-Disposition", 'attachment; filename="modelo-importacao-dgs.xlsx"');
+    res.setHeader("Content-Disposition", 'attachment; filename="modelo-importacao.xlsx"');
     res.setHeader("Cache-Control", "no-cache");
     res.send(buffer);
   })

@@ -10,7 +10,7 @@ export const STATUS_LABEL: Record<string, string> = {
   SEM_TELEFONE: "Não contatável (sem telefone)",
   SEM_DATA: "Não contatável (sem data)",
   FALHA: "Falha na entrega",
-  CANCELADO: "Cancelado pela DGS",
+  CANCELADO: "Cancelado pela equipe",
 };
 
 export const REFUSAL_REASON_LABEL: Record<string, string> = {

@@ -36,7 +36,7 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
     doctorId: filters.doctorId,
     municipalityId: filters.municipalityId,
     procedureId: filters.procedureId,
-    // Cancelado pela DGS (médico indisponível) não passou pelo fluxo de
+    // Cancelado pela equipe (médico indisponível) não passou pelo fluxo de
     // confirmação normal — nunca teve chance real de virar "confirmado".
     // Contar como "planejado" infla o denominador e derruba a taxa de
     // confirmação artificialmente (achado pelo usuário em 2026-08-29: agenda
