@@ -916,3 +916,12 @@ p { margin: 0 0 1em; }
 @media (max-width: 860px) {
   .faltas-copy h2 { font-size: 6.7vw; }
 }
+
+/* Diminua as faltas no computador: foto encostada na borda direita da página */
+@media (min-width: 861px) {
+  .faltas-section > .faltas-layout {
+    width: 100%; max-width: none; margin: 0;
+    padding-left: max(16px, calc((100% - 1160px) / 2));
+    grid-template-columns: 1fr min(48vw, 680px);
+  }
+}
