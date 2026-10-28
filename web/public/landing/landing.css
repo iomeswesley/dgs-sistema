@@ -797,3 +797,71 @@ p { margin: 0 0 1em; }
 @media (max-width: 860px) {
   .section.benefits-section { padding: 24px 0 0; }
 }
+
+/* ===== Página refeita (28/10) ===== */
+.hero h1 { font-size: clamp(2rem, 4.2vw, 3.2rem); line-height: 1.1; }
+.hero .hero-tag { margin-bottom: 16px; }
+.hero-cta { margin-top: 28px; }
+
+.numbers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+.numbers-lead { margin: 0; font-size: clamp(1.1rem, 2vw, 1.35rem); line-height: 1.55; color: var(--ink-muted); }
+.numbers-grid .numbers { grid-template-columns: 1fr; gap: 14px; }
+.icon-red { background: var(--red-soft); color: var(--red); }
+.num-red { color: var(--red) !important; }
+.section.numbers-section { padding: 40px 0 56px; }
+
+.big-title { font-size: clamp(1.9rem, 3.8vw, 2.9rem); line-height: 1.1; margin: 0 0 16px; }
+.faltas-section { overflow: hidden; background: linear-gradient(180deg, #f3f8fe, #fff); }
+.faltas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+.faltas-grid .lead { margin-bottom: 28px; }
+.person { position: relative; justify-self: center; width: min(380px, 100%); }
+.person img {
+  display: block; width: 100%; height: auto; border-radius: 28px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 22%);
+}
+.person-bubble {
+  position: absolute; left: -38%; top: 44%; width: 82%;
+  display: flex; gap: 12px; padding: 16px 18px;
+  border-radius: 22px 22px 22px 6px; background: #e7fbd8;
+  box-shadow: 0 18px 40px rgb(15 29 51 / 0.18);
+}
+.person-avatar {
+  flex: none; width: 48px; height: 48px; border-radius: 50%;
+  background: url(/landing/pessoa-whatsapp.jpg) 50% 22% / 220% auto;
+}
+.person-bubble strong { display: block; color: var(--ink); font-size: 1rem; margin-bottom: 4px; }
+.person-bubble p { margin: 0 0 6px; color: var(--ink); font-size: 0.92rem; line-height: 1.4; }
+.person-time { display: block; text-align: right; color: var(--ink-muted); font-size: 0.78rem; }
+.person-time i { font-style: normal; color: #34b7f1; letter-spacing: -3px; }
+
+.recursos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+.recursos-copy .lead { margin-bottom: 24px; }
+.recursos-copy .hero-visual { margin-top: 40px; }
+.recursos-grid .features { margin: 0; }
+
+.contact-light { background: #fff; }
+.contact-light .contact-form { box-shadow: 0 20px 50px rgb(15 29 51 / 0.12); border: 1px solid var(--line); }
+.contact-light .benefits { margin: 0; }
+
+@media (max-width: 860px) {
+  .numbers-grid, .faltas-grid, .recursos-grid { grid-template-columns: 1fr; gap: 32px; }
+  .person { width: min(300px, 78%); margin-left: auto; margin-right: 0; }
+  .person-bubble { left: -26%; width: 92%; }
+}
+@media (max-width: 560px) {
+  .person-bubble { padding: 12px 14px; gap: 10px; }
+  .person-avatar { width: 38px; height: 38px; }
+  .person-bubble p { font-size: 0.85rem; }
+}
+.person img { aspect-ratio: 4 / 5; object-fit: cover; object-position: 50% 0; }
+.person-bubble { top: 52%; }
+.contact-light .contact-grid { align-items: center; }
+@media (max-width: 860px) {
+  .person-bubble { top: auto; bottom: -24px; }
+  .person { margin-bottom: 24px; }
+}
+@media (max-width: 860px) {
+  .person-bubble { bottom: -110px; }
+  .person { margin-bottom: 110px; }
+}

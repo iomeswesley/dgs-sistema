@@ -23,8 +23,7 @@
       </a>
       <nav class="nav" id="site-nav" aria-label="Seções">
         <a href="#recursos">Recursos</a>
-        <a href="#planos">Planos</a>
-        <a href="#duvidas">Dúvidas</a>
+        <a href="#contato">Contato</a>
         <a href="/entrar" class="nav-mobile-only">Entrar</a>
       </nav>
       <div class="header-actions">
@@ -36,276 +35,227 @@
   </header>
 
   <main>
-    <!-- HERO -->
+    <!-- TOPO -->
     <section class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <h1>Mais produtividade e menos faltas <span class="hl-red">nas suas agendas.</span></h1>
-          <p class="lead">Envie confirmações pelo WhatsApp e acompanhe tudo em tempo real.</p>
+          <p class="hero-tag">Confirmação inteligente de agendas</p>
+          <h1>Simplifique a confirmação de consultas, reduza a burocracia e <span class="hl-blue">ganhe eficiência na gestão das agendas.</span></h1>
           <div class="hero-cta">
             <a href="#contato" class="btn btn-primary btn-lg">Peça uma demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
           </div>
         </div>
 
-        <div class="hero-visual" aria-label="Exemplo do painel com dados fictícios">
-          <div class="dash">
-            <div class="dash-head">
-              <img src="/landing/regulacao-marca.png" alt="" width="720" height="125" />
-              <div class="dash-title">
-                <strong>Relatório de Confirmações</strong>
-                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>28/10/2026</span>
+        <div class="hero-demo" aria-label="Demonstração de conversa no WhatsApp com dados fictícios">
+          <div class="phone">
+            <div class="phone-screen">
+              <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
+              <div class="wa-head">
+                <span class="wa-back" aria-hidden="true">‹</span>
+                <span class="wa-avatar" aria-hidden="true">RA</span>
+                <div class="wa-who">
+                  <strong>Central de Regulação <span class="wa-verified" aria-hidden="true">✓</span></strong>
+                  <span>conta comercial oficial</span>
+                </div>
               </div>
-            </div>
-            <div class="dash-stats">
-              <div class="dash-stat st-green"><span class="dash-ico">✓</span><strong>37</strong><span>Confirmaram</span></div>
-              <div class="dash-stat st-red"><span class="dash-ico">✕</span><strong>5</strong><span>Recusaram</span></div>
-              <div class="dash-stat st-yellow"><span class="dash-ico">◷</span><strong>20</strong><span>Sem resposta</span></div>
-              <div class="dash-stat st-red"><span class="dash-ico">!</span><strong>6</strong><span>Falha na entrega</span></div>
-            </div>
-            <div class="dash-table" aria-hidden="true">
-              <div class="dash-row dash-th"><span></span><span>Paciente</span><span>Procedimento</span><span>Data/Hora</span><span>Status</span></div>
-              <div class="dash-row">
-                <span class="dash-avatar"></span>
-                <span class="dash-bar" style="--w:80%"></span>
-                <span class="dash-bar" style="--w:70%"></span>
-                <span class="dash-bar" style="--w:75%"></span>
-                <span class="dash-status"><i class="dot-green"></i>Confirmado</span>
-              </div>
-              <div class="dash-row">
-                <span class="dash-avatar"></span>
-                <span class="dash-bar" style="--w:65%"></span>
-                <span class="dash-bar" style="--w:64%"></span>
-                <span class="dash-bar" style="--w:75%"></span>
-                <span class="dash-status"><i class="dot-red"></i>Recusado</span>
-              </div>
-              <div class="dash-row">
-                <span class="dash-avatar"></span>
-                <span class="dash-bar" style="--w:90%"></span>
-                <span class="dash-bar" style="--w:70%"></span>
-                <span class="dash-bar" style="--w:65%"></span>
-                <span class="dash-status"><i class="dot-yellow"></i>Sem resposta</span>
-              </div>
-              <div class="dash-row">
-                <span class="dash-avatar"></span>
-                <span class="dash-bar" style="--w:70%"></span>
-                <span class="dash-bar" style="--w:60%"></span>
-                <span class="dash-bar" style="--w:75%"></span>
-                <span class="dash-status"><i class="dot-red"></i>Falha na entrega</span>
-              </div>
+              <div class="wa-body" id="wa-body" aria-live="off"></div>
+              <div class="wa-input" aria-hidden="true"><span class="wa-field">Mensagem</span><span class="wa-mic"></span></div>
+              <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
             </div>
           </div>
-          <div class="notif">
-            <div class="notif-head">
-              <span class="notif-wa" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3Z"/></svg></span>
-              <strong>RegulAção</strong>
-              <span class="notif-time">Agora</span>
-            </div>
-            <strong class="notif-title">Lembrete de consulta</strong>
-            <p>Olá! Você tem uma consulta agendada para 28/10 às 10:00. Você confirma sua presença?</p>
-          </div>
-          <p class="demo-note">Exemplo com dados fictícios</p>
+          <p class="demo-note">Demonstração com dados fictícios</p>
         </div>
       </div>
     </section>
 
     <!-- NÚMEROS -->
     <section class="section numbers-section" aria-label="Números">
-      <div class="container numbers reveal">
-        <div class="number-card">
-          <span class="number-icon icon-blue" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="m9 15 2 2 4-4"/></svg>
-          </span>
-          <div><strong><span class="num-dark">+ de</span> 6 mil</strong><span>consultas confirmadas</span></div>
-        </div>
-        <div class="number-card">
-          <span class="number-icon icon-green" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3Z"/></svg>
-          </span>
-          <div><strong><span class="num-dark">cerca de</span> 70%</strong><span>confirmam sua consulta pelo WhatsApp</span></div>
+      <div class="container numbers-grid reveal">
+        <p class="numbers-lead">Automatize a comunicação com seus pacientes pelo WhatsApp, reduza tarefas manuais, a dependência de múltiplos números e os riscos de bloqueio. Mais agilidade para sua equipe e mais organização para seus atendimentos.</p>
+        <div class="numbers">
+          <div class="number-card">
+            <span class="number-icon icon-blue" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="m9 15 2 2 4-4"/></svg>
+            </span>
+            <div><strong><span class="num-dark">+ de</span> 15 mil</strong><span>consultas confirmadas diariamente</span></div>
+          </div>
+          <div class="number-card">
+            <span class="number-icon icon-green" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3Z"/></svg>
+            </span>
+            <div><strong>95%</strong><span>confirmam sua consulta pelo WhatsApp</span></div>
+          </div>
+          <div class="number-card">
+            <span class="number-icon icon-red" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="7" r="3.5"/><path d="M1.5 19a6.5 6.5 0 0 1 13 0v1h-13z"/><circle cx="15" cy="6" r="3" opacity=".75"/><circle cx="18" cy="17" r="5" stroke="#fff" stroke-width="1.5"/><path d="m16.2 15.2 3.6 3.6M19.8 15.2l-3.6 3.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <div><strong class="num-red">10%</strong><span>de faltas</span></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- BENEFÍCIOS -->
-    <section class="section benefits-section" aria-label="Benefícios">
-      <div class="container benefits-wrap reveal">
-        <ul class="benefits">
-          <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong>Deixe de perder tempo <span class="hl-red">ligando</span></strong> para confirmar a presença dos pacientes.</p></li>
-          <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong class="hl-red">Tenha mais tempo</strong> para tarefas em que a sua decisão fará a diferença.</p></li>
-          <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong class="hl-red">Ganhe tempo</strong> para os seus pacientes, mesmo nos dias mais corridos.</p></li>
-        </ul>
+    <!-- DIMINUA AS FALTAS -->
+    <section class="section faltas-section">
+      <div class="container faltas-grid">
+        <div class="reveal">
+          <h2 class="big-title">Diminua as faltas automatizando sua <span class="hl-red">comunicação</span></h2>
+          <p class="lead">Envie confirmações de consultas pelo WhatsApp, reduza tarefas manuais e tenha mais eficiência na gestão das agendas.</p>
+          <a href="#contato" class="btn btn-primary btn-lg">Peça uma demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        </div>
+        <div class="person" aria-hidden="true">
+          <img src="/landing/pessoa-whatsapp.jpg" alt="" width="424" height="1116" loading="lazy" />
+          <div class="person-bubble">
+            <span class="person-avatar"></span>
+            <div>
+              <strong>Olá, Ana!</strong>
+              <p>Você tem uma consulta agendada para o dia 28 de março às 10:00.</p>
+              <p>Você confirma sua presença?</p>
+              <span class="person-time">10:24 <i>✓✓</i></span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- RECURSOS -->
-    <section class="section" id="recursos">
-      <div class="container features-grid">
-        <div class="features-wrap reveal">
-        <p class="eyebrow">Recursos</p>
-        <h2>Tudo o que a sua equipe precisa para gerir as agendas</h2>
-        <ol class="features">
-          <li class="feature">
-            <span class="feature-icon tile-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="15" height="14" rx="2.5"/><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4"/><circle cx="18" cy="17.5" r="4.5" fill="#22a85a" stroke="#fff" stroke-width="1.5"/><path d="m16 17.6 1.4 1.4 2.6-2.6" stroke="#fff" stroke-width="1.8"/></svg></span>
-            <span class="feature-num" aria-hidden="true">1</span>
-            <div>
-              <h3>Envio da confirmação de consultas</h3>
-              <p>Envie automaticamente a confirmação das consultas pelo WhatsApp oficial.</p>
-            </div>
-          </li>
-          <li class="feature">
-            <span class="feature-icon tile-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="15" height="14" rx="2.5"/><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4"/><circle cx="18" cy="17.5" r="4.5" fill="currentColor" stroke="#fff" stroke-width="1.5"/><path d="m16.4 15.9 3.2 3.2M19.6 15.9l-3.2 3.2" stroke="#fff" stroke-width="1.8"/></svg></span>
-            <span class="feature-num" aria-hidden="true">2</span>
-            <div>
-              <h3>Cancelamento das consultas</h3>
-              <p>O paciente avisa com um toque que não poderá ir, e a vaga fica livre para outro paciente.</p>
-            </div>
-          </li>
-          <li class="feature">
-            <span class="feature-icon tile-green" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M8 18.5h2"/><path d="M15 8h6l-2-2M21 13h-6l2 2"/></svg></span>
-            <span class="feature-num" aria-hidden="true">3</span>
-            <div>
-              <h3>Troca de número</h3>
-              <p>Atualize o número de WhatsApp do paciente em caso de troca e reenvie a mensagem.</p>
-            </div>
-          </li>
-          <li class="feature">
-            <span class="feature-icon tile-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="7.5" r="4"/><path d="M2.5 20.5a7 7 0 0 1 11-5.7"/><circle cx="17.5" cy="17" r="4.5" fill="currentColor" stroke="#fff" stroke-width="1.5"/><path d="M17.5 15v4M15.5 17h4" stroke="#fff" stroke-width="1.8"/></svg></span>
-            <span class="feature-num" aria-hidden="true">4</span>
-            <div>
-              <h3>Inclusão de novos números</h3>
-              <p>Adicione novos números mesmo após o envio da lista, sem precisar refazer tudo.</p>
-            </div>
-          </li>
-          <li class="feature">
-            <span class="feature-icon tile-purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5H6.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8z"/><path d="M14 2.5V8h5.5"/><path d="M9 17.5v-3M12 17.5v-5M15 17.5v-2"/></svg></span>
-            <span class="feature-num" aria-hidden="true">5</span>
-            <div>
-              <h3>Relatórios sobre as agendas</h3>
-              <p>Acompanhe confirmações, cancelamentos, faltas e a situação das agendas em tempo real.</p>
-            </div>
-          </li>
-          <li class="feature">
-            <span class="feature-icon tile-orange" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5a6 6 0 0 0-6 6v3.6L4.3 15a1 1 0 0 0 .9 1.5h13.6a1 1 0 0 0 .9-1.5L18 12.1V8.5a6 6 0 0 0-6-6Z"/><path d="M9.5 18.5a2.5 2.5 0 0 0 5 0z"/></svg></span>
-            <span class="feature-num" aria-hidden="true">6</span>
-            <div>
-              <h3>Lembrete antes da consulta</h3>
-              <p>Envie lembretes automáticos antes das consultas para reduzir as faltas.</p>
-            </div>
-          </li>
-          <li class="feature">
-            <span class="feature-icon tile-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="13" width="4.5" height="8" rx="1"/><rect x="9.75" y="8.5" width="4.5" height="12.5" rx="1"/><rect x="16.5" y="3" width="4.5" height="18" rx="1"/></svg></span>
-            <span class="feature-num" aria-hidden="true">7</span>
-            <div>
-              <h3>Indicadores</h3>
-              <p>Visualize em tempo real os principais indicadores de desempenho das agendas.</p>
-            </div>
-          </li>
-        </ol>
-        <a href="#contato" class="btn btn-primary btn-lg btn-block features-cta">Solicitar demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-        </div>
-          <div class="hero-demo" aria-label="Demonstração de conversa no WhatsApp com dados fictícios">
-            <div class="phone">
-              <div class="phone-screen">
-                <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="status-icons"><i></i><i></i><i></i></span></div>
-                <div class="wa-head">
-                  <span class="wa-back" aria-hidden="true">‹</span>
-                  <span class="wa-avatar" aria-hidden="true">RA</span>
-                  <div class="wa-who">
-                    <strong>Central de Regulação <span class="wa-verified" aria-hidden="true">✓</span></strong>
-                    <span>conta comercial oficial</span>
-                  </div>
+    <section class="section section-alt" id="recursos">
+      <div class="container recursos-grid">
+        <div class="recursos-copy reveal">
+          <h2 class="big-title">Mais produtividade e menos faltas <span class="hl-red">nas suas agendas.</span></h2>
+          <p class="lead">Envie confirmações pelo WhatsApp e acompanhe tudo em tempo real.</p>
+          <a href="#contato" class="btn btn-primary btn-lg">Peça uma demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <div class="hero-visual" aria-label="Exemplo do painel com dados fictícios">
+            <div class="dash">
+              <div class="dash-head">
+                <img src="/landing/regulacao-marca.png" alt="" width="720" height="125" />
+                <div class="dash-title">
+                  <strong>Relatório de Confirmações</strong>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>28/10/2026</span>
                 </div>
-                <div class="wa-body" id="wa-body" aria-live="off"></div>
-                <div class="wa-input" aria-hidden="true"><span class="wa-field">Mensagem</span><span class="wa-mic"></span></div>
-                <div class="toast" id="wa-toast" role="status" aria-live="polite"></div>
+              </div>
+              <div class="dash-stats">
+                <div class="dash-stat st-green"><span class="dash-ico">✓</span><strong>37</strong><span>Confirmaram</span></div>
+                <div class="dash-stat st-red"><span class="dash-ico">✕</span><strong>5</strong><span>Recusaram</span></div>
+                <div class="dash-stat st-yellow"><span class="dash-ico">◷</span><strong>20</strong><span>Sem resposta</span></div>
+                <div class="dash-stat st-red"><span class="dash-ico">!</span><strong>6</strong><span>Falha na entrega</span></div>
+              </div>
+              <div class="dash-table" aria-hidden="true">
+                <div class="dash-row dash-th"><span></span><span>Paciente</span><span>Procedimento</span><span>Data/Hora</span><span>Status</span></div>
+                <div class="dash-row">
+                  <span class="dash-avatar"></span>
+                  <span class="dash-bar" style="--w:80%"></span>
+                  <span class="dash-bar" style="--w:70%"></span>
+                  <span class="dash-bar" style="--w:75%"></span>
+                  <span class="dash-status"><i class="dot-green"></i>Confirmado</span>
+                </div>
+                <div class="dash-row">
+                  <span class="dash-avatar"></span>
+                  <span class="dash-bar" style="--w:65%"></span>
+                  <span class="dash-bar" style="--w:64%"></span>
+                  <span class="dash-bar" style="--w:75%"></span>
+                  <span class="dash-status"><i class="dot-red"></i>Recusado</span>
+                </div>
+                <div class="dash-row">
+                  <span class="dash-avatar"></span>
+                  <span class="dash-bar" style="--w:90%"></span>
+                  <span class="dash-bar" style="--w:70%"></span>
+                  <span class="dash-bar" style="--w:65%"></span>
+                  <span class="dash-status"><i class="dot-yellow"></i>Sem resposta</span>
+                </div>
+                <div class="dash-row">
+                  <span class="dash-avatar"></span>
+                  <span class="dash-bar" style="--w:70%"></span>
+                  <span class="dash-bar" style="--w:60%"></span>
+                  <span class="dash-bar" style="--w:75%"></span>
+                  <span class="dash-status"><i class="dot-red"></i>Falha na entrega</span>
+                </div>
               </div>
             </div>
-            <p class="demo-note">Demonstração com dados fictícios</p>
-          </div>
-      </div>
-    </section>
-
-    <!-- PLANOS -->
-    <section class="section" id="planos">
-      <div class="container reveal">
-        <p class="eyebrow">Planos</p>
-        <h2>Comece por créditos, cresça por faixas de uso</h2>
-        <div class="plans">
-          <article class="plan">
-            <p class="plan-tag">Conhecer e validar</p>
-            <h3>Créditos pré-pagos</h3>
-            <p class="price"><strong>R$ 0,50</strong> <span>por mensagem</span></p>
-            <p class="plan-sub">Pacote de 1.000 mensagens por R$ 500</p>
-            <ul>
-              <li>Sem mensalidade nem contrato longo</li>
-              <li>Ideal para testar em uma unidade</li>
-              <li>Quem valida migra para o plano mensal</li>
-            </ul>
-            <a href="#contato" class="btn btn-ghost">Quero testar</a>
-          </article>
-
-          <article class="plan plan-featured">
-            <p class="plan-tag">Operar no dia a dia</p>
-            <h3>Plano mensal por faixas</h3>
-            <p class="plan-sub">Cada faixa tem seu preço: quanto mais usa, menos paga por mensagem.</p>
-            <div class="tiers">
-              <div class="tier"><strong>R$ 0,44</strong><span>até 5.000 mensagens/mês</span><em>ex.: 3.000 msgs = R$ 1.320</em></div>
-              <div class="tier"><strong>R$ 0,36</strong><span>de 5.001 a 10.000</span><em>ex.: 8.000 msgs = R$ 3.280</em></div>
-              <div class="tier"><strong>R$ 0,28</strong><span>acima de 10.000</span><em>ex.: 15.000 msgs = R$ 5.400</em></div>
+            <div class="notif">
+              <div class="notif-head">
+                <span class="notif-wa" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3Z"/></svg></span>
+                <strong>RegulAção</strong>
+                <span class="notif-time">Agora</span>
+              </div>
+              <strong class="notif-title">Lembrete de consulta</strong>
+              <p>Olá! Você tem uma consulta agendada para 28/10 às 10:00. Você confirma sua presença?</p>
             </div>
-            <a href="#contato" class="btn btn-primary">Falar sobre o plano</a>
-          </article>
+            <p class="demo-note">Exemplo com dados fictícios</p>
+          </div>
         </div>
-        <p class="fineprint">Valores ilustrativos, com imposto incluído. Exemplos calculados por faixa (ex.: 8.000 = 5.000 × 0,44 + 3.000 × 0,36).</p>
-      </div>
-    </section>
-
-    <!-- DÚVIDAS -->
-    <section class="section section-alt" id="duvidas">
-      <div class="container reveal">
-        <p class="eyebrow">Dúvidas frequentes</p>
-        <h2>Perguntas que as secretarias costumam fazer</h2>
-        <div class="faq">
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">Funciona com a lista que já sai do SISREG ou de sistemas similares?</button>
-            <div class="faq-a"><p>Sim. A equipe sobe o PDF do relatório como ele já é gerado hoje; o sistema lê nome, telefone, data, horário e procedimento sozinho. Nada é enviado antes de alguém revisar e aprovar na tela.</p></div>
-          </div>
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">É o WhatsApp oficial? O número pode ser bloqueado?</button>
-            <div class="faq-a"><p>É a API oficial do WhatsApp Business (Meta), com modelos de mensagem aprovados e respeitando o limite diário de envios do número. Não é disparo por WhatsApp comum.</p></div>
-          </div>
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">E quando o paciente diz que não vai?</button>
-            <div class="faq-a"><p>O horário aparece na hora como vaga liberada, em média com quase 3 dias de antecedência. A equipe pode oferecer a vaga a outro paciente da fila pelo próprio WhatsApp, com botão para aceitar.</p></div>
-          </div>
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">E se o telefone estiver errado ou o paciente não tiver WhatsApp?</button>
-            <div class="faq-a"><p>O sistema sinaliza quem ficou sem entrega, tenta o telefone alternativo do cadastro quando existe e deixa a lista de quem precisa de contato manual pronta para a equipe.</p></div>
-          </div>
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">Como fica a LGPD e o dado de saúde?</button>
-            <div class="faq-a"><p>Os dados de cada secretaria ficam isolados, o diagnóstico (CID) nunca vai na mensagem, toda alteração manual fica registrada e os dados antigos são expurgados automaticamente.</p></div>
-          </div>
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">Quanto tempo leva para começar?</button>
-            <div class="faq-a"><p>Os municípios atendidos hoje entraram em operação no mesmo dia em que a primeira lista foi carregada.</p></div>
-          </div>
-          <div class="faq-item">
-            <button type="button" class="faq-q" aria-expanded="false">Como a prefeitura contrata?</button>
-            <div class="faq-a"><p>Deixe seu contato abaixo: montamos a proposta de acordo com o volume do município e a modalidade de contratação adequada.</p></div>
-          </div>
+        <div class="reveal">
+          <ol class="features">
+            <li class="feature">
+              <span class="feature-icon tile-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="15" height="14" rx="2.5"/><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4"/><circle cx="18" cy="17.5" r="4.5" fill="#22a85a" stroke="#fff" stroke-width="1.5"/><path d="m16 17.6 1.4 1.4 2.6-2.6" stroke="#fff" stroke-width="1.8"/></svg></span>
+              <span class="feature-num" aria-hidden="true">1</span>
+              <div>
+                <h3>Envio da confirmação de consultas</h3>
+                <p>Envie automaticamente a confirmação das consultas pelo WhatsApp oficial.</p>
+              </div>
+            </li>
+            <li class="feature">
+              <span class="feature-icon tile-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="15" height="14" rx="2.5"/><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4"/><circle cx="18" cy="17.5" r="4.5" fill="currentColor" stroke="#fff" stroke-width="1.5"/><path d="m16.4 15.9 3.2 3.2M19.6 15.9l-3.2 3.2" stroke="#fff" stroke-width="1.8"/></svg></span>
+              <span class="feature-num" aria-hidden="true">2</span>
+              <div>
+                <h3>Cancelamento das consultas</h3>
+                <p>O paciente avisa com um toque que não poderá ir, e a vaga fica livre para outro paciente.</p>
+              </div>
+            </li>
+            <li class="feature">
+              <span class="feature-icon tile-green" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M8 18.5h2"/><path d="M15 8h6l-2-2M21 13h-6l2 2"/></svg></span>
+              <span class="feature-num" aria-hidden="true">3</span>
+              <div>
+                <h3>Troca de número</h3>
+                <p>Atualize o número de WhatsApp do paciente em caso de troca e reenvie a mensagem.</p>
+              </div>
+            </li>
+            <li class="feature">
+              <span class="feature-icon tile-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="7.5" r="4"/><path d="M2.5 20.5a7 7 0 0 1 11-5.7"/><circle cx="17.5" cy="17" r="4.5" fill="currentColor" stroke="#fff" stroke-width="1.5"/><path d="M17.5 15v4M15.5 17h4" stroke="#fff" stroke-width="1.8"/></svg></span>
+              <span class="feature-num" aria-hidden="true">4</span>
+              <div>
+                <h3>Inclusão de novos números</h3>
+                <p>Adicione novos números mesmo após o envio da lista, sem precisar refazer tudo.</p>
+              </div>
+            </li>
+            <li class="feature">
+              <span class="feature-icon tile-purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5H6.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8z"/><path d="M14 2.5V8h5.5"/><path d="M9 17.5v-3M12 17.5v-5M15 17.5v-2"/></svg></span>
+              <span class="feature-num" aria-hidden="true">5</span>
+              <div>
+                <h3>Relatórios sobre as agendas</h3>
+                <p>Acompanhe confirmações, cancelamentos, faltas e a situação das agendas em tempo real.</p>
+              </div>
+            </li>
+            <li class="feature">
+              <span class="feature-icon tile-orange" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5a6 6 0 0 0-6 6v3.6L4.3 15a1 1 0 0 0 .9 1.5h13.6a1 1 0 0 0 .9-1.5L18 12.1V8.5a6 6 0 0 0-6-6Z"/><path d="M9.5 18.5a2.5 2.5 0 0 0 5 0z"/></svg></span>
+              <span class="feature-num" aria-hidden="true">6</span>
+              <div>
+                <h3>Lembrete antes da consulta</h3>
+                <p>Envie lembretes automáticos antes das consultas para reduzir as faltas.</p>
+              </div>
+            </li>
+            <li class="feature">
+              <span class="feature-icon tile-red" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="13" width="4.5" height="8" rx="1"/><rect x="9.75" y="8.5" width="4.5" height="12.5" rx="1"/><rect x="16.5" y="3" width="4.5" height="18" rx="1"/></svg></span>
+              <span class="feature-num" aria-hidden="true">7</span>
+              <div>
+                <h3>Indicadores</h3>
+                <p>Visualize em tempo real os principais indicadores de desempenho das agendas.</p>
+              </div>
+            </li>
+          </ol>
         </div>
       </div>
     </section>
 
     <!-- CONTATO -->
-    <section class="section contact" id="contato">
-      <div class="container contact-grid reveal">
-        <div class="contact-copy">
-          <p class="eyebrow eyebrow-light">Fale com a gente</p>
-          <h2>Leve o RegulAção para a sua secretaria</h2>
-          <p>Conte um pouco sobre o seu município e retornamos com uma demonstração e uma proposta.</p>
-          <img src="/landing/regulacao.png" alt="" class="contact-art" width="1200" height="800" loading="lazy" />
+    <section class="section contact-light" id="contato">
+      <div class="container contact-grid">
+        <div class="reveal">
+          <ul class="benefits">
+            <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong>Deixe de perder tempo <span class="hl-red">ligando</span></strong> para confirmar a presença dos pacientes.</p></li>
+            <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong class="hl-red">Tenha mais tempo</strong> para tarefas em que a sua decisão fará a diferença.</p></li>
+            <li><span class="benefit-check" aria-hidden="true">✓</span><p><strong class="hl-red">Ganhe tempo</strong> para os seus pacientes, mesmo nos dias mais corridos.</p></li>
+          </ul>
         </div>
         <form class="contact-form" id="contact-form" novalidate>
           <label>Nome<input name="name" autocomplete="name" required maxlength="120" /></label>
