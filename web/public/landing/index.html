@@ -24,6 +24,7 @@
       <nav class="nav" id="site-nav" aria-label="Seções">
         <a href="#recursos">Recursos</a>
         <a href="#contato">Contato</a>
+        <a href="#duvidas">Dúvidas</a>
         <a href="/entrar" class="nav-mobile-only">Entrar</a>
       </nav>
       <div class="header-actions">
@@ -105,16 +106,7 @@
           <a href="#contato" class="btn btn-primary btn-lg">Peça uma demonstração gratuita <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
         </div>
         <div class="faltas-art">
-          <img src="/landing/diminua-faltas-fundo.webp" width="1024" height="1386" alt="" loading="lazy" />
-          <div class="art-bubble" aria-label="Exemplo de mensagem no WhatsApp">
-            <img class="art-avatar" src="/landing/avatar-ana.webp" width="180" height="180" alt="" loading="lazy" />
-            <div>
-              <strong>Olá, Ana!</strong>
-              <p>Você tem uma consulta agendada para o dia 28 de março às 10:00.</p>
-              <p>Você confirma sua presença?</p>
-              <span class="art-time">10:24 <i>✓✓</i></span>
-            </div>
-          </div>
+          <img src="/landing/diminua-faltas-fundo.webp" width="1024" height="1386" alt="Mensagem de exemplo no WhatsApp: Olá, Ana! Você tem uma consulta agendada para o dia 28 de março às 10:00. Você confirma sua presença?" loading="lazy" />
         </div>
       </div>
     </section>
@@ -272,6 +264,44 @@
           <button type="submit" class="btn btn-primary btn-lg">Enviar contato</button>
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
+      </div>
+    </section>
+
+    <!-- DÚVIDAS -->
+    <section class="section section-alt" id="duvidas">
+      <div class="container reveal">
+        <p class="eyebrow">Dúvidas frequentes</p>
+        <h2>Perguntas que as secretarias costumam fazer</h2>
+        <div class="faq">
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Funciona com a lista que já sai do SISREG ou de sistemas similares?</button>
+            <div class="faq-a"><p>Sim. A equipe sobe o PDF do relatório como ele já é gerado hoje; o sistema lê nome, telefone, data, horário e procedimento sozinho. Nada é enviado antes de alguém revisar e aprovar na tela.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">É o WhatsApp oficial? O número pode ser bloqueado?</button>
+            <div class="faq-a"><p>É a API oficial do WhatsApp Business (Meta), com modelos de mensagem aprovados e respeitando o limite diário de envios do número. Não é disparo por WhatsApp comum.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">E quando o paciente diz que não vai?</button>
+            <div class="faq-a"><p>O horário aparece na hora como vaga liberada, em média com quase 3 dias de antecedência. A equipe pode oferecer a vaga a outro paciente da fila pelo próprio WhatsApp, com botão para aceitar.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">E se o telefone estiver errado ou o paciente não tiver WhatsApp?</button>
+            <div class="faq-a"><p>O sistema sinaliza quem ficou sem entrega, tenta o telefone alternativo do cadastro quando existe e deixa a lista de quem precisa de contato manual pronta para a equipe.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Como fica a LGPD e o dado de saúde?</button>
+            <div class="faq-a"><p>Os dados de cada secretaria ficam isolados, o diagnóstico (CID) nunca vai na mensagem, toda alteração manual fica registrada e os dados antigos são expurgados automaticamente.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Quanto tempo leva para começar?</button>
+            <div class="faq-a"><p>Os municípios atendidos hoje entraram em operação no mesmo dia em que a primeira lista foi carregada.</p></div>
+          </div>
+          <div class="faq-item">
+            <button type="button" class="faq-q" aria-expanded="false">Como a prefeitura contrata?</button>
+            <div class="faq-a"><p>Deixe seu contato abaixo: montamos a proposta de acordo com o volume do município e a modalidade de contratação adequada.</p></div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
