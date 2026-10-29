@@ -214,16 +214,21 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
     // interesse. Sem "DGS" no texto e sem rodapé de marca — a apresentação é a
     // própria Secretaria ({{2}} = município). "Não tenho interesse" é recusa
     // (libera a vaga), "Sim, tenho interesse" é aceite.
-    name: "oferta_consulta",
+    // v1 (`oferta_consulta`, "Você tem interesse em realizar a consulta?") foi
+    // reclassificado pela Meta de UTILITY pra MARKETING em 29/10 — soa como
+    // oferta de serviço. Este segue o molde do `convite_vaga_aberta` (aprovado
+    // UTILITY): vaga já reservada, ligada a um agendamento, pergunta objetiva
+    // e os mesmos botões, que classifyReply já reconhece.
+    name: "oferta_vaga_consulta",
     category: "UTILITY",
     language: "pt_BR",
     components: [
       {
         type: "BODY",
         text:
-          "Prezado(a) {{1}},\n\nAqui é a Secretaria de Saúde de {{2}}.\n\n" +
-          "Você tem interesse em realizar a consulta de {{3}}?\n\nData: {{4}} às {{5}}\nLocal: {{6}}\n\n" +
-          "Responda pelos botões abaixo.",
+          "Olá, {{1}}! Aqui é a Secretaria de Saúde de {{2}}.\n\n" +
+          "Há uma consulta de {{3}} reservada para você:\n\nData: {{4}} às {{5}}\nLocal: {{6}}\n\n" +
+          "Você deseja ficar com essa vaga?",
         example: {
           body_text: [
             ["Arthur", "Penha", "Ultrassonografia obstétrica", "23/07/2026", "09:15", "Policlínica - Av. Eugênio Krause, 2265, Centro"],
@@ -233,8 +238,8 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
       {
         type: "BUTTONS",
         buttons: [
-          { type: "QUICK_REPLY", text: "Sim, tenho interesse" },
-          { type: "QUICK_REPLY", text: "Não tenho interesse" },
+          { type: "QUICK_REPLY", text: "Sim, quero a vaga" },
+          { type: "QUICK_REPLY", text: "Não, obrigado" },
         ],
       },
     ],

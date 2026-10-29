@@ -264,11 +264,11 @@ Os dados completos estão no painel administrativo.
 
 O texto do Template 2 acima é o original (`lembrete_vespera`). Desde 05/10/2026 o sistema envia o **`lembrete_vespera_v2`** (aprovado), que acrescenta "- A guia do exame" na lista "Leve com você" e a frase "Importante: confira na guia do exame as orientações e os documentos que precisam ser levados." antes da instrução de retirar a autorização. Motivo: pacientes iam ao exame sem documento. Texto exato em `src/lib/whatsapp-templates.ts` (`DEFAULT_TEMPLATES`). A variável `{{6}}` (Preparo) sem instrução cadastrada vira "sem preparo especial informado, confira as orientações e os documentos a levar na guia do exame" (`PREPARO_PADRAO`, `src/lib/templates.ts`).
 
-## Template 7 — `oferta_consulta` (fluxo OFERTA, 2026-10-29)
+## Template 7 — `oferta_vaga_consulta` (fluxo OFERTA, 2026-10-29)
 
-- **Nome**: `oferta_consulta` · UTILITY · pt_BR · sem cabeçalho/rodapé de marca
-- **Corpo**: "Prezado(a) {{1}}, Aqui é a Secretaria de Saúde de {{2}}. Você tem interesse em realizar a consulta de {{3}}? Data: {{4}} às {{5}} / Local: {{6}} / Responda pelos botões abaixo."
+- **Nome**: `oferta_vaga_consulta` · UTILITY · pt_BR · sem cabeçalho/rodapé de marca
+- **Corpo**: "Olá, {{1}}! Aqui é a Secretaria de Saúde de {{2}}. Há uma consulta de {{3}} reservada para você: Data: {{4}} às {{5}} / Local: {{6}} / Você deseja ficar com essa vaga?"
 - **Variáveis**: 1 paciente, 2 município, 3 procedimento, 4 data, 5 horário, 6 unidade + endereço
-- **Botões**: "Sim, tenho interesse" / "Não tenho interesse" (recusa = libera a vaga)
-- Submetido à WABA ativa em 29/10/2026 (`scripts/submeter-template-oferta.ts`), **PENDING**. A Meta pode reclassificar como MARKETING.
-- **Ainda não ligado ao envio**: falta `TEMPLATE_NAMES.OFERTA`, escolha por `messageFlow` na fila e `classifyReply` com os dois botões.
+- **Botões**: "Sim, quero a vaga" / "Não, obrigado" (mesmos do `convite_vaga_aberta`, já reconhecidos por `classifyReply`)
+- **Histórico**: a v1 `oferta_consulta` ("Você tem interesse em realizar a consulta?") foi reclassificada pela Meta de UTILITY para MARKETING em 29/10 (soa como oferta de serviço). A v2 segue o molde do `convite_vaga_aberta` (aprovado UTILITY). Submetida em 29/10, **PENDING** — conferir a categoria final quando sair da revisão.
+- **Ainda não ligado ao envio**: falta `TEMPLATE_NAMES.OFERTA`, escolha por `messageFlow` na fila e a classificação das respostas.

@@ -1,5 +1,5 @@
 /*
-  Submete o template `oferta_consulta` (fluxo OFERTA, 2026-10-29) à WABA ativa
+  Submete o template `oferta_vaga_consulta` (fluxo OFERTA, 2026-10-29) à WABA ativa
   do cliente 1 e lista o status dos templates. Idempotente: nome já existente
   é ignorado em silêncio (error_subcode 2388024). Mesma fonte de credencial do
   envio real (`getActiveCredentials()`).
@@ -18,8 +18,8 @@ async function main() {
       console.error("Sem conta WhatsApp ativa com wabaId — nada pra submeter.");
       return;
     }
-    const oferta = DEFAULT_TEMPLATES.filter((t) => t.name === "oferta_consulta");
-    console.log(`Submetendo oferta_consulta pra WABA ${credentials.wabaId}...`);
+    const oferta = DEFAULT_TEMPLATES.filter((t) => t.name === "oferta_vaga_consulta");
+    console.log(`Submetendo oferta_vaga_consulta pra WABA ${credentials.wabaId}...`);
     await submitTemplates(oferta, credentials.wabaId, credentials.accessToken);
 
     const statuses = await getTemplateStatuses(credentials.wabaId, credentials.accessToken);
