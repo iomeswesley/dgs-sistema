@@ -263,3 +263,12 @@ Os dados completos estão no painel administrativo.
 ## Nota 2026-10-05 — Template 2 em uso é o `lembrete_vespera_v2`
 
 O texto do Template 2 acima é o original (`lembrete_vespera`). Desde 05/10/2026 o sistema envia o **`lembrete_vespera_v2`** (aprovado), que acrescenta "- A guia do exame" na lista "Leve com você" e a frase "Importante: confira na guia do exame as orientações e os documentos que precisam ser levados." antes da instrução de retirar a autorização. Motivo: pacientes iam ao exame sem documento. Texto exato em `src/lib/whatsapp-templates.ts` (`DEFAULT_TEMPLATES`). A variável `{{6}}` (Preparo) sem instrução cadastrada vira "sem preparo especial informado, confira as orientações e os documentos a levar na guia do exame" (`PREPARO_PADRAO`, `src/lib/templates.ts`).
+
+## Template 7 — `oferta_consulta` (fluxo OFERTA, 2026-10-29)
+
+- **Nome**: `oferta_consulta` · UTILITY · pt_BR · sem cabeçalho/rodapé de marca
+- **Corpo**: "Prezado(a) {{1}}, Aqui é a Secretaria de Saúde de {{2}}. Você tem interesse em realizar a consulta de {{3}}? Data: {{4}} às {{5}} / Local: {{6}} / Responda pelos botões abaixo."
+- **Variáveis**: 1 paciente, 2 município, 3 procedimento, 4 data, 5 horário, 6 unidade + endereço
+- **Botões**: "Sim, tenho interesse" / "Não tenho interesse" (recusa = libera a vaga)
+- Submetido à WABA ativa em 29/10/2026 (`scripts/submeter-template-oferta.ts`), **PENDING**. A Meta pode reclassificar como MARKETING.
+- **Ainda não ligado ao envio**: falta `TEMPLATE_NAMES.OFERTA`, escolha por `messageFlow` na fila e `classifyReply` com os dois botões.

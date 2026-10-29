@@ -208,6 +208,37 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  {
+    // Fluxo OFERTA (cliente novo, 2026-10-29): em vez de confirmar uma consulta
+    // já marcada, a secretaria OFERECE o horário e o paciente diz se tem
+    // interesse. Sem "DGS" no texto e sem rodapé de marca — a apresentação é a
+    // própria Secretaria ({{2}} = município). "Não tenho interesse" é recusa
+    // (libera a vaga), "Sim, tenho interesse" é aceite.
+    name: "oferta_consulta",
+    category: "UTILITY",
+    language: "pt_BR",
+    components: [
+      {
+        type: "BODY",
+        text:
+          "Prezado(a) {{1}},\n\nAqui é a Secretaria de Saúde de {{2}}.\n\n" +
+          "Você tem interesse em realizar a consulta de {{3}}?\n\nData: {{4}} às {{5}}\nLocal: {{6}}\n\n" +
+          "Responda pelos botões abaixo.",
+        example: {
+          body_text: [
+            ["Arthur", "Penha", "Ultrassonografia obstétrica", "23/07/2026", "09:15", "Policlínica - Av. Eugênio Krause, 2265, Centro"],
+          ],
+        },
+      },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "Sim, tenho interesse" },
+          { type: "QUICK_REPLY", text: "Não tenho interesse" },
+        ],
+      },
+    ],
+  },
 ];
 
 /**
