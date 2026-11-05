@@ -934,15 +934,19 @@ export function Listas() {
           const canDelete = true; // lista disparada também: o backend só recusa se algum paciente recebeu/respondeu
           return (
             <Link key={list.id} to={`/listas/${list.id}`} className="card flex flex-col p-[18px]">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                {/* `flex-1`, não só `min-w-0` — sem largura definida na
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                {/* No celular o título ocupa a largura toda e quebra em várias
+                    linhas (2026-11-05: cortava em poucos caracteres porque
+                    dividia a linha com Lembrete/status/Excluir); os controles
+                    descem pra uma linha própria. De sm pra cima volta lado a
+                    lado. `flex-1`, não só `min-w-0` — sem largura definida na
                     linha flex, o item cresce pro tamanho do próprio
                     conteúdo (nome de arquivo comprido) em vez de ser
                     contido pela tela, e o `truncate` do título não tem
                     caixa nenhuma pra cortar (achado pelo usuário em
                     2026-08-27, com print real do celular). */}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[17px] font-bold text-ink">
+                  <p className="break-words text-[17px] font-bold text-ink">
                     {list.originalName}
                     {list.isComplementary && (
                       <span className="ml-2 align-middle text-xs font-normal text-accent">complementar</span>
@@ -963,7 +967,7 @@ export function Listas() {
                     {list.uploadedBy.name} em {formatDate(list.createdAt)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex shrink-0 flex-wrap items-center gap-3">
                   <span
                     className="flex items-center gap-1.5"
                     title={list.remindersEnabled ? "Lembrete D-1 ligado nesta lista" : "Lembrete D-1 desligado nesta lista"}
