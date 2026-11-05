@@ -12,10 +12,10 @@ import { formatDateTime, formatPhone } from "../lib/format";
   o nome, ir em Conversas, colar na busca. Aqui é um clique no nome, dentro
   da própria tela da lista.
 
-  Não é a tela de Conversas inteira (essa continua existindo, com envio de
-  mensagem/template) — é só leitura + decidir confirmado/recusado, o que
-  cobre o motivo mais comum de abrir a conversa vindo da lista: conferir o
-  que a pessoa respondeu antes de mexer no status dela.
+  Leitura + responder com texto livre (2026-11-05, pedido do cliente) +
+  decidir confirmado/recusado. Fora da janela de 24h o texto livre é
+  recusado pelo backend (409) — reabrir a conversa com template continua só
+  na tela de Conversas.
 */
 
 interface ThreadMessage {
@@ -52,6 +52,8 @@ export function PatientConversationModal({
     [phone]
   );
   const [busy, setBusy] = useState(false);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,7 +74,26 @@ export function PatientConversationModal({
   useEffect(() => {
     // Cada agendamento aberto começa sem erro de uma tentativa anterior.
     setError(null);
+    setText("");
   }, [appointment?.id]);
+
+  async function sendText() {
+    const message = text.trim();
+    if (!phone || !message) return;
+    setSending(true);
+    setError(null);
+    try {
+      await api.post(`/api/conversations/${phone}/messages`, { text: message });
+      setText("");
+      thread.reload();
+    } catch (err) {
+      // Fora da janela de 24h a Meta só aceita template — o backend responde
+      // 409 explicando; a mensagem chega aqui como está.
+      setError(err instanceof Error ? err.message : "Falha ao enviar.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   if (!open || !appointment) return null;
 
@@ -149,6 +170,33 @@ export function PatientConversationModal({
             <div className="mb-2">
               <ErrorNote message={error} />
             </div>
+          )}
+          {phone && (
+            <form
+              className="mb-3 flex items-end gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendText();
+              }}
+            >
+              <textarea
+                className="field min-h-[40px] flex-1 resize-none"
+                rows={2}
+                placeholder="Escreva uma resposta…"
+                value={text}
+                disabled={sending}
+                onChange={(event) => setText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendText();
+                  }
+                }}
+              />
+              <button type="submit" className="btn btn-primary px-4 py-2 text-sm" disabled={sending || !text.trim()}>
+                {sending ? "Enviando…" : "Enviar"}
+              </button>
+            </form>
           )}
           <div className="flex items-center justify-between gap-3">
             <div>

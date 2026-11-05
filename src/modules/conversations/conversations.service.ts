@@ -207,13 +207,20 @@ export async function listConversations(limit = 200, search?: string): Promise<C
   // pacientes hoje, consulta leve, só nome+telefone) e compara em JS com o
   // mesmo normalizador usado no resto do sistema pra nome livre
   // (`normalizeForMatch`, já usado no preview de upload de lista).
-  const normalizedQuery = normalizeForMatch(query);
+  // Por PALAVRA, não pela frase inteira: o nome digitado inteiro ("PRISCILA
+  // DAIANE WANDREY") não achava quem tinha espaço duplo no cadastro (comum
+  // em nome vindo de PDF) ou pontuação/ordem diferente, enquanto só o
+  // primeiro nome achava (relato do cliente, 2026-11-05). Agora cada palavra
+  // digitada precisa aparecer no nome, em qualquer ordem, espaço ignorado.
+  const tokens = normalizeForMatch(query).split(/[\s.,;-]+/).filter(Boolean);
   const allPatients = await prisma.patient.findMany({ select: { name: true, phones: true } });
-  const patients = allPatients.filter(
-    (p) =>
-      normalizeForMatch(p.name).includes(normalizedQuery) ||
+  const patients = allPatients.filter((p) => {
+    const name = normalizeForMatch(p.name);
+    return (
+      (tokens.length > 0 && tokens.every((token) => name.includes(token))) ||
       (digits.length >= 4 && p.phones.some((phone) => phone.includes(digits)))
-  );
+    );
+  });
   const candidatePhones = new Set(patients.flatMap((p) => p.phones.flatMap((phone) => phoneCandidates(phone))));
 
   // Nem paciente cadastrado bateu, nem dígito suficiente pra buscar direto
