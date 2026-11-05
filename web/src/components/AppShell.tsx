@@ -80,7 +80,7 @@ export function AppShell() {
         <img src="/regulacao-logo-escuro.png" alt="RegulAção" className="h-auto w-[180px]" />
       </div>
       {activeClient && (
-        <div className="truncate px-2.5 pb-2.5 text-[12px] text-[#8FA0C4]">{activeClient.name}</div>
+        <div className="shrink-0 truncate px-2.5 pb-3 text-[13px] leading-5 text-[#8FA0C4]">{activeClient.name}</div>
       )}
 
       <ul className="flex flex-col gap-0.5">
