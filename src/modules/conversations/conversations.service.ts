@@ -213,7 +213,7 @@ export async function listConversations(limit = 200, search?: string): Promise<C
   // primeiro nome achava (relato do cliente, 2026-11-05). Agora cada palavra
   // digitada precisa aparecer no nome, em qualquer ordem, espaço ignorado.
   const tokens = normalizeForMatch(query).split(/[\s.,;-]+/).filter(Boolean);
-  const allPatients = await prisma.patient.findMany({ select: { name: true, phones: true } });
+  const allPatients = await prisma.patient.findMany({ select: { id: true, name: true, phones: true } });
   const patients = allPatients.filter((p) => {
     const name = normalizeForMatch(p.name);
     return (
@@ -221,18 +221,39 @@ export async function listConversations(limit = 200, search?: string): Promise<C
       (digits.length >= 4 && p.phones.some((phone) => phone.includes(digits)))
     );
   });
-  const candidatePhones = new Set(patients.flatMap((p) => p.phones.flatMap((phone) => phoneCandidates(phone))));
+  const patientIds = patients.map((p) => p.id);
+  // Os telefones do CADASTRO do paciente nem sempre incluem o número que de
+  // fato recebeu a mensagem: o reenvio/correção de telefone grava o número
+  // novo só no agendamento (`selectedPhone`/`phones`). Sem olhar isso, quem
+  // teve o telefone corrigido não era achado pelo nome (relato do cliente,
+  // 2026-11-05 — a conversa existia, mas a busca dava "nenhuma encontrada").
+  const appointmentPhones =
+    patientIds.length > 0
+      ? await prisma.appointment.findMany({
+          where: { patientId: { in: patientIds } },
+          select: { phones: true, selectedPhone: true },
+        })
+      : [];
+  const candidatePhones = new Set([
+    ...patients.flatMap((p) => p.phones.flatMap((phone) => phoneCandidates(phone))),
+    ...appointmentPhones.flatMap((a) =>
+      [...a.phones, ...(a.selectedPhone ? [a.selectedPhone] : [])].flatMap((phone) => phoneCandidates(phone))
+    ),
+  ]);
 
   // Nem paciente cadastrado bateu, nem dígito suficiente pra buscar direto
   // no telefone da mensagem — nada a fazer (evita um `OR: []` vazio, que o
   // Prisma não aceita).
-  if (candidatePhones.size === 0 && digits.length < 4) return [];
+  if (candidatePhones.size === 0 && patientIds.length === 0 && digits.length < 4) return [];
 
   const messages = await prisma.whatsappMessage.findMany({
     where: {
       ...NOT_FAILED_OUTBOUND,
       OR: [
         ...(candidatePhones.size > 0 ? [{ phone: { in: [...candidatePhones] } }] : []),
+        // Mensagem já vinculada a um agendamento desse paciente, qualquer
+        // que seja o formato do telefone gravado nela.
+        ...(patientIds.length > 0 ? [{ appointment: { patientId: { in: patientIds } } }] : []),
         // Cobre também quem já escreveu mas nunca virou Patient (nenhum
         // agendamento vinculado ainda) — busca direto pelo dígito no
         // telefone salvo da mensagem.

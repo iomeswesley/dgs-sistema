@@ -54,6 +54,10 @@
   --wa-bubble-out: var(--wa-out);
   --wa-bubble-in: var(--wa-in);
   --wa-input-bar: #f0f2f5;
+  /* Bolhas são claras nos dois temas, então o texto também é fixo (escuro) —
+     usar --ink aqui deixava a mensagem branca sobre branco no tema escuro. */
+  --wa-text: #111b21;
+  --wa-time: #667781;
 
   --shadow-hover: var(--shadow-pop);
 }
@@ -101,6 +105,8 @@
   --color-wa-bubble-out: var(--wa-bubble-out);
   --color-wa-bubble-in: var(--wa-bubble-in);
   --color-wa-input-bar: var(--wa-input-bar);
+  --color-wa-text: var(--wa-text);
+  --color-wa-time: var(--wa-time);
 
   --color-info: var(--info-text);
   --color-info-soft: var(--info-bg);

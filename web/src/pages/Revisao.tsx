@@ -1831,7 +1831,7 @@ export function Revisao() {
         {approvePreviewLoading && <Spinner />}
         {approvePreview && (
           <div className="rounded-lg bg-wa-bg p-4">
-            <div className="max-w-[85%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-ink shadow-sm">
+            <div className="max-w-[85%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-wa-text shadow-sm">
               <p className="whitespace-pre-wrap">{approvePreview.text}</p>
             </div>
             <p className="mt-2 text-xs text-ink-faint">
@@ -2063,7 +2063,7 @@ export function Revisao() {
             {settingsPreviewLoading && <span className="font-normal text-ink-faint">atualizando…</span>}
           </p>
           {settingsPreview ? (
-            <div className="max-w-[90%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-ink shadow-sm">
+            <div className="max-w-[90%] rounded-lg rounded-tl-none bg-wa-bubble-in px-3 py-2 text-sm text-wa-text shadow-sm">
               <p className="whitespace-pre-wrap">{settingsPreview.text}</p>
             </div>
           ) : (

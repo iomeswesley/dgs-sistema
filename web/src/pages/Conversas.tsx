@@ -279,7 +279,7 @@ export function Conversas() {
                 <ErrorNote message={conversations.error} />
               </div>
             )}
-            {conversations.data?.conversations.length === 0 && !conversations.loading && (
+            {conversations.data?.conversations.length === 0 && !conversations.loading && !debouncedSearch && (
               <p className="p-4 text-sm text-ink-muted">Nenhuma conversa ainda.</p>
             )}
             {conversations.data && filteredConversations.length === 0 && search && (
@@ -379,7 +379,7 @@ export function Conversas() {
                         m.direction === "ENVIADA"
                           ? "rounded-tr-none bg-wa-bubble-out"
                           : "rounded-tl-none bg-wa-bubble-in"
-                      } text-ink`}
+                      } text-wa-text`}
                     >
                       {m.hasMedia && (
                         <MediaPreview
@@ -391,7 +391,7 @@ export function Conversas() {
                       <p className="whitespace-pre-wrap">
                         {m.body ?? m.buttonPayload ?? (m.template ? `[modelo: ${m.template}]` : "—")}
                       </p>
-                      <p className="mt-1 text-right text-xs text-ink-faint">
+                      <p className="mt-1 text-right text-xs text-wa-time">
                         {formatDateTime(m.createdAt)}
                       </p>
                     </div>

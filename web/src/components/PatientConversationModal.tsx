@@ -143,7 +143,7 @@ export function PatientConversationModal({
                 <div
                   className={`max-w-[80%] rounded-lg px-3 py-2 text-sm shadow-sm ${
                     m.direction === "ENVIADA" ? "rounded-tr-none bg-wa-bubble-out" : "rounded-tl-none bg-wa-bubble-in"
-                  } text-ink`}
+                  } text-wa-text`}
                 >
                   {m.hasMedia && (
                     <MediaPreview
@@ -155,7 +155,7 @@ export function PatientConversationModal({
                   <p className="whitespace-pre-wrap">
                     {m.body ?? m.buttonPayload ?? (m.template ? `[modelo: ${m.template}]` : "—")}
                   </p>
-                  <p className="mt-1 text-right text-xs text-ink-faint">{formatDateTime(m.createdAt)}</p>
+                  <p className="mt-1 text-right text-xs text-wa-time">{formatDateTime(m.createdAt)}</p>
                 </div>
               </div>
             ))}
