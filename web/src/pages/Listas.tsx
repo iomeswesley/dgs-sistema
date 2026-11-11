@@ -934,7 +934,7 @@ export function Listas() {
           const canDelete = true; // lista disparada também: o backend só recusa se algum paciente recebeu/respondeu
           return (
             <Link key={list.id} to={`/listas/${list.id}`} className="card flex flex-col p-[18px]">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-3">
                 {/* No celular o título ocupa a largura toda e quebra em várias
                     linhas (2026-11-05: cortava em poucos caracteres porque
                     dividia a linha com Lembrete/status/Excluir); os controles
@@ -945,7 +945,7 @@ export function Listas() {
                     contido pela tela, e o `truncate` do título não tem
                     caixa nenhuma pra cortar (achado pelo usuário em
                     2026-08-27, com print real do celular). */}
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0">
                   <p className="break-words text-[17px] font-bold text-ink">
                     {list.originalName}
                     {list.isComplementary && (
@@ -961,10 +961,16 @@ export function Listas() {
                       </span>
                     )}
                   </p>
-                  <p className="mt-0.5 text-sm text-ink-muted">
-                    {list.municipality.name}
-                    {list.agenda && ` · agenda de ${formatCalendarDate(list.agenda.date)}`} · enviada por{" "}
-                    {list.uploadedBy.name} em {formatDate(list.createdAt)}
+                  <p className="mt-0.5 flex flex-wrap gap-x-1.5 text-sm text-ink-muted">
+                    {/* Cada trecho é uma unidade que não quebra no meio
+                        ("agenda de" separado da data ficava estranho). */}
+                    <span className="whitespace-nowrap">{list.municipality.name}</span>
+                    {list.agenda && (
+                      <span className="whitespace-nowrap">· agenda de {formatCalendarDate(list.agenda.date)}</span>
+                    )}
+                    <span className="whitespace-nowrap">
+                      · enviada por {list.uploadedBy.name} em {formatDate(list.createdAt)}
+                    </span>
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-3">
