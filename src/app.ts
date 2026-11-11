@@ -26,6 +26,7 @@ import { cancellationsRouter } from "@/modules/cancellations/cancellations.route
 import { settingsRouter } from "@/modules/settings/settings.routes.js";
 import { adminRouter } from "@/modules/admin/admin.routes.js";
 import { leadsRouter } from "@/modules/leads/leads.routes.js";
+import { externalRouter } from "@/modules/external/external.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia } from "@/modules/queue/cadence.service.js";
@@ -256,6 +257,7 @@ export function createApp() {
   app.use(settingsRouter);
   app.use(adminRouter);
   app.use(leadsRouter);
+  app.use(externalRouter);
 
   app.use("/api", notFoundHandler);
 

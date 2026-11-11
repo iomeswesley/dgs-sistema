@@ -2,6 +2,14 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-11-11 — integração com ChatGPT (API só de leitura, só números)
+
+- **Pedido**: Lucas Primo (dono da DGS) quer acompanhar o sistema por um GPT no ChatGPT. Decisão do usuário: **só números** por enquanto (nada de nome/telefone de paciente), escopo = cliente DGS.
+- **Token por cliente** (`ApiToken`, migration `20261111000000_api_tokens`, aditiva; modelo isolado em `TENANT_ISOLATED_MODELS`): `rgl_` + 40 chars aleatórios, banco guarda só SHA-256 + prefixo; revogar = `revokedAt`. Tela em **Equipe → Integração com ChatGPT** (`ChatGptIntegration.tsx`): gerar (token aparece 1 vez, com passo a passo + instruções prontas pro GPT), revogar, último uso e nº de consultas.
+- **API** (`src/modules/external/`, `Authorization: Bearer`, `requireApiToken` acha o token em `runAsSuperAdmin` e abre `runWithClient` do cliente dele; 300 consultas/h por token): `GET /api/externo/resumo` (atividade + pendências, versão só-números do `status-diario.ts`), `/agendamentos` (por data da CONSULTA, por agenda), `/listas`, `/indicadores` (mesma `buildIndicators` da tela, sem financeiro). `GET /api/externo/openapi.json` é público (só descreve) — é a URL que se importa em "Ações" do GPT; auth = Chave de API / Bearer.
+- Cada consulta grava `AuditLog` `api_external_read` (fora da lista padrão de "Últimos lançamentos" pra não enterrar lançamento de verdade; a contagem aparece no token). Gerar/revogar: `create_api_token`/`revoke_api_token`.
+- Testado ponta a ponta num Postgres local descartável com dado fictício (401 sem token/revogado, isolamento entre 2 clientes, nenhum nome/telefone na resposta). **Não testado ainda com o ChatGPT de verdade.**
+
 ## Sessão de 2026-10-27 — marca RegulAção + domínio novo regulacao.vercel.app
 
 - **Marca**: logo RegulAção (sem fundo, "Regul" em branco) no login e no menu, aba "RegulAção", ícone = "A" vermelho com seta em fundo branco (favicon/192/512/apple-touch). Políticas de privacidade dizem "RegulAção", mas o **responsável pelos dados continua a D'Artibale Gestão em Saúde (DGS)** (decisão do usuário).

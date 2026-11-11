@@ -290,7 +290,11 @@ teamRouter.get(
         entity: query.entity,
         entityId: query.entityId,
         userId: query.userId,
-        action: query.action,
+        // Consulta da API externa (ChatGPT) é leitura, não lançamento —
+        // fora da lista padrão pra não enterrar alteração de verdade
+        // (atendidos/guias). Contagem por token fica em Integração com
+        // ChatGPT; dá pra ver uma a uma pedindo `action=api_external_read`.
+        action: query.action ?? { not: "api_external_read" },
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,

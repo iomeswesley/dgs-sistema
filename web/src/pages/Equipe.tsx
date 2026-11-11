@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { formatDateTime } from "../lib/format";
 import { useSession } from "../lib/session";
+import { ChatGptIntegration } from "../components/ChatGptIntegration";
 
 interface TeamUser {
   id: number;
@@ -48,6 +49,8 @@ const ACTION_LABEL: Record<string, string> = {
   activate_user: "reativou usuário",
   deactivate_user: "desativou usuário",
   change_own_password: "trocou a própria senha",
+  create_api_token: "gerou token do ChatGPT",
+  revoke_api_token: "revogou token do ChatGPT",
 };
 
 const ENTITY_LABEL: Record<string, string> = {
@@ -62,6 +65,7 @@ const ENTITY_LABEL: Record<string, string> = {
   DoctorProcedure: "valores do médico",
   Agenda: "agenda",
   Patient: "paciente",
+  ApiToken: "token de integração",
 };
 
 export function Equipe() {
@@ -302,6 +306,8 @@ export function Equipe() {
           </Table>
         </div>
       )}
+
+      <ChatGptIntegration />
 
       <h2 className="eyebrow mb-2">Últimos lançamentos</h2>
       <p className="mb-3 text-sm text-ink-muted">
