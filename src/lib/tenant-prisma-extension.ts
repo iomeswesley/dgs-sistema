@@ -53,6 +53,7 @@ export const TENANT_ISOLATED_MODELS = [
   "ClosingAttachment",
   "AuditLog",
   "AppSettings",
+  "ApiToken",
 ] as const;
 
 export type TenantIsolatedModel = (typeof TENANT_ISOLATED_MODELS)[number];

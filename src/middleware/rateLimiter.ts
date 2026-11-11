@@ -59,3 +59,12 @@ export async function passwordResetRateLimiter(req: Request, res: Response, next
     next(err);
   }
 }
+
+// API externa (GPT do ChatGPT, 2026-11-11) — por token, não por IP: as
+// chamadas vêm dos servidores da OpenAI, com IPs variados e compartilhados.
+const EXTERNAL_API_WINDOW_MS = 60 * 60_000;
+const MAX_EXTERNAL_API_REQUESTS = 300;
+
+export async function externalApiAllowed(tokenId: number): Promise<boolean> {
+  return checkAndRecordHit(`api:${tokenId}`, EXTERNAL_API_WINDOW_MS, MAX_EXTERNAL_API_REQUESTS);
+}

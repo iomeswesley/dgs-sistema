@@ -63,6 +63,7 @@ model Client {
   closingAttachments  ClosingAttachment[]
   auditLogs           AuditLog[]
   settings            AppSettings?
+  apiTokens           ApiToken[]
 
   @@map("clients")
 }
@@ -126,6 +127,7 @@ model User {
   attendedClosings          DailyClosing[]      @relation("ClosingAttendedBy")
   paidClosings              DailyClosing[]      @relation("ClosingPaidBy")
   connectedWhatsappAccounts WhatsappAccount[]
+  createdApiTokens          ApiToken[]
 
   @@map("users")
 }
@@ -773,6 +775,29 @@ model AuditLog {
 // Contato deixado no formulário da landing page pública (RegulAção).
 // Da plataforma, não de um cliente — por isso sem clientId e fora de
 // TENANT_ISOLATED_MODELS; só o super admin enxerga, em /admin.
+// Token de acesso só de leitura pra integração externa (ex.: GPT do ChatGPT
+// do dono da DGS, pedido de 2026-11-11). Preso a UM cliente; só números
+// agregados saem por ele (nunca nome/telefone de paciente). O token em si
+// nunca é guardado — só o SHA-256 (`tokenHash`) e o começo (`tokenPrefix`)
+// pra a tela conseguir mostrar qual é qual. Revogar = `revokedAt`.
+model ApiToken {
+  id          Int       @id @default(autoincrement())
+  clientId    Int
+  createdById Int?
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  client    Client @relation(fields: [clientId], references: [id])
+  createdBy User?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@map("api_tokens")
+}
+
 model ContactLead {
   id           Int       @id @default(autoincrement())
   createdAt    DateTime  @default(now())
