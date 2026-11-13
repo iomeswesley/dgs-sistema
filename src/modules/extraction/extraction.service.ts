@@ -6,6 +6,7 @@ import { parseSisreg } from "./parsers/sisreg.js";
 import { parseTabular } from "./parsers/tabular.js";
 import { parseIds } from "./parsers/ids.js";
 import { parseCisamve } from "./parsers/cisamve.js";
+import { parseIpm } from "./parsers/ipm.js";
 import { ExcelReadError, parseExcel } from "./parsers/excel.js";
 import { EXCEL_MIME } from "./excel-layout.js";
 import { extractionResultSchema, type ExtractionResult } from "./extraction.schema.js";
@@ -69,7 +70,9 @@ export async function extractList(
             ? parseIds(text)
             : format === "CISAMVE"
               ? parseCisamve(text)
-              : {
+              : format === "IPM"
+                ? parseIpm(text)
+                : {
                   sourceFormat: "OUTRO",
                   municipality: null,
                   executingUnit: null,
@@ -77,7 +80,7 @@ export async function extractList(
                   procedure: null,
                   rows: [],
                   warnings: [
-                    "Formato do arquivo não reconhecido (não é SISREG, CELK, IDS Saúde, CISAMVE nem tabular). Cadastre os agendamentos manualmente nesta lista.",
+                    "Formato do arquivo não reconhecido (não é SISREG, CELK, IDS Saúde, CISAMVE, IPM nem tabular). Cadastre os agendamentos manualmente nesta lista.",
                   ],
                   unrecognized: [],
                 };

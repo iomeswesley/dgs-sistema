@@ -533,7 +533,7 @@ export function Listas() {
             </span>
           </span>
           <span className="flex flex-wrap gap-1.5">
-            {["SISREG", "CELK", "IDS Saúde", "CISAMVE", "Excel"].map((format) => (
+            {["SISREG", "CELK", "IDS Saúde", "CISAMVE", "IPM", "Excel"].map((format) => (
               <span key={format} className="rounded-full bg-[var(--surface-muted)] px-2.5 py-[3px] text-[12px] font-bold text-[var(--text-2)]">
                 {format}
               </span>
@@ -841,7 +841,7 @@ export function Listas() {
       {allLists.length === 0 && !lists.loading && (
         <EmptyState
           title="Nenhuma lista ainda"
-          description="Arraste o PDF do dia exportado do SISREG, CELK, IDS Saúde ou CISAMVE. O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
+          description="Arraste o PDF do dia exportado do SISREG, CELK, IDS Saúde, CISAMVE ou IPM (Atende.Net). O sistema lê o arquivo e deixa tudo pronto para a equipe conferir antes de qualquer disparo."
         />
       )}
 

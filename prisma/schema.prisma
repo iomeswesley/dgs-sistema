@@ -854,6 +854,10 @@ enum SourceFormat {
   // Relatório "Agendamento de Exames" do CISAMVE (exame, data, horário, nome;
   // sem telefone). Achado em 2026-10-16 (Doppler, Vale Europeu).
   CISAMVE
+  // Relatório "Relação da Agenda para Contato" do Atende.Net (IPM Sistemas):
+  // uma linha por paciente, coluna Celular quebrando em várias linhas.
+  // Achado em 2026-11-13 (Camboriú, psiquiatria).
+  IPM
   // Planilha no modelo oficial da plataforma (modelo-importacao-dgs.xlsx) —
   // o cliente converte o Excel da secretaria pra esse formato padrão.
   EXCEL

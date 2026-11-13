@@ -2,6 +2,12 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-11-13 — formato novo de extração "IPM" (Atende.Net, Camboriú)
+
+- **Pedido** (Luciano/DGS): Camboriú mandou a agenda de psiquiatria (Dr. Luiz Felipe, 16/11/2026, 27 pacientes) no relatório **"Relação da Agenda para Contato" do Atende.Net (IPM Sistemas, módulo SRG)**. Caía em `OUTRO`. Uma linha por paciente: `NOME IDADE <telefones> DD/MM/AAAA HH:MM CONVÊNIO SITUAÇÃO`; cabeçalho com `Unidade Executante:` e `Especialidade: X / Profissional: Y` (a especialidade vira o procedimento). Sem CNS/nascimento.
+- **`parsers/ipm.ts`** (`SourceFormat.IPM`, migration `20261113000000_ipm_source_format`, aditiva, aplicada pelo deploy): paciente = linhas desde "NOME IDADE" até a linha com data/hora — a coluna Celular quebra em várias linhas quando tem mais de um número, e a quebra de página pode cair no meio (cabeçalho/rodapé filtrado antes). Telefone em qualquer máscara (com/sem parênteses e hífen, vírgula entre números, celular sem o 9º dígito): `splitPhones()` separa por quantidade de dígitos, não por máscara — "(" sempre abre número novo, pedaço com 10+ dígitos é um número, senão junta até 10–11. Descarta placeholder `(99)99999-9999` e repetido. Idade nunca vira telefone. Situação ≠ "Agendado" (cancelado etc.) entra com confiança 0,6 e nota. Várias seções (especialidade/profissional) → cada linha leva a sua + aviso (mesmo cuidado do CELK). Linha que não fecha paciente vira "Registro não reconhecido". Detecção: "IPM Sistemas" + "Relação da Agenda para Contato" (antes do teste de SISREG).
+- Validado com o PDF real pelo `extractList` de verdade: 27/27, todos com celular válido, sem aviso. 10 testes novos (dados fictícios). Commit na branch `claude/brave-cori-k8mnmx` (sessão na nuvem) — **vai pro ar só quando entrar no `master`**.
+
 ## Sessão de 2026-11-11 — integração com ChatGPT (API só de leitura, só números)
 
 - **Pedido**: Lucas Primo (dono da DGS) quer acompanhar o sistema por um GPT no ChatGPT. Decisão do usuário: **só números** por enquanto (nada de nome/telefone de paciente), escopo = cliente DGS.

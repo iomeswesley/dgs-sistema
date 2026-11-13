@@ -17,6 +17,9 @@ export function detectFormat(text: string): ExtractionResult["sourceFormat"] {
   if (/Agendamento de Exames/i.test(text) && /Descri[cç][aã]o do Exame\s+Data\s+Hor[aá]rio\s+Nome do Usu[aá]rio/i.test(text)) {
     return "CISAMVE";
   }
+  // "Relação da Agenda para Contato" do Atende.Net (IPM Sistemas), Camboriú 2026-11-13.
+  // O identificador do relatório começa com "SRG" — checar antes do SISREG por garantia.
+  if (/IPM Sistemas/i.test(text) && /Rela[cç][aã]o da Agenda para Contato/i.test(text)) return "IPM";
   if (/SISREG/i.test(text) || /PROPRIEDADES DA AGENDA/i.test(text)) return "SISREG";
   return "OUTRO";
 }
