@@ -273,10 +273,10 @@ O texto do Template 2 acima é o original (`lembrete_vespera`). Desde 05/10/2026
 - **Histórico**: a v1 `oferta_consulta` ("Você tem interesse em realizar a consulta?") foi reclassificada pela Meta de UTILITY para MARKETING em 29/10 (soa como oferta de serviço). A v2 segue o molde do `convite_vaga_aberta` (aprovado UTILITY). Submetida em 29/10, **PENDING** — conferir a categoria final quando sair da revisão.
 - **Ainda não ligado ao envio**: falta `TEMPLATE_NAMES.OFERTA`, escolha por `messageFlow` na fila e a classificação das respostas.
 
-## Template 8 — `aviso_agenda_medico` (aviso de agenda ao MÉDICO na véspera, 2026-11-14)
+## Template 8 — `aviso_agenda_medico_v2` (aviso de agenda ao MÉDICO na véspera, 2026-11-14)
 
 - **Pedido**: Luciano/Lucas (DGS) — hoje mandam print da agenda pro médico uma semana antes; o sistema passa a lembrar o médico na véspera, de manhã, com o total de pacientes.
-- **Nome**: `aviso_agenda_medico` · UTILITY · pt_BR · sem botões. Texto do cliente, com 2 ajustes: "Camboriú" do título virou variável e o "Dra." fixo virou parte do {{1}} (tratamento Dr./Dra. vem do cadastro do médico). A linha "Pacientes agendados" chegou a entrar e foi tirada a pedido do usuário (14/11, antes de submeter). Assinatura "Gestão **em** Saúde" (igual ao resto do sistema; o cliente escreveu "de").
+- **Nome**: `aviso_agenda_medico_v2` · UTILITY · pt_BR · sem botões. Texto do cliente, com 3 ajustes: "Camboriú" do título virou variável, o "Dra." fixo virou parte do {{1}} (tratamento Dr./Dra. vem do cadastro do médico) e a linha do total de pacientes. **Histórico**: a v1 (`aviso_agenda_medico`, sem o total) foi submetida em 14/11 e ficou PENDING; no mesmo dia o cliente pediu o total de volta ("mesmo que não esteja confirmado — o paciente às vezes não confirma mas vai"). Template em análise não pode ser editado, então a v2 vai com nome novo; a v1 não é usada nem resubmetida (saiu do `DEFAULT_TEMPLATES`). Assinatura "Gestão **em** Saúde" (igual ao resto do sistema; o cliente escreveu "de").
 - **Cabeçalho**: "Confirmação de Agenda - {{1}}" (município)
 - **Corpo**:
 
@@ -288,6 +288,7 @@ Informamos os dados da sua agenda:
 📅 *Data:* {{2}}
 🩺 *Procedimento:* {{3}}
 📍 *Local:* {{4}}
+👥 *Pacientes agendados:* {{5}}
 
 Por gentileza, verifique as informações da agenda.
 
@@ -295,6 +296,6 @@ Atenciosamente,
 *Equipe D'Artibale Gestão em Saúde*
 ```
 
-- **Variáveis**: 1 tratamento + nome do médico ("Dr. Luiz Felipe"), 2 data com dia da semana ("segunda-feira, 16/11/2026"), 3 procedimento da agenda (sem procedimento na agenda: os das listas, até 3), 4 unidade + endereço (sem unidade: município). Agenda sem nenhum paciente (ou toda cancelada) não gera aviso automático.
+- **Variáveis**: 1 tratamento + nome do médico ("Dr. Luiz Felipe"), 2 data com dia da semana ("segunda-feira, 16/11/2026"), 3 procedimento da agenda (sem procedimento na agenda: os das listas, até 3), 4 unidade + endereço (sem unidade: município), 5 total de agendamentos da agenda (ou das listas dela), confirmados ou não, menos os cancelados. Agenda sem nenhum paciente (ou toda cancelada) não gera aviso automático.
 - **Cliente que não é a DGS**: `brandTemplates()` troca a assinatura pelo `senderName`.
 - **Submissão**: entra em `DEFAULT_TEMPLATES` (WABA nova submete sozinha). WABA que já existia: Configurações → WhatsApp → "Enviar pra aprovação" ao lado do template.

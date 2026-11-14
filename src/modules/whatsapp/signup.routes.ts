@@ -334,7 +334,7 @@ function buildTestParams(template: TemplateKind) {
     return { body: [procedure.toUpperCase(), date, "Motivo de teste"] };
   }
   if (template === "AVISO_MEDICO") {
-    return { header: [municipality], body: ["Dr. Teste", date, procedure, local] };
+    return { header: [municipality], body: ["Dr. Teste", date, procedure, local, "25"] };
   }
   return { header: [municipality], body: [firstName, municipality, date, time, procedure, local] };
 }

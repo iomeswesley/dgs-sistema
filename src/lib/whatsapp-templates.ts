@@ -247,9 +247,12 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
   {
     // Aviso da agenda pro MÉDICO na véspera (pedido do cliente, 2026-11-14 —
     // texto dele, com o município virando variável no título, o "Dra." fixo
-    // virando parte do {{1}}; sem o total de pacientes, por decisão do usuário).
-    // Vai de manhã, um dia antes de cada agenda (modules/doctor-notice).
-    name: "aviso_agenda_medico",
+    // virando parte do {{1}} e o total de pacientes da agenda, confirmados ou
+    // não). Vai de manhã, um dia antes de cada agenda (modules/doctor-notice).
+    // v2: a v1 (`aviso_agenda_medico`, sem o total) chegou a ser submetida em
+    // 14/11 e o cliente pediu o total de volta — template em análise na Meta
+    // não pode ser editado, então este vai com nome novo; a v1 fica esquecida.
+    name: "aviso_agenda_medico_v2",
     category: "UTILITY",
     language: "pt_BR",
     components: [
@@ -263,7 +266,7 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
         type: "BODY",
         text:
           "Olá, *{{1}}*!\n\nInformamos os dados da sua agenda:\n\n" +
-          "📅 *Data:* {{2}}\n🩺 *Procedimento:* {{3}}\n📍 *Local:* {{4}}\n\n" +
+          "📅 *Data:* {{2}}\n🩺 *Procedimento:* {{3}}\n📍 *Local:* {{4}}\n👥 *Pacientes agendados:* {{5}}\n\n" +
           "Por gentileza, verifique as informações da agenda.\n\n" +
           "Atenciosamente,\n*Equipe D'Artibale Gestão em Saúde*",
         example: {
@@ -273,6 +276,7 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
               "segunda-feira, 16/11/2026",
               "Consulta em psiquiatria",
               "Policlínica - Av. Eugênio Krause, 2265, Centro",
+              "25",
             ],
           ],
         },
@@ -398,7 +402,7 @@ export function brandTemplates(templates: TemplateDefinition[], senderName?: str
       .join("Aqui é a Secretaria de Saúde de {{2}}.")
       .split(DGS_FOOTER)
       .join(JSON.stringify(sender).slice(1, -1))
-      // Assinatura do aviso ao médico (aviso_agenda_medico) fica no corpo.
+      // Assinatura do aviso ao médico (aviso_agenda_medico_v2) fica no corpo.
       .split(DGS_SIGNATURE)
       .join(JSON.stringify(sender).slice(1, -1))
   ) as TemplateDefinition[];

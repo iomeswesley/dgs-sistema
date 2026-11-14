@@ -12,9 +12,9 @@ import { doctorGreetingName, formatAgendaDate, isMorningWindow, summarizeProcedu
   Aviso da agenda ao MÉDICO na véspera (pedido do cliente, 2026-11-14).
 
   Um dia antes de cada agenda, de manhã, o médico recebe no WhatsApp a data,
-  o procedimento e o local. O total de pacientes saiu da mensagem (decisão do
-  usuário), mas agenda sem nenhum paciente (ou toda cancelada) continua sem
-  aviso automático — não lembra o médico de agenda que não vai ter. Não passa
+  o procedimento, o local e o total de pacientes da agenda (confirmados ou
+  não — o paciente que não respondeu costuma ir mesmo assim). Agenda sem
+  nenhum paciente (ou toda cancelada) não tem aviso automático. Não passa
   pela fila de pacientes (MessageJob é sempre de um agendamento): são poucas
   mensagens por dia, enviadas direto e registradas em WhatsappMessage sem
   appointmentId — aparecem em Conversas, e a resposta do médico também.
@@ -54,7 +54,7 @@ async function describeProcedure(agenda: NoticeAgenda): Promise<string> {
   return summarizeProcedures(rows.map((r) => r.procedure.name));
 }
 
-export async function buildNoticeParams(agenda: NoticeAgenda) {
+export async function buildNoticeParams(agenda: NoticeAgenda, patientCount: number) {
   const local = agenda.unit
     ? [agenda.unit.name, agenda.unit.address].filter(Boolean).join(" - ")
     : agenda.municipality.name;
@@ -65,6 +65,7 @@ export async function buildNoticeParams(agenda: NoticeAgenda) {
       formatAgendaDate(agenda.date),
       await describeProcedure(agenda),
       local,
+      String(patientCount),
     ],
   };
 }
@@ -90,7 +91,7 @@ async function sendNotice(agenda: NoticeAgenda, { allowEmpty }: { allowEmpty: bo
   if (capacity.billing.blocked) return skip("Envio bloqueado pelo limite de mensagens do cliente.");
   if (capacity.remaining <= 0) return skip("Teto diário de mensagens do WhatsApp atingido.");
 
-  const params = await buildNoticeParams(agenda);
+  const params = await buildNoticeParams(agenda, patientCount);
   const templateName = TEMPLATE_NAMES.AVISO_MEDICO;
   const body = renderTemplateText(templateName, params.header, params.body);
   const clientId = requireActiveClientId();
