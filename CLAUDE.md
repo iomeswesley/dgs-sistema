@@ -2,6 +2,12 @@
 
 Leia isto no início de qualquer sessão nova. O desenho completo do produto está no [PLANO.md](PLANO.md) e os textos de WhatsApp em [TEMPLATES-WHATSAPP.md](TEMPLATES-WHATSAPP.md) — aqui ficam o estado atual e as convenções operacionais.
 
+## Sessão de 2026-11-14 — cartões de Listas "distorcidos" no cliente = aba com versão velha + aviso de versão nova
+
+- **Relato** (Luciano/DGS, prints do notebook e do celular): nos cartões de Listas o título e o "Camboriú · agenda de … · enviada por …" quebravam a cada poucas letras, espremidos ao lado de Lembrete/status/Excluir. **Não é bug do código atual**: renderizado com Playwright (celular, tablet, notebook; claro/escuro) o `master` já mostra título na largura toda e controles embaixo (`6989826` de 05/11 + `61c26c4` de 11/11). Os prints batem com versões velhas: celular com o "Age…" cortado (antes de 05/11), notebook com o layout de 05/11 (controles ao lado do título). Causa: SPA — aba aberta há dias nunca baixa o JS novo; navegar entre telas não recarrega.
+- **Fix** (`web/src/lib/appVersion.ts`, usado no `AppShell`): compara o bundle que está rodando (`/assets/index-<hash>.js`) com o que `/app.html` aponta agora (fetch sem cache) ao abrir, a cada 5 min e quando a aba volta a ficar visível. Versão nova → faixa azul (`--info-bg`) "Saiu uma versão nova do sistema" com "Atualizar agora", e recarga automática na próxima troca de tela (nunca no meio de um formulário). Em dev (script `/src/main.tsx`, sem hash) não faz nada. Testado com Playwright simulando deploy novo (faixa aparece, troca de tela recarrega). **Abas já abertas com versão velha só pegam isso depois de UM recarregamento manual** (F5 ou fechar e abrir a aba).
+- Não deu pra conferir na Vercel se o último deploy do `master` está "Ready" (sessão na nuvem sem acesso ao domínio/painel).
+
 ## Sessão de 2026-11-13 — formato novo de extração "IPM" (Atende.Net, Camboriú)
 
 - **Pedido** (Luciano/DGS): Camboriú mandou a agenda de psiquiatria (Dr. Luiz Felipe, 16/11/2026, 27 pacientes) no relatório **"Relação da Agenda para Contato" do Atende.Net (IPM Sistemas, módulo SRG)**. Caía em `OUTRO`. Uma linha por paciente: `NOME IDADE <telefones> DD/MM/AAAA HH:MM CONVÊNIO SITUAÇÃO`; cabeçalho com `Unidade Executante:` e `Especialidade: X / Profissional: Y` (a especialidade vira o procedimento). Sem CNS/nascimento.

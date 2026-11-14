@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   CalendarCheck,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useSession } from "../lib/session";
 import { useTheme, type ThemeChoice } from "../lib/theme";
+import { useUpdateAvailable } from "../lib/appVersion";
 import { ConfirmModal } from "./ConfirmModal";
 
 /*
@@ -62,6 +63,16 @@ export function AppShell() {
       .then((data) => setModules(data.features))
       .catch(() => setModules(null));
   }, [user?.activeClientId]);
+
+  // Versão nova publicada enquanto esta aba estava aberta: recarrega na
+  // próxima troca de tela (ver lib/appVersion.ts).
+  const updateAvailable = useUpdateAvailable();
+  const location = useLocation();
+  const firstPath = useRef(location.pathname);
+  useEffect(() => {
+    if (updateAvailable && location.pathname !== firstPath.current) window.location.reload();
+    firstPath.current = location.pathname;
+  }, [updateAvailable, location.pathname]);
 
   const activeClient = clients.find((c) => c.id === user?.activeClientId);
   const items = (user?.isSuperAdmin ? [...NAV, ADMIN_NAV_ITEM] : NAV).filter(
@@ -213,6 +224,18 @@ export function AppShell() {
       )}
 
       <main className="min-w-0 flex-1 bg-[var(--bg)] px-4 py-5 lg:px-[26px] lg:py-[22px]">
+        {updateAvailable && (
+          <div
+            role="status"
+            className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] px-3.5 py-2.5 text-[14px]"
+            style={{ background: "var(--info-bg)", color: "var(--info-text)" }}
+          >
+            <span className="min-w-0 flex-1">Saiu uma versão nova do sistema.</span>
+            <button type="button" className="btn btn-quiet px-3 py-1 text-[13px]" onClick={() => window.location.reload()}>
+              Atualizar agora
+            </button>
+          </div>
+        )}
         <Outlet />
       </main>
 
