@@ -276,7 +276,7 @@ O texto do Template 2 acima é o original (`lembrete_vespera`). Desde 05/10/2026
 ## Template 8 — `aviso_agenda_medico` (aviso de agenda ao MÉDICO na véspera, 2026-11-14)
 
 - **Pedido**: Luciano/Lucas (DGS) — hoje mandam print da agenda pro médico uma semana antes; o sistema passa a lembrar o médico na véspera, de manhã, com o total de pacientes.
-- **Nome**: `aviso_agenda_medico` · UTILITY · pt_BR · sem botões. Texto do cliente, com 3 ajustes: "Camboriú" do título virou variável, o "Dra." fixo virou parte do {{1}} (tratamento Dr./Dra. vem do cadastro do médico) e entrou a linha do total de pacientes (era o objetivo do pedido). Assinatura "Gestão **em** Saúde" (igual ao resto do sistema; o cliente escreveu "de").
+- **Nome**: `aviso_agenda_medico` · UTILITY · pt_BR · sem botões. Texto do cliente, com 2 ajustes: "Camboriú" do título virou variável e o "Dra." fixo virou parte do {{1}} (tratamento Dr./Dra. vem do cadastro do médico). A linha "Pacientes agendados" chegou a entrar e foi tirada a pedido do usuário (14/11, antes de submeter). Assinatura "Gestão **em** Saúde" (igual ao resto do sistema; o cliente escreveu "de").
 - **Cabeçalho**: "Confirmação de Agenda - {{1}}" (município)
 - **Corpo**:
 
@@ -288,7 +288,6 @@ Informamos os dados da sua agenda:
 📅 *Data:* {{2}}
 🩺 *Procedimento:* {{3}}
 📍 *Local:* {{4}}
-👥 *Pacientes agendados:* {{5}}
 
 Por gentileza, verifique as informações da agenda.
 
@@ -296,6 +295,6 @@ Atenciosamente,
 *Equipe D'Artibale Gestão em Saúde*
 ```
 
-- **Variáveis**: 1 tratamento + nome do médico ("Dr. Luiz Felipe"), 2 data com dia da semana ("segunda-feira, 16/11/2026"), 3 procedimento da agenda (sem procedimento na agenda: os das listas, até 3), 4 unidade + endereço (sem unidade: município), 5 total de agendamentos da agenda, menos cancelados.
+- **Variáveis**: 1 tratamento + nome do médico ("Dr. Luiz Felipe"), 2 data com dia da semana ("segunda-feira, 16/11/2026"), 3 procedimento da agenda (sem procedimento na agenda: os das listas, até 3), 4 unidade + endereço (sem unidade: município). Agenda sem nenhum paciente (ou toda cancelada) não gera aviso automático.
 - **Cliente que não é a DGS**: `brandTemplates()` troca a assinatura pelo `senderName`.
 - **Submissão**: entra em `DEFAULT_TEMPLATES` (WABA nova submete sozinha). WABA que já existia: Configurações → WhatsApp → "Enviar pra aprovação" ao lado do template.

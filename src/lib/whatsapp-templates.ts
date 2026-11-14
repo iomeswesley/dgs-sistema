@@ -247,8 +247,8 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
   {
     // Aviso da agenda pro MÉDICO na véspera (pedido do cliente, 2026-11-14 —
     // texto dele, com o município virando variável no título, o "Dra." fixo
-    // virando parte do {{1}} e o total de pacientes, que era o objetivo do
-    // pedido). Vai de manhã, um dia antes de cada agenda (modules/doctor-notice).
+    // virando parte do {{1}}; sem o total de pacientes, por decisão do usuário).
+    // Vai de manhã, um dia antes de cada agenda (modules/doctor-notice).
     name: "aviso_agenda_medico",
     category: "UTILITY",
     language: "pt_BR",
@@ -263,7 +263,7 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
         type: "BODY",
         text:
           "Olá, *{{1}}*!\n\nInformamos os dados da sua agenda:\n\n" +
-          "📅 *Data:* {{2}}\n🩺 *Procedimento:* {{3}}\n📍 *Local:* {{4}}\n👥 *Pacientes agendados:* {{5}}\n\n" +
+          "📅 *Data:* {{2}}\n🩺 *Procedimento:* {{3}}\n📍 *Local:* {{4}}\n\n" +
           "Por gentileza, verifique as informações da agenda.\n\n" +
           "Atenciosamente,\n*Equipe D'Artibale Gestão em Saúde*",
         example: {
@@ -273,7 +273,6 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
               "segunda-feira, 16/11/2026",
               "Consulta em psiquiatria",
               "Policlínica - Av. Eugênio Krause, 2265, Centro",
-              "27",
             ],
           ],
         },

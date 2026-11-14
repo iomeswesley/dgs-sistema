@@ -12,7 +12,9 @@ import { doctorGreetingName, formatAgendaDate, isMorningWindow, summarizeProcedu
   Aviso da agenda ao MÉDICO na véspera (pedido do cliente, 2026-11-14).
 
   Um dia antes de cada agenda, de manhã, o médico recebe no WhatsApp a data,
-  o procedimento, o local e quantos pacientes foram pra agenda. Não passa
+  o procedimento e o local. O total de pacientes saiu da mensagem (decisão do
+  usuário), mas agenda sem nenhum paciente (ou toda cancelada) continua sem
+  aviso automático — não lembra o médico de agenda que não vai ter. Não passa
   pela fila de pacientes (MessageJob é sempre de um agendamento): são poucas
   mensagens por dia, enviadas direto e registradas em WhatsappMessage sem
   appointmentId — aparecem em Conversas, e a resposta do médico também.
@@ -52,7 +54,7 @@ async function describeProcedure(agenda: NoticeAgenda): Promise<string> {
   return summarizeProcedures(rows.map((r) => r.procedure.name));
 }
 
-export async function buildNoticeParams(agenda: NoticeAgenda, patientCount: number) {
+export async function buildNoticeParams(agenda: NoticeAgenda) {
   const local = agenda.unit
     ? [agenda.unit.name, agenda.unit.address].filter(Boolean).join(" - ")
     : agenda.municipality.name;
@@ -63,7 +65,6 @@ export async function buildNoticeParams(agenda: NoticeAgenda, patientCount: numb
       formatAgendaDate(agenda.date),
       await describeProcedure(agenda),
       local,
-      String(patientCount),
     ],
   };
 }
@@ -89,7 +90,7 @@ async function sendNotice(agenda: NoticeAgenda, { allowEmpty }: { allowEmpty: bo
   if (capacity.billing.blocked) return skip("Envio bloqueado pelo limite de mensagens do cliente.");
   if (capacity.remaining <= 0) return skip("Teto diário de mensagens do WhatsApp atingido.");
 
-  const params = await buildNoticeParams(agenda, patientCount);
+  const params = await buildNoticeParams(agenda);
   const templateName = TEMPLATE_NAMES.AVISO_MEDICO;
   const body = renderTemplateText(templateName, params.header, params.body);
   const clientId = requireActiveClientId();

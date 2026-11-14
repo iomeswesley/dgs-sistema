@@ -545,7 +545,7 @@ function DoctorsTab() {
         </Field>
         <Field
           label="Celular com WhatsApp"
-          hint="Recebe na véspera, de manhã, o aviso da agenda (data, procedimento, local e total de pacientes). Em branco, não recebe."
+          hint="Recebe na véspera, de manhã, o aviso da agenda (data, procedimento e local). Em branco, não recebe."
         >
           <input
             className="field"
@@ -1517,7 +1517,7 @@ function AgendasTab() {
         title={notifying ? `Avisar ${notifying.doctor.name} agora?` : ""}
         description={
           notifying
-            ? `Manda agora pro WhatsApp do médico, ${formatPhone(notifying.doctor.phone)}, a agenda de ${formatCalendarDate(notifying.date)}: data, procedimento, local e total de pacientes. ` +
+            ? `Manda agora pro WhatsApp do médico, ${formatPhone(notifying.doctor.phone)}, a agenda de ${formatCalendarDate(notifying.date)}: data, procedimento e local. ` +
               (notifying.doctorNoticeSentAt ? "Ele já foi avisado antes — vai receber de novo." : "O aviso automático da véspera não repete depois disso.")
             : ""
         }

@@ -47,7 +47,7 @@ export const TEMPLATE_FIELDS: Record<TemplateKind, TemplateFields> = {
   },
   AVISO_MEDICO: {
     header: ["Município"],
-    body: ["Médico (com Dr./Dra.)", "Data", "Procedimento", "Local", "Pacientes agendados"],
+    body: ["Médico (com Dr./Dra.)", "Data", "Procedimento", "Local"],
   },
 };
 
