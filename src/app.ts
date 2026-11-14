@@ -30,6 +30,7 @@ import { externalRouter } from "@/modules/external/external.routes.js";
 import { processQueue } from "@/modules/queue/queue.service.js";
 import { closeExpiredAppointments } from "@/modules/whatsapp/whatsapp.service.js";
 import { enqueueReminders, enqueueRetries, purgeExpiredData, purgeExpiredMedia } from "@/modules/queue/cadence.service.js";
+import { notifyDoctorsForTomorrow } from "@/modules/doctor-notice/doctor-notice.service.js";
 import { PRIVACY_POLICY_HTML } from "@/legal/privacy.js";
 import { prisma } from "@/lib/prisma.js";
 import { runWithClient } from "@/lib/tenant-context.js";
@@ -205,6 +206,13 @@ export function createApp() {
             // agora não fica esperando o cron de amanhã pra sair.
             const reminders = await enqueueReminders();
             const retries = await enqueueRetries();
+            // Aviso da agenda de amanhã pro médico (só de manhã; ver
+            // modules/doctor-notice). Falha aqui não pode travar a fila
+            // dos pacientes.
+            const doctorNotices = await notifyDoctorsForTomorrow().catch((err) => {
+              console.error("[CRON] Aviso ao médico falhou:", (err as Error).message);
+              return null;
+            });
             // Cada chamada recebe só o tempo que REALMENTE sobra da
             // invocação inteira, nunca os 45s padrão de novo — senão duas
             // chamadas em sequência podem somar mais que os 60s de
@@ -224,7 +232,7 @@ export function createApp() {
             const closed = await closeExpiredAppointments();
             const purged = await purgeExpiredData();
             const mediaPurged = await purgeExpiredMedia();
-            return { reminders, retries, processed: { ...processed, sent, failed }, closed, purged, mediaPurged };
+            return { reminders, retries, doctorNotices, processed: { ...processed, sent, failed }, closed, purged, mediaPurged };
           });
           perClient[client.name] = result;
           totals.sent += result.processed.sent;

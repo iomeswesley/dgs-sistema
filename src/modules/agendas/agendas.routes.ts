@@ -9,6 +9,7 @@ import { recordAudit } from "@/modules/audit/audit.service.js";
 import { toCsv } from "@/lib/csv.js";
 import { REFUSAL_REASON_LABEL } from "@/lib/labels.js";
 import { syncAgendaToReviewLists } from "@/modules/lists/lists.service.js";
+import { notifyDoctorNow } from "@/modules/doctor-notice/doctor-notice.service.js";
 
 /*
   Agenda = escala do médico num município e data. É o que permite saber o
@@ -54,7 +55,7 @@ agendasRouter.get(
       },
       orderBy: [{ date: "desc" }, { doctorId: "asc" }],
       include: {
-        doctor: { select: { id: true, name: true } },
+        doctor: { select: { id: true, name: true, phone: true, notifyAgenda: true } },
         municipality: { select: { id: true, name: true } },
         unit: { select: { id: true, name: true, address: true } },
         procedure: { select: { id: true, name: true } },
@@ -93,14 +94,31 @@ agendasRouter.patch(
     const before = await prisma.agenda.findUnique({ where: { id } });
     if (!before) throw new AppError("Agenda não encontrada", 404);
 
+    const newDate = data.date ? parseDateOnly(data.date) : undefined;
+    // Data mudou: o aviso ao médico já enviado era da data antiga — libera
+    // um aviso novo na véspera da data certa.
+    const dateChanged = newDate !== undefined && newDate.getTime() !== before.date.getTime();
     const agenda = await prisma.agenda.update({
       where: { id },
-      data: { ...data, date: data.date ? parseDateOnly(data.date) : undefined },
+      data: {
+        ...data,
+        date: newDate,
+        ...(dateChanged ? { doctorNoticeSentAt: null, doctorNoticeFailedAt: null, doctorNoticeError: null } : {}),
+      },
     });
     await recordAudit({ userId: currentUserId(req), action: "update", entity: "Agenda", entityId: id });
     // Listas ainda em revisão passam a refletir o médico/procedimento novos.
     const synced = await syncAgendaToReviewLists(id, before.procedureId, currentUserId(req));
     res.json({ agenda, synced });
+  })
+);
+
+/** Botão "Avisar médico": manda agora o aviso da agenda pro WhatsApp do médico. */
+agendasRouter.post(
+  "/api/agendas/:id/notify-doctor",
+  asyncHandler(async (req, res) => {
+    await notifyDoctorNow(routeId(req), currentUserId(req));
+    res.json({ ok: true });
   })
 );
 

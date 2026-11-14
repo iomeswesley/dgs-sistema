@@ -6,7 +6,7 @@ import { FormModal } from "../components/FormModal";
 import { Callout, ErrorNote, Field, Spinner, Table, Td, Th } from "../components/ui";
 import { api } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { formatCalendarDate, formatDate, formatDateTime } from "../lib/format";
+import { formatCalendarDate, formatDate, formatDateTime, formatPhone } from "../lib/format";
 
 interface Municipality {
   id: number;
@@ -45,6 +45,9 @@ interface Doctor {
   name: string;
   specialty: string | null;
   registration: string | null;
+  phone: string | null;
+  title: string | null;
+  notifyAgenda: boolean;
   active: boolean;
   procedures: DoctorProcedure[];
 }
@@ -361,11 +364,13 @@ function MunicipalitiesTab() {
 
 /* ---------------- Médicos ---------------- */
 
+const EMPTY_DOCTOR_FORM = { name: "", specialty: "", registration: "", title: "", phone: "", notifyAgenda: true };
+
 function DoctorsTab() {
   const data = useApi<{ doctors: Doctor[] }>("/api/catalog/doctors");
   const [open, setOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
-  const [form, setForm] = useState({ name: "", specialty: "", registration: "" });
+  const [form, setForm] = useState(EMPTY_DOCTOR_FORM);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [togglingDoctor, setTogglingDoctor] = useState<Doctor | null>(null);
@@ -375,14 +380,15 @@ function DoctorsTab() {
     setBusy(true);
     setError(null);
     try {
+      const payload = { ...form, title: form.title || null, phone: form.phone.trim() || null };
       if (editingDoctor) {
-        await api.patch(`/api/catalog/doctors/${editingDoctor.id}`, form);
+        await api.patch(`/api/catalog/doctors/${editingDoctor.id}`, payload);
       } else {
-        await api.post("/api/catalog/doctors", form);
+        await api.post("/api/catalog/doctors", payload);
       }
       setOpen(false);
       setEditingDoctor(null);
-      setForm({ name: "", specialty: "", registration: "" });
+      setForm(EMPTY_DOCTOR_FORM);
       data.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
@@ -411,7 +417,7 @@ function DoctorsTab() {
           className="btn btn-primary"
           onClick={() => {
             setEditingDoctor(null);
-            setForm({ name: "", specialty: "", registration: "" });
+            setForm(EMPTY_DOCTOR_FORM);
             setOpen(true);
           }}
         >
@@ -430,6 +436,7 @@ function DoctorsTab() {
                   demais, forçando scroll lateral). */}
               <Th className="hidden md:table-cell">Especialidade</Th>
               <Th className="hidden md:table-cell">Registro</Th>
+              <Th className="hidden md:table-cell">Celular (aviso de agenda)</Th>
               <Th align="right">Procedimentos</Th>
               <Th align="right">Ações</Th>
             </tr>
@@ -443,9 +450,15 @@ function DoctorsTab() {
                 <p className="text-xs text-ink-faint md:hidden">
                   {doctor.specialty ?? "—"} · {doctor.registration ?? "—"}
                 </p>
+                <p className="text-xs text-ink-faint md:hidden">
+                  <DoctorPhoneLabel doctor={doctor} />
+                </p>
               </Td>
               <Td muted className="hidden md:table-cell">{doctor.specialty ?? "—"}</Td>
               <Td muted className="hidden md:table-cell">{doctor.registration ?? "—"}</Td>
+              <Td muted className="hidden md:table-cell">
+                <DoctorPhoneLabel doctor={doctor} />
+              </Td>
               <Td align="right" muted>
                 {doctor.procedures.length}
               </Td>
@@ -460,6 +473,9 @@ function DoctorsTab() {
                         name: doctor.name,
                         specialty: doctor.specialty ?? "",
                         registration: doctor.registration ?? "",
+                        title: doctor.title ?? "",
+                        phone: doctor.phone ? formatPhone(doctor.phone) : "",
+                        notifyAgenda: doctor.notifyAgenda,
                       });
                       setError(null);
                       setOpen(true);
@@ -520,6 +536,33 @@ function DoctorsTab() {
             onChange={(e) => setForm({ ...form, registration: e.target.value })}
           />
         </Field>
+        <Field label="Tratamento na mensagem">
+          <select className="field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}>
+            <option value="">Só o nome</option>
+            <option value="Dr.">Dr.</option>
+            <option value="Dra.">Dra.</option>
+          </select>
+        </Field>
+        <Field
+          label="Celular com WhatsApp"
+          hint="Recebe na véspera, de manhã, o aviso da agenda (data, procedimento, local e total de pacientes). Em branco, não recebe."
+        >
+          <input
+            className="field"
+            inputMode="tel"
+            placeholder="(47) 99999-9999"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={form.notifyAgenda}
+            onChange={(e) => setForm({ ...form, notifyAgenda: e.target.checked })}
+          />
+          Enviar o aviso da agenda na véspera
+        </label>
       </FormModal>
 
       <ConfirmModal
@@ -536,6 +579,16 @@ function DoctorsTab() {
         onConfirm={toggleActive}
         onCancel={() => setTogglingDoctor(null)}
       />
+    </>
+  );
+}
+
+function DoctorPhoneLabel({ doctor }: { doctor: Doctor }) {
+  if (!doctor.phone) return <span className="italic text-ink-faint">sem celular</span>;
+  return (
+    <>
+      {formatPhone(doctor.phone)}
+      {!doctor.notifyAgenda && <span className="ml-1.5 text-xs text-ink-faint">(aviso desligado)</span>}
     </>
   );
 }
@@ -1016,11 +1069,33 @@ interface Agenda {
   date: string;
   shift: string;
   capacity: number | null;
-  doctor: { id: number; name: string };
+  doctor: { id: number; name: string; phone: string | null; notifyAgenda: boolean };
   municipality: { id: number; name: string };
   unit: { id: number; name: string } | null;
   procedure: { id: number; name: string } | null;
+  doctorNoticeSentAt: string | null;
+  doctorNoticeFailedAt: string | null;
+  doctorNoticeError: string | null;
   _count: { lists: number; appointments: number };
+}
+
+/** Situação do aviso da agenda pro médico (enviado na véspera, de manhã). */
+function DoctorNoticeLabel({ agenda }: { agenda: Agenda }) {
+  let text: string;
+  let tone = "text-ink-faint";
+  if (agenda.doctorNoticeSentAt) {
+    text = `Médico avisado em ${formatDateTime(agenda.doctorNoticeSentAt)}`;
+  } else if (agenda.doctorNoticeError) {
+    text = `Aviso ao médico: ${agenda.doctorNoticeError}`;
+    if (agenda.doctorNoticeFailedAt) tone = "text-[var(--danger-text)]";
+  } else if (!agenda.doctor.phone) {
+    text = "Médico sem celular — sem aviso";
+  } else if (!agenda.doctor.notifyAgenda) {
+    text = "Aviso ao médico desligado";
+  } else {
+    text = "Médico recebe o aviso na véspera, de manhã";
+  }
+  return <p className={`text-xs ${tone}`}>{text}</p>;
 }
 
 interface OpenSlot {
@@ -1062,6 +1137,8 @@ function AgendasTab() {
 
   const [viewingSlots, setViewingSlots] = useState<Agenda | null>(null);
   const [deleting, setDeleting] = useState<Agenda | null>(null);
+  const [notifying, setNotifying] = useState<Agenda | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const slots = useApi<{ slots: OpenSlot[] }>(
     viewingSlots ? `/api/agendas/${viewingSlots.id}/open-slots` : null,
     [viewingSlots?.id]
@@ -1101,6 +1178,23 @@ function AgendasTab() {
       setError(err instanceof Error ? err.message : "Falha ao salvar.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function notifyDoctor() {
+    if (!notifying) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.post(`/api/agendas/${notifying.id}/notify-doctor`);
+      setNotice(`Aviso enviado pro WhatsApp de ${notifying.doctor.name}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao avisar o médico.");
+    } finally {
+      setNotifying(null);
+      setBusy(false);
+      data.reload();
     }
   }
 
@@ -1155,6 +1249,11 @@ function AgendasTab() {
           <ErrorNote message={error} />
         </div>
       )}
+      {notice && (
+        <div className="mb-3">
+          <Callout>{notice}</Callout>
+        </div>
+      )}
 
       {data.loading && <Spinner />}
       {data.data && (
@@ -1190,10 +1289,14 @@ function AgendasTab() {
                 <p className="text-xs text-ink-faint md:hidden">
                   Capacidade {agenda.capacity ?? "—"} · {agenda._count.appointments} vaga(s) aberta(s)
                 </p>
+                <div className="md:hidden">
+                  <DoctorNoticeLabel agenda={agenda} />
+                </div>
               </Td>
               <Td muted className="hidden md:table-cell">
                 {agenda.doctor.name}
                 {agenda.procedure && <p className="text-xs text-ink-faint">{agenda.procedure.name}</p>}
+                <DoctorNoticeLabel agenda={agenda} />
               </Td>
               <Td muted className="hidden md:table-cell">{agenda.municipality.name}</Td>
               <Td muted className="hidden md:table-cell">{agenda.unit ? agenda.unit.name : <span className="italic text-ink-faint">sem unidade</span>}</Td>
@@ -1204,7 +1307,9 @@ function AgendasTab() {
                 {agenda._count.appointments}
               </Td>
               <Td align="right">
-                <div className="flex justify-end gap-1.5">
+                {/* flex-wrap: com "Avisar médico" são 4 botões — no celular
+                    quebram em duas linhas em vez de vazar da tabela. */}
+                <div className="flex flex-wrap justify-end gap-1.5 [&>button]:whitespace-nowrap">
                   <button
                     type="button"
                     className="btn btn-quiet px-2 py-1 text-xs"
@@ -1212,6 +1317,19 @@ function AgendasTab() {
                   >
                     Vagas abertas
                   </button>
+                  {agenda.doctor.phone && (
+                    <button
+                      type="button"
+                      className="btn btn-quiet px-2 py-1 text-xs"
+                      onClick={() => {
+                        setError(null);
+                        setNotice(null);
+                        setNotifying(agenda);
+                      }}
+                    >
+                      Avisar médico
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-quiet px-2 py-1 text-xs"
@@ -1393,6 +1511,21 @@ function AgendasTab() {
         onConfirm={remove}
         onCancel={() => setDeleting(null)}
       />
+
+      <ConfirmModal
+        open={notifying !== null}
+        title={notifying ? `Avisar ${notifying.doctor.name} agora?` : ""}
+        description={
+          notifying
+            ? `Manda agora pro WhatsApp do médico, ${formatPhone(notifying.doctor.phone)}, a agenda de ${formatCalendarDate(notifying.date)}: data, procedimento, local e total de pacientes. ` +
+              (notifying.doctorNoticeSentAt ? "Ele já foi avisado antes — vai receber de novo." : "O aviso automático da véspera não repete depois disso.")
+            : ""
+        }
+        confirmLabel="Enviar aviso"
+        busy={busy}
+        onConfirm={notifyDoctor}
+        onCancel={() => setNotifying(null)}
+      />
     </>
   );
 }
@@ -1439,6 +1572,9 @@ const TEMPLATE_LABEL: Record<string, string> = {
   lembrete_vespera_v2: "Lembrete de véspera (v2)",
   convite_vaga_aberta: "Convite pra vaga aberta",
   cancelamento_consulta: "Cancelamento",
+  reagendamento_consulta: "Reagendamento",
+  oferta_vaga_consulta: "Oferta de vaga (fluxo de oferta)",
+  aviso_agenda_medico: "Aviso de agenda ao médico",
 };
 const TEMPLATE_STATUS_LABEL: Record<TemplateStatus["status"], string> = {
   APPROVED: "Aprovado",
@@ -1538,6 +1674,23 @@ function WhatsappTab() {
   const templates = useApi<{ templates: TemplateStatus[]; billingIssue: boolean; billingUrl: string | null }>(
     "/api/whatsapp/signup/templates"
   );
+  const [submittingTemplate, setSubmittingTemplate] = useState<string | null>(null);
+  const [templateSubmitError, setTemplateSubmitError] = useState<string | null>(null);
+
+  // Template novo do produto que ainda não existe nesta WABA (só é submetido
+  // sozinho quando um número conecta) — manda pra Meta daqui.
+  async function submitTemplate(name: string) {
+    setSubmittingTemplate(name);
+    setTemplateSubmitError(null);
+    try {
+      await api.post(`/api/whatsapp/signup/templates/${name}/submit`);
+      templates.reload();
+    } catch (err) {
+      setTemplateSubmitError(err instanceof Error ? err.message : "Falha ao enviar o template pra Meta.");
+    } finally {
+      setSubmittingTemplate(null);
+    }
+  }
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1809,14 +1962,31 @@ function WhatsappTab() {
             </p>
             <ul className="mt-2 grid gap-1">
               {templates.data.templates.map((t) => (
-                <li key={t.name} className="flex items-center justify-between gap-3">
+                <li key={t.name} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <span>{TEMPLATE_LABEL[t.name] ?? t.name}</span>
-                  <span className={t.status === "REJECTED" ? "font-bold text-[var(--danger-text)]" : "text-ink-faint"}>
-                    {TEMPLATE_STATUS_LABEL[t.status]}
+                  <span className="flex items-center gap-2">
+                    <span className={t.status === "REJECTED" ? "font-bold text-[var(--danger-text)]" : "text-ink-faint"}>
+                      {TEMPLATE_STATUS_LABEL[t.status]}
+                    </span>
+                    {t.status === "NAO_ENCONTRADO" && (
+                      <button
+                        type="button"
+                        className="btn btn-quiet px-2 py-1 text-xs"
+                        disabled={submittingTemplate !== null}
+                        onClick={() => void submitTemplate(t.name)}
+                      >
+                        {submittingTemplate === t.name ? "Enviando…" : "Enviar pra aprovação"}
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
+            {templateSubmitError && (
+              <div className="mt-2">
+                <ErrorNote message={templateSubmitError} />
+              </div>
+            )}
           </Callout>
         </div>
       )}
@@ -1979,6 +2149,7 @@ const TEMPLATE_OPTIONS = [
   { value: "LEMBRETE", label: "Lembrete de véspera" },
   { value: "VAGA_ABERTA", label: "Vaga aberta" },
   { value: "CANCELAMENTO", label: "Cancelamento" },
+  { value: "AVISO_MEDICO", label: "Aviso de agenda ao médico" },
 ] as const;
 
 /**

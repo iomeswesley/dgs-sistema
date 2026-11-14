@@ -8,6 +8,7 @@ import { asyncHandler } from "@/middleware/errorHandler.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { requireAuth, currentUserId } from "@/middleware/auth.js";
 import { parseBody } from "@/lib/http.js";
+import { recordAudit } from "@/modules/audit/audit.service.js";
 import { describePhoneIssue, normalizePhoneList } from "@/lib/phone.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
 import { PREPARO_PADRAO, TEMPLATE_NAMES } from "@/lib/templates.js";
@@ -23,10 +24,13 @@ import {
   subscribeAppToWaba,
 } from "./whatsapp-account.service.js";
 import {
+  brandTemplates,
+  DEFAULT_TEMPLATES,
   getTemplateStatuses,
   registerPhoneNumber,
   renderTemplateText,
   submitDefaultTemplates,
+  submitTemplates,
 } from "@/lib/whatsapp-templates.js";
 
 export const whatsappSignupRouter = Router();
@@ -158,6 +162,36 @@ whatsappSignupRouter.get(
   })
 );
 
+/**
+ * Manda pra Meta UM template padrão que ainda não existe na WABA ativa —
+ * botão "Enviar pra aprovação" na lista de templates de Configurações →
+ * WhatsApp. Existe porque template novo do produto (ex.: aviso_agenda_medico,
+ * 2026-11-14) só é submetido sozinho quando um número CONECTA; WABA que já
+ * existia precisava de script rodado na mão.
+ */
+whatsappSignupRouter.post(
+  "/api/whatsapp/signup/templates/:name/submit",
+  asyncHandler(async (req, res) => {
+    const name = String(req.params.name);
+    const definition = DEFAULT_TEMPLATES.find((t) => t.name === name);
+    if (!definition) throw new AppError("Template desconhecido.", 404);
+
+    const status = await getConnectionStatus();
+    if (!status.connected || !status.wabaId) throw new AppError("Nenhum número do WhatsApp conectado.", 409);
+    const account = await prisma.whatsappAccount.findFirst({
+      where: { wabaId: status.wabaId },
+      orderBy: { connectedAt: "desc" },
+    });
+    if (!account) throw new AppError("A conta ativa não foi conectada pela tela — não dá pra submeter daqui.", 409);
+
+    const settings = await prisma.appSettings.findUnique({ where: { clientId: requireActiveClientId() } });
+    const [result] = await submitTemplates(brandTemplates([definition], settings?.senderName), account.wabaId, account.accessToken);
+    await recordAudit({ userId: currentUserId(req), action: "submit_template", entity: "WhatsappTemplate", newValue: name, metadata: result });
+    if (!result?.ok) throw new AppError(`A Meta recusou o template: ${result?.detail ?? "motivo desconhecido"}`, 502);
+    res.json({ ok: true });
+  })
+);
+
 /** Lista todas as contas conectadas — base do seletor de failover na tela. */
 whatsappSignupRouter.get(
   "/api/whatsapp/signup/accounts",
@@ -216,7 +250,7 @@ whatsappSignupRouter.delete(
 
 const testSendSchema = z.object({
   phone: z.string().min(8),
-  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA", "CANCELAMENTO"]),
+  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA", "CANCELAMENTO", "AVISO_MEDICO"]),
 });
 
 /**
@@ -298,6 +332,9 @@ function buildTestParams(template: TemplateKind) {
   }
   if (template === "CANCELAMENTO") {
     return { body: [procedure.toUpperCase(), date, "Motivo de teste"] };
+  }
+  if (template === "AVISO_MEDICO") {
+    return { header: [municipality], body: ["Dr. Teste", date, procedure, local, "10"] };
   }
   return { header: [municipality], body: [firstName, municipality, date, time, procedure, local] };
 }

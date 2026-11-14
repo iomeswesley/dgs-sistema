@@ -49,13 +49,14 @@ export async function getActivitySummary(from: string, to: string) {
     }),
   ]);
 
-  const porTipo = { confirmacao: 0, lembrete: 0, vagaAberta: 0, cancelamento: 0, reagendamento: 0, textoLivre: 0 };
+  const porTipo = { confirmacao: 0, lembrete: 0, vagaAberta: 0, cancelamento: 0, reagendamento: 0, avisoMedico: 0, textoLivre: 0 };
   const TEMPLATE_KEY: Record<string, keyof typeof porTipo> = {
     CONFIRMACAO: "confirmacao",
     LEMBRETE: "lembrete",
     VAGA_ABERTA: "vagaAberta",
     CANCELAMENTO: "cancelamento",
     REAGENDAMENTO: "reagendamento",
+    AVISO_MEDICO: "avisoMedico",
   };
   for (const m of sent) porTipo[m.template ? TEMPLATE_KEY[m.template] ?? "textoLivre" : "textoLivre"]++;
 

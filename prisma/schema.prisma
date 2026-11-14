@@ -215,6 +215,13 @@ model Doctor {
   name         String
   specialty    String?
   registration String? // CRM
+  // Aviso de agenda ao médico (2026-11-14): celular em E.164 sem "+", ex.
+  // 5547999998888. Sem telefone, o médico simplesmente não recebe o aviso.
+  phone        String?
+  // Como o médico é chamado na mensagem ("Dr." / "Dra."). Nulo = só o nome.
+  title        String?
+  // Desligar o aviso de um médico sem apagar o telefone.
+  notifyAgenda Boolean  @default(true)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -305,6 +312,14 @@ model Agenda {
   shift          Shift    @default(INTEGRAL)
   capacity       Int?
   notes          String?
+  // Aviso da agenda ao médico na véspera (modules/doctor-notice). Enviado =
+  // data do último envio aceito pela Meta; o automático não repete. Falhou =
+  // a Meta recusou; o automático também não repete (o cron roda a cada 10
+  // min), só o botão "Avisar médico". O motivo da última tentativa que não
+  // saiu (sem pacientes, falha...) fica em `doctorNoticeError` pra tela.
+  doctorNoticeSentAt   DateTime?
+  doctorNoticeFailedAt DateTime?
+  doctorNoticeError    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -911,6 +926,9 @@ enum TemplateKind {
   // subiu com horário errado) — reabre a confirmação pro horário certo.
   // Ver "Reagendar" em Revisão, 2026-09-08.
   REAGENDAMENTO
+  // Aviso da agenda pro MÉDICO na véspera (não é mensagem de paciente:
+  // WhatsappMessage sem appointmentId). Ver modules/doctor-notice.
+  AVISO_MEDICO
 }
 
 enum JobStatus {

@@ -6,6 +6,7 @@ import { AppError, asyncHandler } from "@/middleware/errorHandler.js";
 import { currentUserId, requireAuth } from "@/middleware/auth.js";
 import { parseBody, routeId } from "@/lib/http.js";
 import { recordAudit, recordFieldChanges } from "@/modules/audit/audit.service.js";
+import { describePhoneIssue, normalizePhone } from "@/lib/phone.js";
 
 /*
   Cadastros base: municípios, unidades, médicos, procedimentos e a
@@ -225,8 +226,26 @@ const doctorSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   specialty: z.string().nullish(),
   registration: z.string().nullish(),
+  // Celular do médico pro aviso de agenda na véspera (modules/doctor-notice).
+  // Vazio = sem aviso. Gravado normalizado (E.164 sem "+").
+  phone: z.string().nullish(),
+  title: z.enum(["Dr.", "Dra."]).nullish(),
+  notifyAgenda: z.boolean().optional(),
   active: z.boolean().optional(),
 });
+
+/** Valida e normaliza o celular digitado; vazio vira `null`. */
+function normalizeDoctorPhone<T extends { phone?: string | null }>(data: T): T {
+  if (data.phone === undefined) return data;
+  const raw = data.phone?.trim();
+  if (!raw) return { ...data, phone: null };
+  const normalized = normalizePhone(raw);
+  if (!normalized) throw new AppError(`Celular do médico: ${describePhoneIssue(raw)}`, 400);
+  if (normalized.kind !== "mobile") {
+    throw new AppError("Celular do médico: esse número é fixo — o aviso vai por WhatsApp, precisa ser celular.", 400);
+  }
+  return { ...data, phone: normalized.e164 };
+}
 
 catalogRouter.get(
   "/api/catalog/doctors",
@@ -247,7 +266,7 @@ catalogRouter.get(
 catalogRouter.post(
   "/api/catalog/doctors",
   asyncHandler(async (req, res) => {
-    const data = parseBody(req, doctorSchema);
+    const data = normalizeDoctorPhone(parseBody(req, doctorSchema));
     const doctor = await prisma.doctor.create({ data: { ...data, clientId: requireActiveClientId() } });
     await recordAudit({
       userId: currentUserId(req),
@@ -264,7 +283,7 @@ catalogRouter.patch(
   "/api/catalog/doctors/:id",
   asyncHandler(async (req, res) => {
     const id = routeId(req);
-    const data = parseBody(req, doctorSchema.partial());
+    const data = normalizeDoctorPhone(parseBody(req, doctorSchema.partial()));
     const before = await prisma.doctor.findUnique({ where: { id } });
     if (!before) throw new AppError("Médico não encontrado", 404);
 

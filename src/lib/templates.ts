@@ -15,6 +15,7 @@ export const TEMPLATE_NAMES: Record<TemplateKind, string> = {
   VAGA_ABERTA: "convite_vaga_aberta",
   CANCELAMENTO: "cancelamento_consulta",
   REAGENDAMENTO: "reagendamento_consulta",
+  AVISO_MEDICO: "aviso_agenda_medico",
 };
 
 /**
@@ -43,6 +44,10 @@ export const TEMPLATE_FIELDS: Record<TemplateKind, TemplateFields> = {
   },
   REAGENDAMENTO: {
     body: ["Nome do paciente", "Município", "Data", "Horário", "Procedimento", "Local"],
+  },
+  AVISO_MEDICO: {
+    header: ["Município"],
+    body: ["Médico (com Dr./Dra.)", "Data", "Procedimento", "Local", "Pacientes agendados"],
   },
 };
 

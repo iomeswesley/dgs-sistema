@@ -244,6 +244,42 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  {
+    // Aviso da agenda pro MÉDICO na véspera (pedido do cliente, 2026-11-14 —
+    // texto dele, com o município virando variável no título, o "Dra." fixo
+    // virando parte do {{1}} e o total de pacientes, que era o objetivo do
+    // pedido). Vai de manhã, um dia antes de cada agenda (modules/doctor-notice).
+    name: "aviso_agenda_medico",
+    category: "UTILITY",
+    language: "pt_BR",
+    components: [
+      {
+        type: "HEADER",
+        format: "TEXT",
+        text: "Confirmação de Agenda - {{1}}",
+        example: { header_text: ["Camboriú"] },
+      },
+      {
+        type: "BODY",
+        text:
+          "Olá, *{{1}}*!\n\nInformamos os dados da sua agenda:\n\n" +
+          "📅 *Data:* {{2}}\n🩺 *Procedimento:* {{3}}\n📍 *Local:* {{4}}\n👥 *Pacientes agendados:* {{5}}\n\n" +
+          "Por gentileza, verifique as informações da agenda.\n\n" +
+          "Atenciosamente,\n*Equipe D'Artibale Gestão em Saúde*",
+        example: {
+          body_text: [
+            [
+              "Dr. Luiz Felipe",
+              "segunda-feira, 16/11/2026",
+              "Consulta em psiquiatria",
+              "Policlínica - Av. Eugênio Krause, 2265, Centro",
+              "27",
+            ],
+          ],
+        },
+      },
+    ],
+  },
 ];
 
 /**
@@ -340,6 +376,7 @@ export async function submitDefaultTemplates(
 
 const DGS_INTRO = "Aqui é a DGS, que organiza os atendimentos da Secretaria de Saúde de {{2}}.";
 const DGS_FOOTER = "DGS - D'Artibale Gestão em Saúde";
+const DGS_SIGNATURE = "Equipe D'Artibale Gestão em Saúde";
 const FOOTER_MAX = 60;
 
 /**
@@ -361,6 +398,9 @@ export function brandTemplates(templates: TemplateDefinition[], senderName?: str
       .split(DGS_INTRO)
       .join("Aqui é a Secretaria de Saúde de {{2}}.")
       .split(DGS_FOOTER)
+      .join(JSON.stringify(sender).slice(1, -1))
+      // Assinatura do aviso ao médico (aviso_agenda_medico) fica no corpo.
+      .split(DGS_SIGNATURE)
       .join(JSON.stringify(sender).slice(1, -1))
   ) as TemplateDefinition[];
 }
@@ -405,7 +445,8 @@ export async function submitTemplates(
   templates: TemplateDefinition[],
   wabaId: string,
   accessToken: string
-): Promise<void> {
+): Promise<{ name: string; ok: boolean; detail?: string }[]> {
+  const results: { name: string; ok: boolean; detail?: string }[] = [];
   for (const template of templates) {
     try {
       const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/message_templates`, {
@@ -415,7 +456,7 @@ export async function submitTemplates(
       });
       if (!res.ok) {
         const payload = (await res.json().catch(() => ({}))) as {
-          error?: { message?: string; error_subcode?: number };
+          error?: { message?: string; error_user_msg?: string; error_subcode?: number };
         };
         // 2388024 = "Já existe conteúdo nesse idioma" — a Meta rejeita
         // resubmeter o mesmo nome+idioma de um template já cadastrado.
@@ -424,17 +465,22 @@ export async function submitTemplates(
         // reconexão do mesmo número). Confirmado testando manualmente —
         // o texto de `message` sozinho ("Invalid parameter") não diferencia
         // isso de qualquer outro erro, só o `error_subcode` diferencia.
-        if (payload.error?.error_subcode !== 2388024) {
-          console.error(
-            `[WHATSAPP TEMPLATES] Falha ao submeter "${template.name}":`,
-            payload.error?.message ?? JSON.stringify(payload)
-          );
+        if (payload.error?.error_subcode === 2388024) {
+          results.push({ name: template.name, ok: true, detail: "já existia" });
+        } else {
+          const detail = payload.error?.error_user_msg ?? payload.error?.message ?? JSON.stringify(payload);
+          console.error(`[WHATSAPP TEMPLATES] Falha ao submeter "${template.name}":`, detail);
+          results.push({ name: template.name, ok: false, detail });
         }
+      } else {
+        results.push({ name: template.name, ok: true });
       }
     } catch (err) {
       console.error(`[WHATSAPP TEMPLATES] Falha ao submeter "${template.name}":`, (err as Error).message);
+      results.push({ name: template.name, ok: false, detail: (err as Error).message });
     }
   }
+  return results;
 }
 
 /**
