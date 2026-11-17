@@ -9,10 +9,11 @@ import { namesMatch } from "@/lib/text-match.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { parseBrasiliaDateTime, toBrasiliaDateString } from "@/lib/timezone.js";
 import { buildTemplateParams } from "@/modules/queue/queue.service.js";
-import { TEMPLATE_FIELDS, TEMPLATE_NAMES } from "@/lib/templates.js";
+import { listTemplate, TEMPLATE_FIELDS, TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { readPdfText } from "@/lib/pdf-text.js";
 import { matchScheduleReference, parseScheduleReference } from "@/lib/schedule-reference.js";
+import { currentSenderName } from "@/modules/settings/settings.service.js";
 
 /*
   Ciclo de vida de uma lista:
@@ -946,7 +947,7 @@ export async function addManualAppointment(
   // depois disso não tem mais "disparar" esperando, então enfileira na
   // hora (mesmo template que o resto da lista já usa).
   const dispatchNow = list.status !== "EM_REVISAO";
-  const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+  const template = listTemplate(list);
 
   const { appointment, patientOptedOut } = await prisma.$transaction(async (tx) => {
     const patient = await resolvePatient(tx, {
@@ -1080,7 +1081,7 @@ export async function importAdditionalPatients(
   await fillProcedureFromAgenda(list.agendaId, mapped.drafts);
 
   const dispatchNow = list.status !== "EM_REVISAO";
-  const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+  const template = listTemplate(list);
 
   let added = 0;
   let skippedDuplicates = 0;
@@ -1183,9 +1184,9 @@ export async function retryFailedAppointments(
 ): Promise<{ queued: number; corrected: number }> {
   if (updates.length === 0) throw new AppError("Nenhum telefone informado pra reenviar.", 400);
 
-  const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true } });
+  const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true, isOffer: true } });
   if (!list) throw new AppError("Lista não encontrada.", 404);
-  const template = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+  const template = listTemplate(list);
 
   const appointments = await prisma.appointment.findMany({
     where: { id: { in: updates.map((u) => u.appointmentId) }, listId },
@@ -1321,7 +1322,10 @@ export async function rescheduleAppointment(
   }
 
   const newScheduledAt = parseBrasiliaDateTime(scheduledAt);
-  const template = appointment.list.isComplementary ? "VAGA_ABERTA" : "REAGENDAMENTO";
+  // Lista de oferta: oferece de novo o horário novo (o reagendamento_consulta
+  // fala em "confirmar presença", que não é o que a oferta perguntou).
+  const firstTemplate = listTemplate(appointment.list);
+  const template = firstTemplate === "CONFIRMACAO" ? "REAGENDAMENTO" : firstTemplate;
 
   await prisma.$transaction([
     prisma.appointment.update({
@@ -1353,7 +1357,7 @@ export async function rescheduleAppointment(
 }
 
 export interface MessagePreview {
-  template: "CONFIRMACAO" | "VAGA_ABERTA";
+  template: "CONFIRMACAO" | "VAGA_ABERTA" | "OFERTA";
   text: string;
   patientName: string;
   phone: string | null;
@@ -1376,7 +1380,7 @@ export interface MessagePreview {
  * prévia bate exatamente com o que o paciente recebe, sem duplicar regra.
  */
 export async function getMessagePreview(listId: number, draft?: ListSettingsInput): Promise<MessagePreview> {
-  const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true } });
+  const list = await prisma.list.findUnique({ where: { id: listId }, select: { isComplementary: true, isOffer: true } });
   if (!list) throw new AppError("Lista não encontrada", 404);
 
   const appointment = await prisma.appointment.findFirst({
@@ -1420,9 +1424,9 @@ export async function getMessagePreview(listId: number, draft?: ListSettingsInpu
     } as Parameters<typeof buildTemplateParams>[1];
   }
 
-  const template: "CONFIRMACAO" | "VAGA_ABERTA" = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+  const template = listTemplate(list);
   const params = buildTemplateParams(template, source);
-  const text = renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body);
+  const text = renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body, await currentSenderName());
 
   const labels = TEMPLATE_FIELDS[template];
   const fields = [

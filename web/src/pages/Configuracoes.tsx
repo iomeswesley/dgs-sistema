@@ -2148,6 +2148,7 @@ const TEMPLATE_OPTIONS = [
   { value: "CONFIRMACAO", label: "Confirmação de consulta" },
   { value: "LEMBRETE", label: "Lembrete de véspera" },
   { value: "VAGA_ABERTA", label: "Vaga aberta" },
+  { value: "OFERTA", label: "Oferta da vaga" },
   { value: "CANCELAMENTO", label: "Cancelamento" },
   { value: "AVISO_MEDICO", label: "Aviso de agenda ao médico" },
 ] as const;

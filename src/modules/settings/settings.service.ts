@@ -17,7 +17,7 @@ export interface AppSettings {
 }
 
 export interface ClientFeatures {
-  messageFlow: "CONFIRMACAO" | "OFERTA";
+  messageFlow: "CONFIRMACAO" | "OFERTA" | "AMBOS";
   senderName: string | null;
   moduleLembrete: boolean;
   moduleCancelamento: boolean;
@@ -40,6 +40,15 @@ export async function getSettings(): Promise<AppSettings> {
   // pra não mascarar isso.
   if (!settings) throw new AppError("Configurações do sistema não encontradas pra este cliente.", 500);
   return { mediaRetentionDays: settings.mediaRetentionDays, features: toFeatures(settings) };
+}
+
+/** Remetente do cliente ativo (nome que substitui "DGS" nos templates), ou null. */
+export async function currentSenderName(): Promise<string | null> {
+  const settings = await prisma.appSettings.findUnique({
+    where: { clientId: requireActiveClientId() },
+    select: { senderName: true },
+  });
+  return settings?.senderName ?? null;
 }
 
 export interface UpdateSettingsInput {

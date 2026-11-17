@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma.js";
 import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { AppError } from "@/middleware/errorHandler.js";
 import { sendTemplate, WhatsappSendError } from "@/lib/whatsapp.js";
-import { PREPARO_PADRAO, TEMPLATE_NAMES } from "@/lib/templates.js";
+import { listTemplate, PREPARO_PADRAO, TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
 import { getBillingStatus } from "@/modules/billing/billing.service.js";
 import type { BillingStatus } from "@/modules/billing/billing.js";
+import { currentSenderName } from "@/modules/settings/settings.service.js";
 
 /*
   Fila de envio.
@@ -111,7 +112,8 @@ export async function enqueueList(listId: number, userId: number): Promise<{ que
 
   // Lista complementar convida para uma vaga que abriu (template diferente,
   // com pergunta de interesse) — não é a mesma confirmação da lista original.
-  const template: TemplateKind = list.isComplementary ? "VAGA_ABERTA" : "CONFIRMACAO";
+  // Lista de oferta oferece a vaga em vez de confirmar (2026-11-17).
+  const template: TemplateKind = listTemplate(list);
 
   let queued = 0;
   let skipped = 0;
@@ -242,6 +244,7 @@ async function reclaimStuckJobs(): Promise<number> {
 export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promise<ProcessResult> {
   await reclaimStuckJobs();
   const capacity = await queueCapacity();
+  const senderName = await currentSenderName();
   if (capacity.remaining === 0) {
     return {
       sent: 0,
@@ -399,7 +402,10 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
     // CANCELAMENTO continua saindo sempre, é fato decidido pela equipe,
     // não pergunta.
     if (
-      (job.template === "CONFIRMACAO" || job.template === "VAGA_ABERTA" || job.template === "REAGENDAMENTO") &&
+      (job.template === "CONFIRMACAO" ||
+        job.template === "VAGA_ABERTA" ||
+        job.template === "OFERTA" ||
+        job.template === "REAGENDAMENTO") &&
       job.appointment.scheduledAt.getTime() < Date.now()
     ) {
       await prisma.messageJob.update({
@@ -449,7 +455,7 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
             direction: "ENVIADA",
             template: job.template,
             phone: job.phone,
-            body: renderTemplateText(TEMPLATE_NAMES[job.template], params.header, params.body),
+            body: renderTemplateText(TEMPLATE_NAMES[job.template], params.header, params.body, senderName),
             status: "ENVIADO",
             sentAt: new Date(),
           },
@@ -498,7 +504,7 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
             direction: "ENVIADA",
             template: job.template,
             phone: job.phone,
-            body: renderTemplateText(TEMPLATE_NAMES[job.template], params.header, params.body),
+            body: renderTemplateText(TEMPLATE_NAMES[job.template], params.header, params.body, senderName),
             status: "FALHOU",
             errorCode: code ?? null,
             errorMessage: message,
@@ -588,7 +594,8 @@ export function buildTemplateParams(template: TemplateKind, appointment: JobAppo
     };
   }
 
-  if (template === "VAGA_ABERTA") {
+  // OFERTA (oferta_vaga_consulta) tem as mesmas 6 variáveis, na mesma ordem.
+  if (template === "VAGA_ABERTA" || template === "OFERTA") {
     return {
       body: [firstName, appointment.municipality.name, appointment.procedure.name, date, time, local],
     };

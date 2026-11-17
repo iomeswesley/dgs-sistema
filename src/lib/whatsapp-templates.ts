@@ -526,8 +526,15 @@ function fillVariables(text: string, values: string[]): string {
  * paciente realmente recebeu. Só funciona pros templates cadastrados aqui
  * (`DEFAULT_TEMPLATES`); template desconhecido devolve string vazia.
  */
-export function renderTemplateText(templateName: string, header: string[] | undefined, body: string[]): string {
-  const template = DEFAULT_TEMPLATES.find((t) => t.name === templateName);
+export function renderTemplateText(
+  templateName: string,
+  header: string[] | undefined,
+  body: string[],
+  /** Remetente do cliente (AppSettings.senderName) — o texto bate com o template que a Meta aprovou pra ele. */
+  senderName?: string | null
+): string {
+  const found = DEFAULT_TEMPLATES.find((t) => t.name === templateName);
+  const template = found ? brandTemplates([found], senderName)[0] : undefined;
   if (!template) return "";
 
   const parts: string[] = [];

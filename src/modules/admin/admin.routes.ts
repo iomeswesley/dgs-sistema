@@ -195,7 +195,7 @@ adminRouter.patch(
 );
 
 const setFeaturesSchema = z.object({
-  messageFlow: z.enum(["CONFIRMACAO", "OFERTA"]).optional(),
+  messageFlow: z.enum(["CONFIRMACAO", "OFERTA", "AMBOS"]).optional(),
   senderName: z.string().max(80).nullable().optional(),
   moduleLembrete: z.boolean().optional(),
   moduleCancelamento: z.boolean().optional(),

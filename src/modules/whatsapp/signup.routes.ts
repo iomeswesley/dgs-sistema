@@ -32,6 +32,7 @@ import {
   submitDefaultTemplates,
   submitTemplates,
 } from "@/lib/whatsapp-templates.js";
+import { currentSenderName } from "@/modules/settings/settings.service.js";
 
 export const whatsappSignupRouter = Router();
 whatsappSignupRouter.use("/api/whatsapp/signup", requireAuth);
@@ -250,7 +251,7 @@ whatsappSignupRouter.delete(
 
 const testSendSchema = z.object({
   phone: z.string().min(8),
-  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA", "CANCELAMENTO", "AVISO_MEDICO"]),
+  template: z.enum(["CONFIRMACAO", "LEMBRETE", "VAGA_ABERTA", "CANCELAMENTO", "AVISO_MEDICO", "OFERTA"]),
 });
 
 /**
@@ -269,6 +270,7 @@ whatsappSignupRouter.post(
     if (normalized.kind !== "mobile") throw new AppError("Só celular recebe WhatsApp.", 400);
 
     const params = buildTestParams(template);
+    const senderName = await currentSenderName();
 
     // Grava no banco igual o disparo de verdade (queue.service.ts) — sem
     // isso o aviso de "sem forma de pagamento" (que olha o último envio
@@ -283,7 +285,7 @@ whatsappSignupRouter.post(
           direction: "ENVIADA",
           template,
           phone: normalized.e164,
-          body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body),
+          body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body, senderName),
           status: "ENVIADO",
           sentAt: new Date(),
         },
@@ -298,7 +300,7 @@ whatsappSignupRouter.post(
           direction: "ENVIADA",
           template,
           phone: normalized.e164,
-          body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body),
+          body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body, senderName),
           status: "FALHOU",
           errorCode: code ?? null,
           errorMessage: message,
@@ -327,7 +329,7 @@ function buildTestParams(template: TemplateKind) {
   if (template === "LEMBRETE") {
     return { body: [firstName, date, time, procedure, local, PREPARO_PADRAO] };
   }
-  if (template === "VAGA_ABERTA") {
+  if (template === "VAGA_ABERTA" || template === "OFERTA") {
     return { body: [firstName, municipality, procedure, date, time, local] };
   }
   if (template === "CANCELAMENTO") {

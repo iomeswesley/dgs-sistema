@@ -131,6 +131,8 @@ interface ListDetail {
     mimeType: string;
     sourceFormat: string;
     status: string;
+    isComplementary: boolean;
+    isOffer: boolean;
     remindersEnabled: boolean;
     extractionError: string | null;
     municipality: { id: number; name: string };
@@ -350,6 +352,16 @@ export function Revisao() {
   // 2026-09-14) — ligar exige confirmação explícita, desligar não.
   const [confirmReminders, setConfirmReminders] = useState(false);
   const [remindersBusy, setRemindersBusy] = useState(false);
+  // Confirmação × oferta (2026-11-17): só aparece pra cliente com o fluxo
+  // AMBOS ligado em /admin.
+  const [messageFlow, setMessageFlow] = useState<"CONFIRMACAO" | "OFERTA" | "AMBOS">("CONFIRMACAO");
+  const [kindBusy, setKindBusy] = useState(false);
+  useEffect(() => {
+    api
+      .get<{ features: { messageFlow: "CONFIRMACAO" | "OFERTA" | "AMBOS" } }>("/api/settings")
+      .then((data) => setMessageFlow(data.features.messageFlow))
+      .catch(() => undefined);
+  }, []);
 
   // Enquanto a extração roda em segundo plano (EXTRAINDO), o status só muda
   // sozinho no banco — sem isso a tela ficava presa até a equipe apertar F5.
@@ -1020,6 +1032,19 @@ export function Revisao() {
    * comentário no backend, achado de 2026-09-14: esperar o cron do dia
    * seguinte perderia a janela pra quem tem consulta amanhã).
    */
+  async function setMessageKind(isOffer: boolean) {
+    setKindBusy(true);
+    setError(null);
+    try {
+      await api.patch(`/api/lists/${list.id}/message-kind`, { isOffer });
+      detail.setData((prev) => (prev ? { ...prev, list: { ...prev.list, isOffer } } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao mudar o tipo de mensagem.");
+    } finally {
+      setKindBusy(false);
+    }
+  }
+
   async function setReminders(enabled: boolean) {
     setRemindersBusy(true);
     setError(null);
@@ -1124,7 +1149,7 @@ export function Revisao() {
                 title={hasUnitIssue && !unitConfirmed ? "Confirme o comparativo de unidade/endereço abaixo antes de disparar." : undefined}
                 onClick={() => setConfirmAction("dispatch")}
               >
-                Disparar confirmações
+                {list.isOffer ? "Disparar ofertas" : "Disparar confirmações"}
               </button>
             )}
             {list.status === "DISPARADA" && (
@@ -1135,6 +1160,30 @@ export function Revisao() {
           </div>
         }
       />
+
+      {messageFlow === "AMBOS" && !list.isComplementary && (
+        <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="text-sm font-semibold text-ink">Tipo de mensagem</p>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              {list.isOffer
+                ? "Oferta da vaga — o paciente responde se quer ficar com o horário (Sim, quero a vaga / Não, obrigado)."
+                : "Confirmação de consulta já marcada (Sim, vou comparecer / Não poderei ir)."}
+              {list.status === "EM_REVISAO" || list.status === "APROVADA" ? "" : " Não muda mais depois do disparo."}
+            </p>
+          </div>
+          <select
+            className="field w-auto"
+            aria-label="Tipo de mensagem desta lista"
+            value={list.isOffer ? "OFERTA" : "CONFIRMACAO"}
+            disabled={kindBusy || (list.status !== "EM_REVISAO" && list.status !== "APROVADA")}
+            onChange={(e) => void setMessageKind(e.target.value === "OFERTA")}
+          >
+            <option value="CONFIRMACAO">Confirmação</option>
+            <option value="OFERTA">Oferta da vaga</option>
+          </select>
+        </div>
+      )}
 
       <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
@@ -1770,7 +1819,9 @@ export function Revisao() {
               : confirmAction === "reprocess"
               ? "Tentar a leitura de novo?"
               : confirmAction === "dispatch"
-                ? "Disparar as confirmações?"
+                ? list.isOffer
+                  ? "Disparar as ofertas?"
+                  : "Disparar as confirmações?"
                 : "Concluir esta lista?"
         }
         description={

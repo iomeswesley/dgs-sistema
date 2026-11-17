@@ -353,6 +353,11 @@ model List {
   // Lista complementar enviada pra preencher vagas abertas de uma agenda que
   // já teve disparo (fase 2).
   isComplementary Boolean      @default(false)
+  // Lista de OFERTA (2026-11-17, Botuverá): em vez de confirmar consulta já
+  // marcada, oferece a vaga (template oferta_vaga_consulta, "Sim, quero a
+  // vaga"/"Não, obrigado"). Escolhida por lista na Revisão quando o cliente
+  // tem o fluxo AMBOS; com fluxo OFERTA toda lista nasce assim.
+  isOffer         Boolean      @default(false)
   // Lembrete D-1 (véspera) — desligado por padrão desde 2026-09-14 (pedido
   // do usuário: nem toda lista quer o lembrete automático, precisa ser uma
   // decisão explícita por lista, com confirmação, não um comportamento
@@ -929,6 +934,8 @@ enum TemplateKind {
   // Aviso da agenda pro MÉDICO na véspera (não é mensagem de paciente:
   // WhatsappMessage sem appointmentId). Ver modules/doctor-notice.
   AVISO_MEDICO
+  // Oferta da vaga (fluxo OFERTA, lista com isOffer). 2026-11-17.
+  OFERTA
 }
 
 enum JobStatus {
@@ -955,6 +962,8 @@ enum DeliveryStatus {
 enum MessageFlow {
   CONFIRMACAO
   OFERTA
+  // Os dois: a equipe escolhe por lista (padrão confirmação). 2026-11-17.
+  AMBOS
 }
 
 enum BillingMode {

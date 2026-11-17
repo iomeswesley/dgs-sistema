@@ -7,6 +7,7 @@ import { sendTemplate, sendText, type TemplateComponentParams } from "@/lib/what
 import { TEMPLATE_NAMES } from "@/lib/templates.js";
 import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { AppError } from "@/middleware/errorHandler.js";
+import { currentSenderName } from "@/modules/settings/settings.service.js";
 
 /*
   Tela de conversas: mostra TODA mensagem trocada com um número, não só a
@@ -414,7 +415,7 @@ export async function sendTemplateReply(
       direction: "ENVIADA",
       template,
       phone: key,
-      body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body),
+      body: renderTemplateText(TEMPLATE_NAMES[template], params.header, params.body, await currentSenderName()),
       status: "ENVIADO",
     },
   });

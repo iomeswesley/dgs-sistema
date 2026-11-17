@@ -16,7 +16,19 @@ export const TEMPLATE_NAMES: Record<TemplateKind, string> = {
   CANCELAMENTO: "cancelamento_consulta",
   REAGENDAMENTO: "reagendamento_consulta",
   AVISO_MEDICO: "aviso_agenda_medico_v2",
+  OFERTA: "oferta_vaga_consulta",
 };
+
+/**
+ * Template da 1ª mensagem de uma lista: reposição de vaga (lista
+ * complementar), oferta (lista de oferta, 2026-11-17) ou confirmação.
+ * Fonte única — antes cada ponto repetia o `isComplementary ? ... : ...`.
+ */
+export function listTemplate(list: { isComplementary: boolean; isOffer: boolean }): "CONFIRMACAO" | "VAGA_ABERTA" | "OFERTA" {
+  if (list.isComplementary) return "VAGA_ABERTA";
+  if (list.isOffer) return "OFERTA";
+  return "CONFIRMACAO";
+}
 
 /**
  * Rótulo de cada variável, na mesma ordem que o template espera — usado
@@ -44,6 +56,9 @@ export const TEMPLATE_FIELDS: Record<TemplateKind, TemplateFields> = {
   },
   REAGENDAMENTO: {
     body: ["Nome do paciente", "Município", "Data", "Horário", "Procedimento", "Local"],
+  },
+  OFERTA: {
+    body: ["Nome do paciente", "Município", "Procedimento", "Data", "Horário", "Local"],
   },
   AVISO_MEDICO: {
     header: ["Município"],

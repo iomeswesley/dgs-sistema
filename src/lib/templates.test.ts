@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyReply } from "@/lib/templates.js";
+import { classifyReply, listTemplate } from "@/lib/templates.js";
 
 describe("classifyReply — clique de botão", () => {
   it("entende os botões dos três templates", () => {
@@ -43,5 +43,20 @@ describe("classifyReply — texto livre", () => {
     expect(classifyReply({ text: "Posso confirmar?" })).toBe("unknown");
     expect(classifyReply({ text: "" })).toBe("unknown");
     expect(classifyReply({})).toBe("unknown");
+  });
+});
+
+describe("listTemplate — 1ª mensagem da lista", () => {
+  it("confirmação por padrão, oferta em lista de oferta, vaga aberta na complementar", () => {
+    expect(listTemplate({ isComplementary: false, isOffer: false })).toBe("CONFIRMACAO");
+    expect(listTemplate({ isComplementary: false, isOffer: true })).toBe("OFERTA");
+    expect(listTemplate({ isComplementary: true, isOffer: false })).toBe("VAGA_ABERTA");
+    // Complementar vence: reposição tem template próprio.
+    expect(listTemplate({ isComplementary: true, isOffer: true })).toBe("VAGA_ABERTA");
+  });
+
+  it("os botões da oferta são reconhecidos como aceite/recusa", () => {
+    expect(classifyReply({ buttonPayload: "Sim, quero a vaga" })).toBe("confirm");
+    expect(classifyReply({ buttonPayload: "Não, obrigado" })).toBe("refuse");
   });
 });

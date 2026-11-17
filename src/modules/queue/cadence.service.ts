@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma.js";
 import { requireActiveClientId } from "@/lib/tenant-context.js";
 import { getSettings } from "@/modules/settings/settings.service.js";
 import { startOfBrasiliaDay } from "@/lib/timezone.js";
+import { listTemplate } from "@/lib/templates.js";
 
 /*
   Cadência das mensagens:
@@ -118,7 +119,12 @@ export async function enqueueRetries(): Promise<CadenceResult> {
       patient: { optedOut: false },
       messages: { some: { direction: "ENVIADA", createdAt: { lt: cutoff } } },
     },
-    select: { id: true, phones: true, selectedPhone: true },
+    select: {
+      id: true,
+      phones: true,
+      selectedPhone: true,
+      list: { select: { isComplementary: true, isOffer: true } },
+    },
   });
 
   let queued = 0;
@@ -141,7 +147,9 @@ export async function enqueueRetries(): Promise<CadenceResult> {
       data: {
         clientId: requireActiveClientId(),
         appointmentId: appointment.id,
-        template: "CONFIRMACAO",
+        // Mesmo template da 1ª mensagem da lista (vaga aberta/oferta não
+        // podem ser reenviadas como "confirme sua presença").
+        template: appointment.list ? listTemplate(appointment.list) : "CONFIRMACAO",
         phone: nextPhone,
       },
     });

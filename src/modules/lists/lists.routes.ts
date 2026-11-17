@@ -30,6 +30,7 @@ import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.
 import { enqueueReminders } from "@/modules/queue/cadence.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
+import { getSettings } from "@/modules/settings/settings.service.js";
 import { EXCEL_MIME } from "@/modules/extraction/excel-layout.js";
 import { buildImportTemplate } from "@/modules/extraction/excel-template.js";
 import {
@@ -83,6 +84,7 @@ listsRouter.get(
         sourceFormat: true,
         status: true,
         isComplementary: true,
+        isOffer: true,
         remindersEnabled: true,
         extractionError: true,
         createdAt: true,
@@ -185,9 +187,13 @@ listsRouter.post(
       throw new AppError("Arquivo maior que 20 MB. Divida em partes.", 413);
     }
 
+    // Cliente só de oferta: toda lista nasce como oferta. Com AMBOS nasce
+    // confirmação e a equipe troca na Revisão (2026-11-17).
+    const { features } = await getSettings();
     const list = await prisma.list.create({
       data: {
         clientId: requireActiveClientId(),
+        isOffer: !data.isComplementary && features.messageFlow === "OFERTA",
         municipalityId: data.municipalityId,
         agendaId: data.agendaId ?? null,
         originalName: data.originalName,
@@ -284,6 +290,8 @@ listsRouter.get(
         mimeType: true,
         sourceFormat: true,
         status: true,
+        isComplementary: true,
+        isOffer: true,
         remindersEnabled: true,
         extractionError: true,
         extractionRaw: true,
@@ -539,6 +547,46 @@ listsRouter.post(
     runInBackground(extractAndStage(id), (err) =>
       console.error(`[LISTA ${id}] Falha no reprocessamento:`, (err as Error).message)
     );
+  })
+);
+
+const messageKindSchema = z.object({ isOffer: z.boolean() });
+
+/**
+ * Troca o tipo da 1ª mensagem da lista: confirmação de consulta marcada ×
+ * oferta da vaga (2026-11-17, Botuverá). Só antes do disparo (EM_REVISAO ou
+ * APROVADA — depois disso o paciente já recebeu uma das duas) e só pra
+ * cliente com o fluxo AMBOS ligado em /admin. Lista complementar (reposição
+ * de vaga) tem template próprio e não troca.
+ */
+listsRouter.patch(
+  "/api/lists/:id/message-kind",
+  asyncHandler(async (req, res) => {
+    const id = routeId(req);
+    const data = parseBody(req, messageKindSchema);
+    const { features } = await getSettings();
+    if (features.messageFlow !== "AMBOS") {
+      throw new AppError("Este cliente não tem a escolha entre confirmação e oferta ligada.", 403);
+    }
+    const list = await prisma.list.findUnique({ where: { id }, select: { status: true, isOffer: true, isComplementary: true } });
+    if (!list) throw new AppError("Lista não encontrada", 404);
+    if (list.isComplementary) throw new AppError("Lista de reposição de vaga já usa o convite de vaga aberta.", 409);
+    if (list.status !== "EM_REVISAO" && list.status !== "APROVADA") {
+      throw new AppError("A lista já foi disparada — o tipo de mensagem não pode mais mudar.", 409);
+    }
+    if (list.isOffer !== data.isOffer) {
+      await prisma.list.update({ where: { id }, data: { isOffer: data.isOffer } });
+      await recordAudit({
+        userId: currentUserId(req),
+        action: "set_list_message_kind",
+        entity: "List",
+        entityId: id,
+        field: "isOffer",
+        oldValue: list.isOffer,
+        newValue: data.isOffer,
+      });
+    }
+    res.json({ ok: true, isOffer: data.isOffer });
   })
 );
 

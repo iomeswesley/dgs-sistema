@@ -1,0 +1,25 @@
+{
+  "_fonte": "Ficha 'Cadastro de novo cliente' preenchida pela Secretaria (recebida em 17/11/2026).",
+  "client": {
+    "name": "Botuverá",
+    "notes": "Secretaria Municipal de Saúde de Botuverá. CNPJ 11.960.753/0001-65. Rua João Morelli, 65. Responsável: Luis Fernando Sanni (gestor), saude@botuvera.sc.gov.br, (47) 99928-7487."
+  },
+  "features": {
+    "messageFlow": "AMBOS",
+    "senderName": "Secretaria Municipal de Saúde de Botuverá",
+    "moduleLembrete": true,
+    "moduleCancelamento": true
+  },
+  "municipality": { "name": "Botuverá", "state": "SC" },
+  "units": [
+    { "name": "USF Willy Maestri", "address": "Rua João Morelli, 65" },
+    { "name": "USF Prefeito José Bonus", "address": "Estrada Geral Águas Negras" }
+  ],
+  "users": [
+    { "name": "Leticia", "email": "smsbotuvera.regulacao@gmail.com" },
+    { "name": "Jenifer", "email": "saude@botuvera.sc.gov.br" }
+  ],
+  "doctors": [],
+  "procedures": [],
+  "whatsappAccountId": 9
+}

@@ -58,7 +58,7 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
       doctor: { select: { name: true } },
       municipality: { select: { name: true } },
       procedure: { select: { name: true } },
-      list: { select: { isComplementary: true } },
+      list: { select: { isComplementary: true, isOffer: true } },
     },
   });
 
@@ -110,7 +110,9 @@ export async function buildIndicators(filters: IndicatorFilters, groupBy: GroupB
       doctorName: appointment.doctor.name,
       municipalityName: appointment.municipality.name,
       procedureName: appointment.procedure.name,
-      isComplementary: appointment.list?.isComplementary ?? false,
+      // Lista de oferta pergunta "quer a vaga?" como a reposição — mesmo balde,
+      // fora da % Confirmação (2026-11-17).
+      isComplementary: (appointment.list?.isComplementary || appointment.list?.isOffer) ?? false,
       confirmationTemplateSent: confirmationSentIds.has(appointment.id),
       manuallyContacted: appointment.contactedById !== null,
     })),
@@ -152,11 +154,11 @@ export async function getReceivedFlowBreakdown(filters: IndicatorFilters): Promi
       procedureId: filters.procedureId,
       status: { not: "CANCELADO" },
     },
-    select: { status: true, list: { select: { isComplementary: true } } },
+    select: { status: true, list: { select: { isComplementary: true, isOffer: true } } },
   });
 
   return buildReceivedFlowBreakdown(
-    appointments.map((a) => ({ status: a.status, isComplementary: a.list?.isComplementary ?? false }))
+    appointments.map((a) => ({ status: a.status, isComplementary: (a.list?.isComplementary || a.list?.isOffer) ?? false }))
   );
 }
 
@@ -173,7 +175,11 @@ export async function getMessagesPerDay(from: Date, to: Date): Promise<DailyMess
   });
 
   return buildMessagesPerDaySeries(
-    messages.map((m) => ({ dayKey: toBrasiliaDateString(m.createdAt), template: m.template as TemplateKindKey | null })),
+    messages.map((m) => ({
+      dayKey: toBrasiliaDateString(m.createdAt),
+      // Oferta soma na barra de "Vaga aberta / oferta" (mesma pergunta: quer a vaga?).
+      template: (m.template === "OFERTA" ? "VAGA_ABERTA" : m.template) as TemplateKindKey | null,
+    })),
     toBrasiliaDateString(from),
     toBrasiliaDateString(to)
   );

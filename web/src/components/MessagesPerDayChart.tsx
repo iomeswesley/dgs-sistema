@@ -28,7 +28,7 @@ const PRESETS = [
 const TEMPLATES: { key: TemplateKind; label: string; color: string }[] = [
   { key: "CONFIRMACAO", label: "Confirmação", color: "var(--chart-confirmacao)" },
   { key: "LEMBRETE", label: "Lembrete", color: "var(--chart-lembrete)" },
-  { key: "VAGA_ABERTA", label: "Vaga aberta", color: "var(--chart-vaga-aberta)" },
+  { key: "VAGA_ABERTA", label: "Vaga aberta / oferta", color: "var(--chart-vaga-aberta)" },
   { key: "CANCELAMENTO", label: "Cancelamento", color: "var(--chart-cancelamento)" },
 ];
 

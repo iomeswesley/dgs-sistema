@@ -33,7 +33,7 @@ interface BillingConfig {
 }
 
 interface ClientFeatures {
-  messageFlow: "CONFIRMACAO" | "OFERTA";
+  messageFlow: "CONFIRMACAO" | "OFERTA" | "AMBOS";
   senderName: string | null;
   moduleLembrete: boolean;
   moduleCancelamento: boolean;
@@ -401,7 +401,8 @@ function ClientFeaturesModal({
         <Field label="Tipo de mensagem principal">
           <select className="field" value={flow} onChange={(e) => setFlow(e.target.value as ClientFeatures["messageFlow"])}>
             <option value="CONFIRMACAO">Confirmação de consulta já marcada (Sim, vou comparecer / Não poderei ir)</option>
-            <option value="OFERTA">Oferta de consulta (Sim, tenho interesse / Não tenho interesse)</option>
+            <option value="OFERTA">Oferta da vaga (Sim, quero a vaga / Não, obrigado)</option>
+            <option value="AMBOS">Os dois — a equipe escolhe em cada lista, na Revisão</option>
           </select>
         </Field>
         <Field label="Nome do remetente nas mensagens (município)">
@@ -420,12 +421,16 @@ function ClientFeaturesModal({
           <input type="checkbox" checked={cancelamento} onChange={(e) => setCancelamento(e.target.checked)} />
           Cancelamento de agenda
         </label>
-        {flow === "OFERTA" && (
+        {flow !== "CONFIRMACAO" && (
           <Callout tone="warn">
-            O texto da oferta e o nome do remetente nos templates dependem do template aprovado na Meta; esta escolha
-            registra a configuração do cliente.
+            A oferta usa o template oferta_vaga_consulta: ele precisa estar aprovado na conta de WhatsApp deste cliente
+            (Configurações → WhatsApp → Enviar pra aprovação).
           </Callout>
         )}
+        <p className="text-xs text-ink-muted">
+          O nome do remetente vai no rodapé dos templates quando eles são submetidos à Meta. Defina antes de conectar o
+          WhatsApp do cliente; se mudar depois, os templates precisam ser reenviados.
+        </p>
       </div>
     </FormModal>
   );

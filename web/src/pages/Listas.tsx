@@ -18,6 +18,7 @@ interface ListSummary {
   status: string;
   sourceFormat: string;
   isComplementary: boolean;
+  isOffer: boolean;
   remindersEnabled: boolean;
   extractionError: string | null;
   createdAt: string;
@@ -948,6 +949,9 @@ export function Listas() {
                 <div className="min-w-0">
                   <p className="break-words text-[17px] font-bold text-ink">
                     {list.originalName}
+                    {list.isOffer && (
+                      <span className="ml-2 align-middle text-xs font-normal text-accent">oferta</span>
+                    )}
                     {list.isComplementary && (
                       <span className="ml-2 align-middle text-xs font-normal text-accent">complementar</span>
                     )}

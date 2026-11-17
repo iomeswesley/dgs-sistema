@@ -7,6 +7,7 @@ import { renderTemplateText } from "@/lib/whatsapp-templates.js";
 import { queueCapacity } from "@/modules/queue/queue.service.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
 import { doctorGreetingName, formatAgendaDate, isMorningWindow, summarizeProcedures, tomorrowCalendarDate } from "./doctor-notice.js";
+import { currentSenderName } from "@/modules/settings/settings.service.js";
 
 /*
   Aviso da agenda ao MÉDICO na véspera (pedido do cliente, 2026-11-14).
@@ -93,7 +94,7 @@ async function sendNotice(agenda: NoticeAgenda, { allowEmpty }: { allowEmpty: bo
 
   const params = await buildNoticeParams(agenda, patientCount);
   const templateName = TEMPLATE_NAMES.AVISO_MEDICO;
-  const body = renderTemplateText(templateName, params.header, params.body);
+  const body = renderTemplateText(templateName, params.header, params.body, await currentSenderName());
   const clientId = requireActiveClientId();
   const phone = agenda.doctor.phone;
 
