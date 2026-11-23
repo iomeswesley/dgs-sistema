@@ -269,7 +269,7 @@ whatsappSignupRouter.post(
     if (!normalized) throw new AppError(describePhoneIssue(phone), 400);
     if (normalized.kind !== "mobile") throw new AppError("Só celular recebe WhatsApp.", 400);
 
-    const params = buildTestParams(template);
+    const params = buildTestParams(template, await loadTestContext());
     const senderName = await currentSenderName();
 
     // Grava no banco igual o disparo de verdade (queue.service.ts) — sem
@@ -312,7 +312,40 @@ whatsappSignupRouter.post(
   })
 );
 
-function buildTestParams(template: TemplateKind) {
+interface TestContext {
+  municipality: string;
+  local: string;
+  procedure: string;
+}
+
+/**
+ * Dados reais do cadastro do cliente pro "Enviar teste" (2026-11-23, pedido
+ * do usuário: com "Município de Teste" a mensagem não parecia a de verdade).
+ * Pega o primeiro município ativo que tenha unidade ativa — de preferência
+ * com endereço, igual sai pro paciente ("Unidade - Endereço") — e o
+ * primeiro procedimento ativo. O paciente continua "Teste" (nunca um nome
+ * de paciente real). Cadastro vazio cai nos textos genéricos de antes.
+ */
+async function loadTestContext(): Promise<TestContext> {
+  const municipalities = await prisma.municipality.findMany({
+    where: { active: true },
+    orderBy: { id: "asc" },
+    include: { units: { where: { active: true }, orderBy: { id: "asc" } } },
+  });
+  const withAddress = municipalities.find((m) => m.units.some((u) => u.address?.trim()));
+  const withUnit = withAddress ?? municipalities.find((m) => m.units.length > 0);
+  const municipality = withUnit ?? municipalities[0];
+  const unit = municipality?.units.find((u) => u.address?.trim()) ?? municipality?.units[0];
+  const procedure = await prisma.procedure.findFirst({ where: { active: true }, orderBy: { id: "asc" } });
+
+  return {
+    municipality: municipality?.name ?? "Município de Teste",
+    local: unit ? [unit.name, unit.address?.trim()].filter(Boolean).join(" - ") : municipality?.name ?? "Unidade de Teste",
+    procedure: procedure?.name ?? "Consulta de teste",
+  };
+}
+
+function buildTestParams(template: TemplateKind, ctx: TestContext) {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const date = tomorrow.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -322,9 +355,7 @@ function buildTestParams(template: TemplateKind) {
   });
   const time = "10:00";
   const firstName = "Teste";
-  const municipality = "Município de Teste";
-  const procedure = "Procedimento de Teste";
-  const local = "Unidade de Teste";
+  const { municipality, procedure, local } = ctx;
 
   if (template === "LEMBRETE") {
     return { body: [firstName, date, time, procedure, local, PREPARO_PADRAO] };
