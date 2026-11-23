@@ -284,7 +284,11 @@ export async function processQueue(timeBudgetMs: number = TIME_BUDGET_MS): Promi
   // verdade pro paciente. `FOR UPDATE SKIP LOCKED` faz cada chamada
   // concorrente pegar um lote DIFERENTE de linhas, sem esperar uma pela
   // outra e sem nunca pegar a mesma linha duas vezes.
-  const limit = Math.min(BATCH_SIZE, capacity.remaining);
+  // O saldo do limite comercial também corta o lote — sem isso, com limite 50
+  // e 0 usadas, um lote de 60 saía inteiro (o bloqueio acima só é checado
+  // ANTES do lote, nunca no meio dele). Envio que falha não conta no limite
+  // (só conta mensagem com wamid), então isso pode mandar menos, nunca mais.
+  const limit = Math.min(BATCH_SIZE, capacity.remaining, capacity.billing.remaining ?? Infinity);
   // SQL cru não passa pela extensão de isolamento (ver
   // src/lib/tenant-prisma-extension.ts) — clientId precisa ir explícito no
   // WHERE, à mão, igual o plano multi-cliente já previa (seção 3.3).
