@@ -40,6 +40,7 @@ async function loadSettings(clientId: number): Promise<BillingSettings> {
     periodLengthDays: row.periodLengthDays,
     creditsBalance: row.creditsBalance,
     creditsGrantedAt: row.creditsGrantedAt,
+    billingTolerance: row.billingTolerance,
   };
 }
 
@@ -89,6 +90,8 @@ export interface SetBillingInput {
   periodLengthDays?: number;
   // CREDITOS — saldo inicial ao entrar nesse modo (topups depois passam por addClientCredits).
   creditsBalance?: number;
+  /** Mensagens extras além do limite (vale pros dois modos). Ausente = 0. */
+  billingTolerance?: number;
 }
 
 /**
@@ -108,11 +111,12 @@ export async function setClientBilling(input: SetBillingInput, userId: number | 
           periodLengthDays: null,
           creditsBalance: null,
           creditsGrantedAt: null,
+          billingTolerance: null,
         }
       : input.billingMode === "JANELA"
-        ? buildJanelaData(input)
+        ? { ...buildJanelaData(input), billingTolerance: toleranceData(input) }
         : input.billingMode === "CREDITOS"
-          ? buildCreditosData(input)
+          ? { ...buildCreditosData(input), billingTolerance: toleranceData(input) }
           : (() => {
               throw new AppError("Modo de cobrança inválido.", 400);
             })();
@@ -129,6 +133,13 @@ export async function setClientBilling(input: SetBillingInput, userId: number | 
   });
 
   return getBillingStatus();
+}
+
+function toleranceData(input: SetBillingInput): number | null {
+  const t = input.billingTolerance;
+  if (t == null || t === 0) return null;
+  if (!Number.isInteger(t) || t < 0) throw new AppError("A tolerância precisa ser um número inteiro (0 ou mais).", 400);
+  return t;
 }
 
 function buildJanelaData(input: SetBillingInput) {
@@ -181,7 +192,9 @@ export async function addClientCredits(amount: number, userId: number | null): P
 
   const now = new Date();
   const used = await countUsed(before, now);
-  const remaining = Math.max(0, (before.creditsBalance ?? 0) - used);
+  // Pode ficar negativo quando o cliente gastou a tolerância (passou do
+  // saldo): o que passou é descontado dos créditos novos, não perdoado.
+  const remaining = (before.creditsBalance ?? 0) - used;
   const newBalance = remaining + amount;
 
   await prisma.appSettings.update({

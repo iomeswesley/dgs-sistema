@@ -10,7 +10,7 @@ import { recordAudit } from "@/modules/audit/audit.service.js";
 import { getPhoneNumberStatus } from "@/modules/whatsapp/whatsapp-account.service.js";
 import { toBrasiliaDateString } from "@/lib/timezone.js";
 import { getBillingStatus } from "@/modules/billing/billing.service.js";
-import type { BillingStatus } from "@/modules/billing/billing.js";
+import { projectDispatch, type BillingStatus, type DispatchProjection } from "@/modules/billing/billing.js";
 import { currentSenderName } from "@/modules/settings/settings.service.js";
 
 /*
@@ -75,6 +75,33 @@ export async function queueCapacity(): Promise<QueueCapacity> {
     pending,
     billing,
   };
+}
+
+/**
+ * Previsão do disparo de uma lista contra o limite comercial do cliente
+ * (2026-11-23) — a Revisão mostra no "Disparar" se vai passar do limite e
+ * quantas ficariam paradas. Conta exatamente o que `enqueueList()` criaria
+ * (mesmos filtros), sem gravar nada.
+ */
+export async function previewListDispatch(listId: number): Promise<DispatchProjection> {
+  const list = await prisma.list.findUnique({ where: { id: listId } });
+  if (!list) throw new AppError("Lista não encontrada", 404);
+  const template: TemplateKind = listTemplate(list);
+
+  const [listMessages, alreadyQueued, billing] = await Promise.all([
+    prisma.appointment.count({
+      where: {
+        listId,
+        status: "PENDENTE",
+        selectedPhone: { not: null },
+        patient: { optedOut: false },
+        messageJobs: { none: { template, status: { in: ["PENDENTE", "ENVIADO"] } } },
+      },
+    }),
+    prisma.messageJob.count({ where: { status: { in: ["PENDENTE", "ENVIANDO"] } } }),
+    getBillingStatus(),
+  ]);
+  return projectDispatch(billing, alreadyQueued, listMessages);
 }
 
 /**

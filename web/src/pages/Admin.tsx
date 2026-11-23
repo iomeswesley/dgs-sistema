@@ -21,6 +21,9 @@ interface BillingStatus {
   limit: number | null;
   used: number;
   remaining: number | null;
+  remainingInLimit: number | null;
+  tolerance: number;
+  overLimit: boolean;
   resetsAt: string | null;
 }
 
@@ -30,6 +33,7 @@ interface BillingConfig {
   periodStartDate: string | null;
   periodLengthDays: number | null;
   creditsBalance: number | null;
+  billingTolerance: number | null;
 }
 
 interface ClientFeatures {
@@ -337,17 +341,19 @@ function BillingSummary({ billing, error }: { billing: BillingStatus; error: str
   if (error) return <span className="text-xs text-[var(--danger-text)]" title={error}>⚠️ Erro ao calcular</span>;
   if (!billing.mode) return <span className="text-xs text-ink-muted">Sem limite</span>;
 
+  const tol = billing.tolerance > 0 ? ` (+${billing.tolerance})` : "";
   const label =
     billing.mode === "JANELA"
-      ? `${billing.used}${billing.limit != null ? `/${billing.limit}` : ""}${
+      ? `${billing.used}${billing.limit != null ? `/${billing.limit}${tol}` : ""}${
           billing.resetsAt ? ` · até ${formatDate(billing.resetsAt)}` : ""
         }`
-      : `${billing.remaining ?? "—"} créditos`;
+      : `${billing.remainingInLimit ?? "—"} créditos${tol}`;
 
   return (
     <div className="text-xs">
       <div className={billing.blocked ? "font-medium text-[var(--danger-text)]" : "text-ink"}>{label}</div>
       {billing.blocked && <div className="text-[var(--danger-text)]">Bloqueado</div>}
+      {billing.overLimit && <div className="text-[var(--warn-text)]">Usando a tolerância</div>}
     </div>
   );
 }
@@ -457,6 +463,7 @@ function ClientBillingModal({
   );
   const [periodLengthDays, setPeriodLengthDays] = useState(String(config?.periodLengthDays ?? "30"));
   const [creditsBalance, setCreditsBalance] = useState(String(config?.creditsBalance ?? ""));
+  const [tolerance, setTolerance] = useState(String(config?.billingTolerance ?? "0"));
   const [addAmount, setAddAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -473,11 +480,13 @@ function ClientBillingModal({
           messageLimit: Number(messageLimit),
           periodStartDate,
           periodLengthDays: Number(periodLengthDays),
+          billingTolerance: Number(tolerance || 0),
         });
       } else {
         await api.patch(`/api/admin/clients/${client.id}/billing`, {
           billingMode: "CREDITOS",
           creditsBalance: Number(creditsBalance),
+          billingTolerance: Number(tolerance || 0),
         });
       }
       onSaved();
@@ -521,7 +530,9 @@ function ClientBillingModal({
               ? `${client.billing.used}${client.billing.limit != null ? ` de ${client.billing.limit}` : ""} mensagens usadas nesta janela${
                   client.billing.resetsAt ? ` · próxima em ${formatDate(client.billing.resetsAt)}` : ""
                 }`
-              : `${client.billing.remaining ?? "—"} créditos restantes de ${client.billing.limit ?? "—"} concedidos`}
+              : `${client.billing.remainingInLimit ?? "—"} créditos restantes de ${client.billing.limit ?? "—"} concedidos`}
+            {client.billing.tolerance > 0 && ` · tolerância de ${client.billing.tolerance}`}
+            {client.billing.overLimit && " — passou do limite, usando a tolerância."}
             {client.billing.blocked && " — envio pausado até liberar mais."}
           </Callout>
         )}
@@ -605,6 +616,22 @@ function ClientBillingModal({
               </div>
             )}
           </>
+        )}
+
+        {mode !== "SEM_LIMITE" && (
+          <Field label="Tolerância (mensagens extras além do limite)">
+            <input
+              className="field"
+              type="number"
+              min={0}
+              value={tolerance}
+              onChange={(e) => setTolerance(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-ink-muted">
+              Pra uma lista não parar pela metade por pouco. Ex.: limite 200 + tolerância 20 = o envio só trava em 220.
+              Antes de disparar, a equipe vê um aviso quando a lista vai passar do limite.
+            </p>
+          </Field>
         )}
       </div>
     </FormModal>

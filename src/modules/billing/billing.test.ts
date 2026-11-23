@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeBillingStatus,
+  projectDispatch,
   resolveBillingWindow,
   type BillingSettings,
 } from "@/modules/billing/billing.js";
@@ -118,5 +119,97 @@ describe("computeBillingStatus", () => {
   it("CREDITOS nunca reseta sozinho por tempo (sem resetsAt)", () => {
     const settings: BillingSettings = { ...base, billingMode: "CREDITOS", creditsBalance: 100, creditsGrantedAt: new Date() };
     expect(computeBillingStatus(settings, new Date(), 10).resetsAt).toBeNull();
+  });
+});
+
+describe("tolerância (2026-11-23)", () => {
+  const janela: BillingSettings = {
+    ...base,
+    billingMode: "JANELA",
+    messageLimit: 200,
+    periodStartDate: calendarDate(2026, 11, 1),
+    periodLengthDays: 30,
+    billingTolerance: 20,
+  };
+  const now = new Date("2026-11-10T12:00:00-03:00");
+
+  it("passou do limite mas dentro da tolerância: não trava, marca overLimit", () => {
+    const s = computeBillingStatus(janela, now, 205);
+    expect(s.blocked).toBe(false);
+    expect(s.overLimit).toBe(true);
+    expect(s.remaining).toBe(15);
+    expect(s.remainingInLimit).toBe(0);
+  });
+
+  it("trava só em limite + tolerância", () => {
+    expect(computeBillingStatus(janela, now, 219).blocked).toBe(false);
+    expect(computeBillingStatus(janela, now, 220).blocked).toBe(true);
+  });
+
+  it("sem tolerância configurada trava no limite, como antes", () => {
+    const s = computeBillingStatus({ ...janela, billingTolerance: null }, now, 200);
+    expect(s.blocked).toBe(true);
+    expect(s.tolerance).toBe(0);
+  });
+
+  it("vale também pra créditos", () => {
+    const s = computeBillingStatus(
+      { ...base, billingMode: "CREDITOS", creditsBalance: 100, creditsGrantedAt: now, billingTolerance: 10 },
+      now,
+      105
+    );
+    expect(s.blocked).toBe(false);
+    expect(s.remaining).toBe(5);
+  });
+});
+
+describe("projectDispatch", () => {
+  const now = new Date("2026-11-10T12:00:00-03:00");
+  const status = (used: number, tolerance = 20) =>
+    computeBillingStatus(
+      {
+        ...base,
+        billingMode: "JANELA",
+        messageLimit: 200,
+        periodStartDate: calendarDate(2026, 11, 1),
+        periodLengthDays: 30,
+        billingTolerance: tolerance,
+      },
+      now,
+      used
+    );
+
+  it("160 usadas + lista de 50: passa do limite, 10 ficam paradas (teto 220)", () => {
+    const p = projectDispatch(status(160), 0, 50);
+    expect(p.totalAfter).toBe(210);
+    expect(p.exceedsLimit).toBe(true);
+    expect(p.exceedsCap).toBe(false);
+    expect(p.sendable).toBe(50);
+    expect(p.heldBack).toBe(0);
+  });
+
+  it("sem tolerância a mesma lista deixa 10 paradas", () => {
+    const p = projectDispatch(status(160, 0), 0, 50);
+    expect(p.exceedsCap).toBe(true);
+    expect(p.sendable).toBe(40);
+    expect(p.heldBack).toBe(10);
+  });
+
+  it("o que já está na fila sai antes e entra na conta", () => {
+    const p = projectDispatch(status(160), 30, 50);
+    expect(p.sendable).toBe(30);
+    expect(p.heldBack).toBe(20);
+  });
+
+  it("cabe no limite: nada a avisar", () => {
+    const p = projectDispatch(status(100), 0, 50);
+    expect(p.exceedsLimit).toBe(false);
+    expect(p.heldBack).toBe(0);
+  });
+
+  it("cliente sem limite: applies false", () => {
+    const p = projectDispatch(computeBillingStatus(base, now, 0), 0, 50);
+    expect(p.applies).toBe(false);
+    expect(p.sendable).toBe(50);
   });
 });

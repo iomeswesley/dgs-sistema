@@ -26,7 +26,7 @@ import {
   updateListSettings,
 } from "./lists.service.js";
 import { previewList } from "./lists.preview.js";
-import { enqueueList, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
+import { enqueueList, previewListDispatch, processQueue, queueCapacity } from "@/modules/queue/queue.service.js";
 import { enqueueReminders } from "@/modules/queue/cadence.service.js";
 import { extractionConfigured } from "@/modules/extraction/extraction.service.js";
 import { recordAudit } from "@/modules/audit/audit.service.js";
@@ -663,6 +663,14 @@ listsRouter.post(
     const data = parseBody(req, approveSchema);
     await approveList(routeId(req), currentUserId(req), data.confirmUnitMismatch ?? false);
     res.json({ ok: true });
+  })
+);
+
+/** Previsão do disparo contra o limite de mensagens do cliente — só lê. */
+listsRouter.get(
+  "/api/lists/:id/dispatch-preview",
+  asyncHandler(async (req, res) => {
+    res.json(await previewListDispatch(routeId(req)));
   })
 );
 

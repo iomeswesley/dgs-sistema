@@ -27,6 +27,7 @@ import { toCsv } from "@/lib/csv.js";
 import { listContactLeads } from "@/modules/leads/leads.service.js";
 import { getClientFeatures, setClientFeatures } from "./client-features.service.js";
 import { addClientCredits, getBillingStatus, setClientBilling } from "@/modules/billing/billing.service.js";
+import { NO_LIMIT } from "@/modules/billing/billing.js";
 
 export const adminRouter = Router();
 adminRouter.use("/api/admin", requireAuth, requireSuperAdmin);
@@ -66,7 +67,7 @@ adminRouter.get(
     // `runWithClient` nenhum aqui.
     const settingsRows = await prisma.appSettings.findMany({
       where: { clientId: { in: clients.map((c) => c.id) } },
-      select: { clientId: true, billingMode: true, messageLimit: true, periodStartDate: true, periodLengthDays: true, creditsBalance: true },
+      select: { clientId: true, billingMode: true, messageLimit: true, periodStartDate: true, periodLengthDays: true, creditsBalance: true, billingTolerance: true },
     });
     const configByClient = new Map(settingsRows.map((row) => [row.clientId, row]));
 
@@ -82,7 +83,7 @@ adminRouter.get(
       try {
         billing = await runWithClient(client.id, () => getBillingStatus());
       } catch (err) {
-        billing = { mode: null, blocked: false, limit: null, used: 0, remaining: null, resetsAt: null };
+        billing = NO_LIMIT;
         billingError = err instanceof Error ? err.message : "Falha ao calcular status de cobrança.";
         console.error(`[ADMIN] Falha ao calcular billing do cliente ${client.id} (${client.name}):`, billingError);
       }
@@ -174,10 +175,12 @@ const setBillingSchema = z.discriminatedUnion("billingMode", [
     messageLimit: z.coerce.number().int().positive(),
     periodStartDate: dateOnlySchema,
     periodLengthDays: z.coerce.number().int().positive(),
+    billingTolerance: z.coerce.number().int().min(0, "A tolerância não pode ser negativa.").optional(),
   }),
   z.object({
     billingMode: z.literal("CREDITOS"),
     creditsBalance: z.coerce.number().int().min(0),
+    billingTolerance: z.coerce.number().int().min(0, "A tolerância não pode ser negativa.").optional(),
   }),
 ]);
 

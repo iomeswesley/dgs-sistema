@@ -12,6 +12,44 @@ import { formatDateTime, formatPhone, LIST_STATUS_LABEL, STATUS_LABEL, toBandCou
 import { runQueueUntilDone } from "../lib/queue";
 import { fileMimeType, fileToBase64 } from "../lib/file";
 
+// Espelha DispatchProjection (src/modules/billing/billing.ts).
+interface DispatchPreview {
+  applies: boolean;
+  limit: number | null;
+  tolerance: number;
+  used: number;
+  alreadyQueued: number;
+  listMessages: number;
+  totalAfter: number;
+  exceedsLimit: boolean;
+  exceedsCap: boolean;
+  sendable: number;
+  heldBack: number;
+}
+
+/** Aviso do limite de mensagens no "Disparar" — null quando cabe ou não há limite. */
+function DispatchLimitWarning({ preview }: { preview: DispatchPreview | null }) {
+  if (!preview || !preview.applies || !preview.exceedsLimit || preview.limit == null) return null;
+  const queued = preview.alreadyQueued > 0 ? ` (mais ${preview.alreadyQueued} que já estão na fila)` : "";
+  const base = `Esta lista tem ${preview.listMessages} mensage${preview.listMessages === 1 ? "m" : "ns"}. Já foram usadas ${preview.used} de ${preview.limit}${queued} — com esta lista ficaria em ${preview.totalAfter}, passando do limite de ${preview.limit} mensagens do plano.`;
+  if (!preview.exceedsCap) {
+    return (
+      <Callout tone="warn">
+        ⚠️ {base} Ainda cabe na tolerância de {preview.tolerance} mensage{preview.tolerance === 1 ? "m" : "ns"} extra{preview.tolerance === 1 ? "" : "s"}, então todas saem. Depois disso o envio fica pausado até liberar mais.
+      </Callout>
+    );
+  }
+  return (
+    <Callout tone="danger">
+      {base}{" "}
+      {preview.sendable > 0
+        ? `Só ${preview.sendable} saem agora; as outras ${preview.heldBack} ficam paradas na fila`
+        : `Nenhuma sai agora; as ${preview.heldBack} ficam paradas na fila`}{" "}
+      até liberar mais mensagens (fale com a DGS).
+    </Callout>
+  );
+}
+
 /*
   Tela de revisão: a etapa obrigatória entre a leitura automática e o disparo.
 
@@ -340,6 +378,7 @@ export function Revisao() {
   const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"dispatch" | "conclude" | "reprocess" | "delete" | "delete_final" | null>(null);
+  const [dispatchPreview, setDispatchPreview] = useState<DispatchPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -623,6 +662,19 @@ export function Revisao() {
       setSettingsError(err instanceof Error ? err.message : "Falha ao salvar as configurações.");
     } finally {
       setSettingsBusy(false);
+    }
+  }
+
+  // Abre a confirmação na hora e busca a previsão do limite de mensagens por
+  // trás — se a previsão falhar, a confirmação continua sem o aviso (o
+  // limite em si continua valendo na fila).
+  async function openDispatchConfirm() {
+    setDispatchPreview(null);
+    setConfirmAction("dispatch");
+    try {
+      setDispatchPreview(await api.get<DispatchPreview>(`/api/lists/${list.id}/dispatch-preview`));
+    } catch {
+      setDispatchPreview(null);
     }
   }
 
@@ -1147,7 +1199,7 @@ export function Revisao() {
                 className="btn btn-primary"
                 disabled={hasUnitIssue && !unitConfirmed}
                 title={hasUnitIssue && !unitConfirmed ? "Confirme o comparativo de unidade/endereço abaixo antes de disparar." : undefined}
-                onClick={() => setConfirmAction("dispatch")}
+                onClick={() => void openDispatchConfirm()}
               >
                 {list.isOffer ? "Disparar ofertas" : "Disparar confirmações"}
               </button>
@@ -1834,9 +1886,16 @@ export function Revisao() {
               : confirmAction === "reprocess"
               ? "A leitura automática roda de novo do zero — qualquer correção feita manualmente nesta lista se perde."
               : confirmAction === "dispatch"
-                ? `As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
-                    pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
-                  }`
+                ? (
+                    <div className="space-y-3">
+                      <p>
+                        {`As mensagens são enviadas na hora, respeitando o limite diário da Meta — o que não couber fica na fila pro próximo envio. ${
+                          pending > 0 ? `Atenção: ${pending} linhas ainda estão marcadas para conferência.` : ""
+                        }`}
+                      </p>
+                      <DispatchLimitWarning preview={dispatchPreview} />
+                    </div>
+                  )
                 : "Marca a lista como encerrada. O relatório com o resultado de cada paciente continua disponível em \"Exportar CSV\"/\"Exportar PDF\" para enviar à secretaria manualmente."
         }
         confirmLabel={

@@ -608,6 +608,10 @@ model AppSettings {
   // CREDITOS: quando esse saldo foi concedido — âncora de contagem
   // (usado = mensagens enviadas desde este instante).
   creditsGrantedAt DateTime?
+  // Tolerância (2026-11-23): mensagens extras permitidas ALÉM do limite
+  // (vale pros dois modos), pra uma lista não parar pela metade por pouco.
+  // O envio só trava de vez em limite + tolerância. Null = 0.
+  billingTolerance Int?
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 

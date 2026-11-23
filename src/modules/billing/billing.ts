@@ -32,6 +32,8 @@ export interface BillingSettings {
   periodLengthDays: number | null;
   creditsBalance: number | null;
   creditsGrantedAt: Date | null;
+  /** Mensagens extras além do limite (2026-11-23). Ausente/null = 0. */
+  billingTolerance?: number | null;
 }
 
 export interface BillingWindow {
@@ -47,8 +49,17 @@ export interface BillingStatus {
   /** Teto (JANELA) ou saldo concedido (CREDITOS) — `null` quando incompleto/sem limite. */
   limit: number | null;
   used: number;
-  /** `null` quando não há limite pra calcular contra. */
+  /**
+   * Quanto ainda pode sair antes de travar de vez (limite + tolerância −
+   * usadas) — é o que a fila usa pra cortar o lote. `null` sem limite.
+   */
   remaining: number | null;
+  /** Quanto sobra DENTRO do limite contratado (sem a tolerância). `null` sem limite. */
+  remainingInLimit: number | null;
+  /** Mensagens extras além do limite antes de travar (0 quando não configurado). */
+  tolerance: number;
+  /** Já passou do limite contratado e está gastando a tolerância (ainda não travou). */
+  overLimit: boolean;
   /** Fim da janela atual (JANELA) — `null` pra CREDITOS (não reseta sozinho) ou sem limite. */
   resetsAt: Date | null;
 }
@@ -100,32 +111,108 @@ export function resolveBillingWindow(settings: BillingSettings, now: Date): Bill
  * pela metade.
  */
 export function computeBillingStatus(settings: BillingSettings, now: Date, used: number): BillingStatus {
-  if (settings.billingMode === "JANELA") {
-    const window = resolveBillingWindow(settings, now);
-    const limit = settings.messageLimit ?? null;
-    const remaining = limit == null ? null : Math.max(0, limit - used);
+  const tolerance = Math.max(0, settings.billingTolerance ?? 0);
+
+  function withLimit(mode: BillingMode, limit: number | null, resetsAt: Date | null): BillingStatus {
+    if (limit == null) {
+      return { mode, blocked: false, limit, used, remaining: null, remainingInLimit: null, tolerance, overLimit: false, resetsAt };
+    }
+    const cap = limit + tolerance;
     return {
-      mode: "JANELA",
-      blocked: limit != null && used >= limit,
+      mode,
+      blocked: used >= cap,
       limit,
       used,
-      remaining,
-      resetsAt: window?.windowEnd ?? null,
+      remaining: Math.max(0, cap - used),
+      remainingInLimit: Math.max(0, limit - used),
+      tolerance,
+      overLimit: used >= limit && used < cap,
+      resetsAt,
     };
+  }
+
+  if (settings.billingMode === "JANELA") {
+    const window = resolveBillingWindow(settings, now);
+    return withLimit("JANELA", settings.messageLimit ?? null, window?.windowEnd ?? null);
   }
 
   if (settings.billingMode === "CREDITOS") {
-    const limit = settings.creditsBalance ?? null;
-    const remaining = limit == null ? null : Math.max(0, limit - used);
-    return {
-      mode: "CREDITOS",
-      blocked: limit != null && remaining !== null && remaining <= 0,
-      limit,
-      used,
-      remaining,
-      resetsAt: null,
-    };
+    return withLimit("CREDITOS", settings.creditsBalance ?? null, null);
   }
 
-  return { mode: null, blocked: false, limit: null, used: 0, remaining: null, resetsAt: null };
+  return NO_LIMIT;
+}
+
+export const NO_LIMIT: BillingStatus = {
+  mode: null,
+  blocked: false,
+  limit: null,
+  used: 0,
+  remaining: null,
+  remainingInLimit: null,
+  tolerance: 0,
+  overLimit: false,
+  resetsAt: null,
+};
+
+/** Previsão de um disparo contra o limite comercial (aviso antes de disparar). */
+export interface DispatchProjection {
+  /** false = cliente sem limite: nada a avisar. */
+  applies: boolean;
+  limit: number | null;
+  tolerance: number;
+  used: number;
+  /** Mensagens que já estão na fila (de outras listas/lembretes) e saem antes desta. */
+  alreadyQueued: number;
+  /** Mensagens que esta lista vai gerar. */
+  listMessages: number;
+  /** used + alreadyQueued + listMessages. */
+  totalAfter: number;
+  /** Vai passar do limite contratado. */
+  exceedsLimit: boolean;
+  /** Vai passar até da tolerância: parte desta lista fica parada. */
+  exceedsCap: boolean;
+  /** Quantas desta lista saem antes de travar. */
+  sendable: number;
+  /** Quantas desta lista ficam paradas na fila esperando liberar mais. */
+  heldBack: number;
+}
+
+/**
+ * Supõe que o que já está na fila sai antes (ordem por `scheduledFor`) —
+ * conservador: lembrete agendado pra depois também conta como já reservado.
+ */
+export function projectDispatch(status: BillingStatus, alreadyQueued: number, listMessages: number): DispatchProjection {
+  const used = status.used;
+  const totalAfter = used + alreadyQueued + listMessages;
+  if (status.limit == null) {
+    return {
+      applies: false,
+      limit: null,
+      tolerance: status.tolerance,
+      used,
+      alreadyQueued,
+      listMessages,
+      totalAfter,
+      exceedsLimit: false,
+      exceedsCap: false,
+      sendable: listMessages,
+      heldBack: 0,
+    };
+  }
+  const cap = status.limit + status.tolerance;
+  const sendable = Math.min(listMessages, Math.max(0, cap - used - alreadyQueued));
+  return {
+    applies: true,
+    limit: status.limit,
+    tolerance: status.tolerance,
+    used,
+    alreadyQueued,
+    listMessages,
+    totalAfter,
+    exceedsLimit: totalAfter > status.limit,
+    exceedsCap: totalAfter > cap,
+    sendable,
+    heldBack: listMessages - sendable,
+  };
 }

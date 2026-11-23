@@ -69,6 +69,8 @@ interface BillingStatus {
   limit: number | null;
   used: number;
   remaining: number | null;
+  tolerance: number;
+  overLimit: boolean;
   resetsAt: string | null;
 }
 
@@ -266,6 +268,16 @@ export function Hoje() {
               : `sem créditos restantes`}
             . <span className="tabular font-semibold">{capacity.pending}</span> mensagem(ns) esperando na fila até um
             super admin liberar mais em Admin → Cobrança.
+          </Callout>
+        </div>
+      )}
+
+      {capacity?.billing.overLimit && (
+        <div className="mb-5">
+          <Callout tone="warn">
+            ⚠️ Passou do limite de {capacity.billing.limit} mensagens do plano ({capacity.billing.used} usadas) e está usando a
+            tolerância. Mais <span className="tabular font-semibold">{capacity.billing.remaining}</span> e o envio fica pausado
+            até liberar mais.
           </Callout>
         </div>
       )}
